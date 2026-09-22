@@ -18,10 +18,10 @@ from tau2.domains.banking_ru.utils import BANKING_RU_DB_PATH, BANKING_RU_TASK_SE
 ID_PATTERNS = {
     "customers": r"^[a-z]+_[a-z]_\d{4}$",
     "accounts": r"^acc_\d{4}$",
-    "cards": r"^card_\d{4}$",
+    "cards": r"^card_\d{4}[a-z]?$",
     "transactions": r"^txn_\d{6}$",
     "disputes": r"^dsp_\d{4}$",
-    "subscriptions": r"^sub_\d{4}$",
+    "subscriptions": r"^sub_\d{4}[a-z]?$",
     "autopayments": r"^ap_\d{4}$",
     "deposits": r"^dep_\d{4}$",
     "loans": r"^ln_\d{4}$",
@@ -131,6 +131,24 @@ def test_dispute_deadline(db: BankingDB):
     assert deadline.isoformat() == "2026-09-19"
 
 
+def test_bank_easy_01_disclosed_code_transfers_are_a_distinct_pair(db: BankingDB):
+    """Два неузнанных перевода Натальи образуют пару на 21 000 ₽.
+
+    Ловит ошибку сценария, где в fraud_disclosed_code попадает только одна
+    операция, легитимная покупка либо неправильная итоговая сумма обращения.
+    """
+    transfers = [db.transactions[transaction_id] for transaction_id in (
+        "txn_774411", "txn_774412"
+    )]
+    assert [(transfer.date, transfer.amount, transfer.kind) for transfer in transfers] == [
+        ("2026-08-28", 8400.0, "transfer"),
+        ("2026-08-28", 12600.0, "transfer"),
+    ]
+    assert all(transfer.customer_id == "belova_n_2201" for transfer in transfers)
+    assert all(transfer.card_id == "card_4417" for transfer in transfers)
+    assert sum(transfer.amount for transfer in transfers) == pytest.approx(21000.0)
+
+
 def test_subscription_savings(db: BankingDB):
     """Экономия по подпискам дороже 400 ₽ из bank_hard_01 равна 1938 ₽."""
     expensive = [
@@ -233,10 +251,16 @@ def test_wave2_hold_expiry(db: BankingDB):
 
 
 def test_wave2_processing_transfer(db: BankingDB):
-    """bank_020: перевод в обработке и его исполненный двойник двумя неделями раньше."""
+    """bank_020: три похожих статуса требуют разных policy-веток."""
     assert db.transactions["txn_861530"].status == "processing"
     assert db.transactions["txn_860210"].status == "posted"
     assert db.transactions["txn_861530"].date == "2026-08-26"
+    assert db.transactions["txn_861531"].status == "hold"
+    assert db.transactions["txn_861531"].hold_expires_at == "2026-08-27"
+    assert db.transactions["txn_861532"].status == "hold"
+    assert db.transactions["txn_861532"].hold_expires_at == "2026-09-02"
+    assert db.transactions["txn_861533"].status == "blocked"
+    assert db.transactions["txn_861533"].date == "2026-08-28"
 
 
 def test_wave2_sbp_headroom(db: BankingDB):

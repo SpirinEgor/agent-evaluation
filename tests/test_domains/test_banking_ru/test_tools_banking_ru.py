@@ -5,12 +5,14 @@
 Если ловушка перестанет выполняться, тест упадёт — и это намеренно.
 """
 
-import pytest
-
+import importlib.util
 from pathlib import Path
+
+import pytest
 
 from tau2.data_model.message import ToolCall
 from tau2.domains.banking_ru.environment import get_environment
+from tau2.domains.banking_ru.utils import BANKING_RU_POLICY_SOLO_PATH
 from tau2.environment.environment import Environment
 
 
@@ -93,7 +95,7 @@ def test_limit_up_to_tariff_maximum_is_allowed(env: Environment):
     assert env.tools.db.card_limits["card_8823"].daily_cash_withdrawal == 300000.0
 
 
-def test_dispute_on_hold_is_rejected(env: Environment):
+def test_dispute_on_recent_hold_is_rejected(env: Environment):
     verified(env, "solomina_o_5214")
     response = call(
         env, "open_dispute", transaction_id="txn_100203", reason="fraud_suspected"
@@ -367,13 +369,13 @@ def test_verify_identity_accepts_birth_date(env: Environment):
 
 
 def test_transactions_are_paginated(env: Environment):
-    first = call(env, "get_transactions", customer_id="solomina_o_5214")
+    first = call(env, "get_transactions", customer_id="guseva_m_2274")
     assert not first.error
     import json
     page = json.loads(first.content)
     assert int(page["total"]) > int(page["limit"]) == 20
     assert len(page["items"]) == 20
-    second = call(env, "get_transactions", customer_id="solomina_o_5214",
+    second = call(env, "get_transactions", customer_id="guseva_m_2274",
                   offset=20)
     tail = json.loads(second.content)
     assert int(tail["offset"]) == 20
@@ -834,7 +836,9 @@ def test_legacy_operations_tool_silently_returns_less(env: Environment):
     страниц — и не сообщает об этом."""
     full = env.tools.get_transactions(customer_id="solomina_o_5214", limit=50)
     legacy = env.tools.get_operations(customer_id="solomina_o_5214")
-    assert len(legacy) == 10
+    # У Соломиной нет фона: из девяти операций устаревший инструмент молча
+    # отдаёт только семь проведённых.
+    assert len(legacy) == 7
     assert full["total"] > len(legacy), "устаревшая выдача обязана быть короче"
     ids = {row["id"] for row in legacy}
     assert "txn_100203" not in ids, "холд не должен попадать в устаревшую выдачу"
@@ -904,9 +908,6 @@ def test_solo_policy_is_in_sync_with_the_dialogue_one():
     """Две редакции политики собираются из одного источника: расходятся руками
     они мгновенно, а разница между режимами должна оставаться только той,
     которая записана в генераторе."""
-    import importlib.util
-    from tau2.domains.banking_ru.utils import BANKING_RU_POLICY_SOLO_PATH
-
     spec = importlib.util.spec_from_file_location(
         "build_policy",
         Path(__file__).resolve().parents[3] / "scripts/banking_ru/build_policy.py",
