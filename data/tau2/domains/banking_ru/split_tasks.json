@@ -50,7 +50,17 @@
     "bank_047",
     "bank_048",
     "bank_049",
-    "bank_050"
+    "bank_050",
+    "bank_c01",
+    "bank_c02",
+    "bank_c03",
+    "bank_c04",
+    "bank_c05",
+    "bank_c06",
+    "bank_c07",
+    "bank_c08",
+    "bank_c09",
+    "bank_c10"
   ],
   "train": [
     "bank_easy_01",
@@ -105,6 +115,16 @@
     "bank_047",
     "bank_048",
     "bank_049",
-    "bank_050"
+    "bank_050",
+    "bank_c01",
+    "bank_c02",
+    "bank_c03",
+    "bank_c04",
+    "bank_c05",
+    "bank_c06",
+    "bank_c07",
+    "bank_c08",
+    "bank_c09",
+    "bank_c10"
   ]
 }

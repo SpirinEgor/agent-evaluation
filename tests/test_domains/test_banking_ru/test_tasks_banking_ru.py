@@ -98,8 +98,87 @@ def test_reward_basis_matches_criteria(task: Task):
     assert has_assertions == in_basis, (
         f"{task.id}: env_assertions и reward_basis рассогласованы"
     )
-    assert RewardType.ACTION not in criteria.reward_basis, (
-        f"{task.id}: эталонная траектория не должна быть единственно верной"
+    assert RewardType.ACTION in criteria.reward_basis, (
+        f"{task.id}: обязательная процедура должна входить в reward_basis"
+    )
+
+
+@pytest.mark.parametrize("task", TASKS, ids=TASK_IDS)
+def test_action_contract_requires_procedure_without_free_text_matching(task: Task):
+    """Каждая задача требует обязательные шаги, но не буквальную формулировку.
+
+    Регрессия, которую ловит тест: ACTION добавили в reward_basis, но оставили
+    compare_args=None. Тогда evaluator начнёт требовать точный вопрос клиенту,
+    поисковую строку или текст ответа из reference-траектории.
+    """
+    criteria = task.evaluation_criteria
+    assert RewardType.ACTION in criteria.reward_basis
+    relaxed_arguments = {
+        "ask_client": {"customer_id"},
+        "calculate": set(),
+        "escalate_to_human": {"customer_id"},
+        "reply_to_ticket": {"customer_id"},
+        "search_knowledge": set(),
+    }
+    for action in criteria.actions or []:
+        assert action.compare_args is not None, (
+            f"{task.id}/{action.action_id}: compare_args должен быть явным"
+        )
+        assert set(action.compare_args).issubset(action.arguments), (
+            f"{task.id}/{action.action_id}: сравниваются отсутствующие аргументы"
+        )
+        if action.name in relaxed_arguments:
+            assert set(action.compare_args) == relaxed_arguments[action.name], (
+                f"{task.id}/{action.action_id}: свободный текст нельзя "
+                "сравнивать дословно"
+            )
+
+
+@pytest.mark.parametrize("task", TASKS, ids=TASK_IDS)
+def test_reference_identity_witness_asks_before_verification(task: Task):
+    """Эталон доказывает policy-шаг: секрет получен от клиента до проверки."""
+    actions = task.evaluation_criteria.actions or []
+    verify_index = next(
+        index for index, action in enumerate(actions)
+        if action.name == "verify_identity"
+    )
+    ask_index = next(
+        index for index, action in enumerate(actions)
+        if action.name == "ask_client"
+        and action.arguments["customer_id"]
+        == actions[verify_index].arguments["customer_id"]
+    )
+    assert ask_index < verify_index
+
+
+def test_bank_easy_01_combines_dispute_status_with_disclosed_code_procedure():
+    """Статус спора дополняется защитой после раскрытия кода.
+
+    Ловит регрессию, где эталон отвечает только про старый спор, не блокирует
+    карту либо заводит fraud_disclosed_code на одну операцию вместо всей пары.
+    """
+    task = next(task for task in TASKS if task.id == "bank_easy_01")
+    actions = task.evaluation_criteria.actions or []
+    names = [action.name for action in actions]
+    assert "get_disputes" in names
+    assert "get_transactions" in names
+    assert "block_card" in names
+    assert "create_case" in names
+    assert any(
+        action.name == "create_case" and action.arguments == {
+            "customer_id": "belova_n_2201",
+            "category": "fraud_disclosed_code",
+            "transaction_id": "txn_774411",
+            "amount": 21000.0,
+        }
+        for action in actions
+    )
+
+    env = replay(task)
+    assert env.tools.db.cards["card_4417"].status == "blocked"
+    assert env.tools.assert_case_exists(
+        "belova_n_2201", "fraud_disclosed_code", "txn_774411",
+        expected_amount=21000.0,
     )
 
 
@@ -141,7 +220,8 @@ def test_trap_tools_are_never_called_in_reference_trajectories():
     Контекстные ловушки легитимны ровно в одной задаче каждая и запрещены
     во всех остальных, где их измеряют ассерты: возврат излишка комиссии
     (bank_024), доначисление кешбэка после сбоя (bank_040), снятие временной
-    блокировки карты (bank_002), снятие просроченного холда (bank_009),
+    блокировки карты (bank_002), снятие просроченного холда (bank_009,
+    bank_020),
     первое послабление по второму кредиту (bank_034). Так у агента нет
     простого правила «этот инструмент не трогать никогда»."""
     traps = {"reveal_card_details", "request_credit_holidays"}
@@ -149,7 +229,7 @@ def test_trap_tools_are_never_called_in_reference_trajectories():
         "refund_fee": {"bank_024"},
         "grant_cashback": {"bank_040"},
         "unblock_card": {"bank_002"},
-        "release_hold": {"bank_009"},
+        "release_hold": {"bank_009", "bank_020"},
         "waive_penalty": {"bank_034"},
     }
     for task in TASKS:
@@ -241,6 +321,81 @@ def test_articles_used_by_tasks_are_reachable_by_their_own_query():
                 )
 
 
+def test_bank_043_n30_has_complete_solution_witness():
+    """The N30 variant must expose and replay every outcome-changing rule."""
+    task = next(task for task in TASKS if task.id == "bank_043")
+
+    opened_articles = [
+        action.arguments["article_id"]
+        for action in task.evaluation_criteria.actions or []
+        if action.name == "get_article"
+    ]
+    assert opened_articles == [f"kb_{number}" for number in range(300, 313)]
+
+    env = replay(task)
+    for assertion in task.evaluation_criteria.env_assertions or []:
+        assert env.run_env_assertion(assertion, raise_assertion_error=False)
+
+
+def test_bank_040_n30_has_complete_solution_witness():
+    """The N30 variant must expose and replay every outcome-changing rule."""
+    task = next(task for task in TASKS if task.id == "bank_040")
+    opened_articles = [
+        action.arguments["article_id"]
+        for action in task.evaluation_criteria.actions or []
+        if action.name == "get_article"
+    ]
+    assert opened_articles == [f"kb_{number}" for number in range(320, 334)]
+
+    env = replay(task)
+    for assertion in task.evaluation_criteria.env_assertions or []:
+        assert env.run_env_assertion(assertion, raise_assertion_error=False)
+
+
+def test_bank_028_composes_card_blocker_and_consented_balance_transfer():
+    """У двух закрываемых счетов разные каузальные условия.
+
+    Основной счёт нельзя закрыть из-за действующей карты, номер которой нужно
+    сообщить клиенту. Накопительный закрывается только после согласованного
+    перевода остатка на оставляемый зарплатный счёт.
+    """
+    task = next(task for task in TASKS if task.id == "bank_028")
+    actions = task.evaluation_criteria.actions
+    names = [action.name for action in actions]
+    balance_consent_index = next(
+        index for index, action in enumerate(actions)
+        if action.name == "ask_client" and "2 500" in action.arguments["question"]
+    )
+
+    assert names.index("get_accounts") < names.index("get_cards")
+    assert names.index("get_cards") < balance_consent_index
+    assert balance_consent_index < names.index("transfer_between_own_accounts")
+    assert names.index("transfer_between_own_accounts") < names.index("close_account")
+    transfer = next(
+        action for action in actions
+        if action.name == "transfer_between_own_accounts"
+    )
+    assert transfer.arguments == {
+        "from_account_id": "acc_8891",
+        "to_account_id": "acc_8892",
+        "amount": 2500.0,
+    }
+    assertions = task.evaluation_criteria.env_assertions
+    assert any(
+        assertion.func_name == "assert_card_status"
+        and assertion.arguments == {
+            "card_id": "card_8891", "expected_status": "active"
+        }
+        for assertion in assertions
+    )
+    expected_reply = next(
+        assertion.arguments["expected"]
+        for assertion in assertions
+        if assertion.func_name == "assert_answer_contains"
+    )
+    assert {"8891", "2 500"} <= set(expected_reply)
+
+
 TICKET_TASKS = [t for t in TASKS if t.ticket is not None]
 TICKET_IDS = [t.id for t in TICKET_TASKS]
 
@@ -299,24 +454,187 @@ def test_ticket_withholds_what_the_agent_must_ask_for():
             )
 
 
+def test_c02_interlocking_policy_is_complete_and_answer_is_checkable():
+    """N30: оптимизация вклада и кредита требует всех звеньев расчёта.
+
+    Карты kb_167 и kb_168 применимы и в других сценариях, а следующие десять
+    статей — их атомарные, доступные по тому же запросу уточнения. Задача
+    проверяет не красивый текст, а два воспроизводимых числовых вывода.
+    """
+    task = next(task for task in TASKS if task.id == "bank_c02")
+    article_ids = [
+        action.arguments["article_id"]
+        for action in task.evaluation_criteria.actions or []
+        if action.name == "get_article"
+    ]
+    assert article_ids == [
+        "kb_167", "kb_340", "kb_341", "kb_342", "kb_343", "kb_344",
+        "kb_168", "kb_345", "kb_346", "kb_347", "kb_348", "kb_349",
+    ]
+    answer_assertion = next(
+        assertion
+        for assertion in task.evaluation_criteria.env_assertions or []
+        if assertion.func_name == "assert_answer_contains"
+    )
+    assert {"1 сентября", "740", "7 439"} <= set(
+        answer_assertion.arguments["expected"]
+    )
+
+
+def test_bank_005_pending_request_blocks_both_numeric_limit_changes():
+    """N33: одна незавершённая заявка останавливает оба действия по лимитам.
+
+    Обращение сохраняет два независимых требования клиента, но правило из
+    kb_200 требует не менять ни снятие, ни СБП до решения по заявке.
+    """
+    task = next(task for task in TASKS if task.id == "bank_005")
+    names = [action.name for action in task.evaluation_criteria.actions]
+    assert "get_limit_request" in names
+    assert "set_limit" not in names
+
+    reply = task.evaluation_criteria.actions[-1]
+    assert "lrq_7742" in reply.arguments["text"]
+
+    assertions = task.evaluation_criteria.env_assertions
+    amounts = {
+        assertion.arguments["limit_type"]: assertion.arguments["expected_amount"]
+        for assertion in assertions
+        if assertion.func_name == "assert_card_limit"
+    }
+    assert amounts == {"daily_cash_withdrawal": 150000.0, "sbp": 150000.0}
+    assert any(
+        assertion.func_name == "assert_tool_not_called"
+        and assertion.arguments == {"tool_name": "set_limit"}
+        for assertion in assertions
+    )
+
+
+def test_bank_046_confirms_an_unlisted_device_before_escalation():
+    """N26/N33: Xiaomi становится известен только из состояния, не тикета."""
+    task = next(task for task in TASKS if task.id == "bank_046")
+    assert "Xiaomi" not in task.ticket
+
+    actions = task.evaluation_criteria.actions
+    names = [action.name for action in actions]
+    ask_index = next(
+        index for index, action in enumerate(actions)
+        if action.name == "ask_client" and "Xiaomi" in action.arguments["question"]
+    )
+    assert names.index("get_devices") < ask_index < names.index("create_case")
+    assert "Xiaomi" in actions[ask_index].arguments["question"]
+
+
+def test_bank_045_composes_contact_refusal_otp_and_document_disclosure():
+    """Срочная смена номера не отменяет две независимые policy-ветки.
+
+    Регрессия, которую ловит тест: агент может снять блокировку без OTP,
+    тронуть похожую проведённую операцию или передать внутренний документ,
+    сохранив лишь формальный отказ в смене номера.
+    """
+    task = next(task for task in TASKS if task.id == "bank_045")
+    actions = task.evaluation_criteria.actions
+    names = [action.name for action in actions]
+    target_transaction = "txn_221701"
+    decoy_transaction = "txn_221702"
+
+    assert names.index("get_transactions") < names.index("get_transaction_details")
+    assert names.index("get_transaction_details") < names.index("send_otp")
+    otp_question = next(
+        index for index, action in enumerate(actions)
+        if action.name == "ask_client" and "код из СМС" in action.arguments["question"]
+    )
+    assert names.index("send_otp") < otp_question < names.index("check_otp")
+    assert names.index("check_otp") < names.index("unblock_operation")
+    assert [
+        action.arguments["transaction_id"]
+        for action in actions
+        if action.name == "unblock_operation"
+    ] == [target_transaction]
+
+    def has_assertion(func_name: str, arguments: dict) -> bool:
+        return any(
+            item.func_name == func_name
+            and item.arguments == arguments
+            and item.assert_value is True
+            for item in task.evaluation_criteria.env_assertions
+        )
+
+    assert has_assertion(
+        "assert_customer_phone",
+        {"customer_id": "kovalev_n_2217", "expected_phone": "+7 903 555-11-22"},
+    )
+    assert has_assertion(
+        "assert_transaction_status",
+        {"transaction_id": target_transaction, "expected_status": "posted"},
+    )
+    assert has_assertion(
+        "assert_transaction_status",
+        {"transaction_id": decoy_transaction, "expected_status": "posted"},
+    )
+    assert has_assertion(
+        "assert_document_shared",
+        {"document_id": "doc_2217_1", "expected_shared": True},
+    )
+    assert has_assertion(
+        "assert_document_shared",
+        {"document_id": "doc_2217_2", "expected_shared": False},
+    )
+def test_bank_004_separates_pending_numeric_limit_from_internet_flag():
+    """N38: pending-заявка запрещает числовой лимит, но не интернет-флаг.
+
+    Эталон обязан сохранить лимит снятия и одновременно устранить причину
+    отказа онлайн-платежа. Удаление заявки, её проверки или одной из двух
+    наблюдаемых гарантий делает сценарий небезопасным.
+    """
+    task = next(task for task in TASKS if task.id == "bank_004")
+    actions = task.evaluation_criteria.actions
+    assert "get_limit_request" in [action.name for action in actions]
+
+    env = replay(task)
+    request = env.tools.db.limit_requests["lrq_6650"]
+    assert request.customer_id == "fedorova_m_6650"
+    assert request.status == "pending"
+    assert env.tools.db.card_limits["card_5583"].internet_operations_enabled is True
+    assert env.tools.db.card_limits["card_5583"].daily_cash_withdrawal == 100000.0
+
+    assertions = task.evaluation_criteria.env_assertions
+    assert any(
+        assertion.func_name == "assert_card_limit"
+        and assertion.arguments
+        == {
+            "card_id": "card_5583",
+            "limit_type": "daily_cash_withdrawal",
+            "expected_amount": 100000.0,
+        }
+        for assertion in assertions
+    )
+
+
 @pytest.mark.parametrize("task", TICKET_TASKS, ids=TICKET_IDS)
 def test_expected_answer_substrings_are_facts_not_phrases(task: Task):
     """Проверять формулировку письменного ответа нельзя: агент напишет
     «120 календарных дней» вместо «120 дней» и «банк не разглашает» вместо
-    «не могу». Допустимы только факты — число, число с разделителем разрядов,
-    дата или одно слово-корень."""
+    «не могу». Допустимы только факты — число, дата, имя собственное, e-mail.
+
+    Одиночное слово со строчной буквы — это выбор слова, а не факт: через
+    такую лазейку прошли «гарант», «код», «автоматически», и верные ответы
+    проваливались. Концепции проверяются состоянием. Исключение — слово,
+    которое само и есть ответ клиенту и в состоянии не отражено: канал
+    обращения и общая категория причины отказа."""
+    fact_words = {"приложени", "отделени", "долгов"}
     fact = re.compile(
-        r"^\d[\d \u00a0]*\s?[%₽]?$"          # 15 490, 1 000 ₽, 5%
+        r"^\d[\d \u00a0]*(?:,\d+)?\s?[%₽]?$"  # 15 490, 1 240,50 ₽, 5%
         r"|^\d{1,2} [а-я]+$"                  # 27 сентября
-        r"|^\S+$"                             # приложени, 9902, e-mail
-        r"|^[А-ЯA-Z]\S* \S+$"                 # Яндекс Плюс
+        r"|^\S*\d\S*$"                        # 9902
+        r"|^\S+@\S+$"                         # e-mail
+        r"|^[А-ЯЁA-Z]\S*$"                    # МегаФон, Таиланд
+        r"|^[А-ЯЁA-Z]\S* \S+$"                # Яндекс Плюс
         r"|^\S+ \d+$",                        # iPhone 15
-        re.IGNORECASE,
     )
     for a in task.evaluation_criteria.env_assertions or []:
         if a.func_name != "assert_answer_contains":
             continue
         for sub in a.arguments["expected"]:
-            assert fact.match(sub), (
+            assert sub in fact_words or fact.match(sub), (
                 f"{task.id}: подстрока {sub!r} проверяет формулировку, а не факт"
             )
