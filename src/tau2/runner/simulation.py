@@ -72,6 +72,11 @@ def run_simulation(
     )
     solo_mode = getattr(orchestrator, "solo_mode", False)
 
+    env_kwargs = {
+        **(env_kwargs or {}),
+        **getattr(orchestrator.environment, "evaluation_env_kwargs", {}),
+    }
+
     # Evaluate
     reward_info = evaluate_simulation(
         simulation=simulation,

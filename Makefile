@@ -88,3 +88,15 @@ help:
 	column -ts $$'\t' |                   \
 	expand -t 1 |                         \
 	grep --color '^[^ ]*'
+
+# Banking release tests (offline; requires uv sync --extra dev --extra platform).
+.PHONY: test-banking-basic test-banking-package test-banking-tools
+
+test-banking-basic:
+	uv run pytest tests/test_domains/test_banking_ru/test_whole_full_catalog_cases.py -q
+
+test-banking-package:
+	uv run pytest tests/test_domains/test_banking_ru/test_release_package.py tests/test_platform/test_package.py -q
+
+test-banking-tools:
+	uv run pytest tests/test_domains/test_banking_ru/test_tool_contract_catalog.py -q

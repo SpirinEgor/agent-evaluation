@@ -7,6 +7,8 @@
       "name": "Классический",
       "monthly_fee": 199.0,
       "free_condition": "Бесплатно при остатке от 100 000 ₽ или тратах от 30 000 ₽ в месяц",
+      "free_min_balance": 100000.0,
+      "free_min_turnover": 30000.0,
       "max_daily_cash_withdrawal": 150000.0,
       "max_sbp_limit": 150000.0,
       "interbank_transfer_fee_percent": 1.0,
@@ -175,6 +177,8 @@
       "email": "solomina.o@example.ru",
       "address": "г. Москва, ул. Лесная, д. 12, кв. 5",
       "tariff_id": "tariff_classic",
+      "avg_monthly_balance": 87500.0,
+      "monthly_turnover": 19899.0,
       "code_word": "пион",
       "otp_code": "957340"
     },
@@ -970,7 +974,7 @@
       "customer_id": "egorova_t_2266",
       "account_type": "current",
       "currency": "RUB",
-      "balance": 112400.0,
+      "balance": 124500.0,
       "status": "active",
       "debt": 0.0
     },
@@ -1136,6 +1140,15 @@
       "status": "active",
       "debt": 0.0
     },
+    "acc_8844": {
+      "id": "acc_8844",
+      "customer_id": "belov_i_2266",
+      "account_type": "current",
+      "currency": "RUB",
+      "balance": 0.0,
+      "status": "closed",
+      "debt": 0.0
+    },
     "acc_7712": {
       "id": "acc_7712",
       "customer_id": "sokolov_d_5512",
@@ -1144,6 +1157,24 @@
       "balance": 84500.0,
       "status": "active",
       "debt": 683.0
+    },
+    "acc_5513": {
+      "id": "acc_5513",
+      "customer_id": "sokolov_d_5512",
+      "account_type": "current",
+      "currency": "RUB",
+      "balance": 2700.0,
+      "status": "active",
+      "debt": 0.0
+    },
+    "acc_5514": {
+      "id": "acc_5514",
+      "customer_id": "sokolov_d_5512",
+      "account_type": "current",
+      "currency": "RUB",
+      "balance": 0.0,
+      "status": "active",
+      "debt": 0.0
     },
     "acc_3392": {
       "id": "acc_3392",
@@ -1204,7 +1235,7 @@
       "customer_id": "solovyova_a_7734",
       "account_type": "current",
       "currency": "RUB",
-      "balance": 4100.0,
+      "balance": 3782.0,
       "status": "active",
       "debt": 0.0
     },
@@ -1241,6 +1272,15 @@
       "account_type": "current",
       "currency": "RUB",
       "balance": 254000.0,
+      "status": "active",
+      "debt": 0.0
+    },
+    "acc_7730": {
+      "id": "acc_7730",
+      "customer_id": "titova_a_7729",
+      "account_type": "savings",
+      "currency": "RUB",
+      "balance": 78500.0,
       "status": "active",
       "debt": 0.0
     },
@@ -1443,6 +1483,19 @@
       "block_reason": null,
       "blocked_at": null,
       "expires_at": "2028-05-31",
+      "delivery_address": null,
+      "reissue_status": null
+    },
+    "card_2202": {
+      "id": "card_2202",
+      "customer_id": "volkov_a_5108",
+      "account_id": "acc_5108",
+      "last4": "2202",
+      "card_type": "debit",
+      "status": "active",
+      "block_reason": null,
+      "blocked_at": null,
+      "expires_at": "2029-05-31",
       "delivery_address": null,
       "reissue_status": null
     },
@@ -1751,9 +1804,9 @@
       "account_id": "acc_2957",
       "last4": "6104",
       "card_type": "debit",
-      "status": "active",
-      "block_reason": null,
-      "blocked_at": null,
+      "status": "blocked",
+      "block_reason": "temporary",
+      "blocked_at": "2026-08-25",
       "expires_at": "2026-09-30",
       "delivery_address": "г. Москва, ул. Ленина, д. 14, кв. 27",
       "reissue_status": null
@@ -1888,6 +1941,19 @@
       "delivery_address": null,
       "reissue_status": null
     },
+    "card_5514": {
+      "id": "card_5514",
+      "customer_id": "sokolov_d_5512",
+      "account_id": "acc_5514",
+      "last4": "5514",
+      "card_type": "debit",
+      "status": "active",
+      "block_reason": null,
+      "blocked_at": null,
+      "expires_at": "2028-05-31",
+      "delivery_address": null,
+      "reissue_status": null
+    },
     "card_3392": {
       "id": "card_3392",
       "customer_id": "smirnova_i_3390",
@@ -1971,6 +2037,19 @@
       "customer_id": "solovyova_a_7734",
       "account_id": "acc_7734",
       "last4": "7735",
+      "card_type": "debit",
+      "status": "active",
+      "block_reason": null,
+      "blocked_at": null,
+      "expires_at": "2028-05-31",
+      "delivery_address": null,
+      "reissue_status": null
+    },
+    "card_7736": {
+      "id": "card_7736",
+      "customer_id": "solovyova_a_7734",
+      "account_id": "acc_7734",
+      "last4": "7736",
       "card_type": "debit",
       "status": "active",
       "block_reason": null,
@@ -2351,6 +2430,12 @@
       "internet_operations_enabled": true,
       "sbp_limit": 150000.0
     },
+    "card_2202": {
+      "card_id": "card_2202",
+      "daily_cash_withdrawal": 150000.0,
+      "internet_operations_enabled": true,
+      "sbp_limit": 150000.0
+    },
     "card_9034": {
       "card_id": "card_9034",
       "daily_cash_withdrawal": 100000.0,
@@ -2555,6 +2640,12 @@
       "internet_operations_enabled": true,
       "sbp_limit": 150000.0
     },
+    "card_5514": {
+      "card_id": "card_5514",
+      "daily_cash_withdrawal": 100000.0,
+      "internet_operations_enabled": true,
+      "sbp_limit": 150000.0
+    },
     "card_3392": {
       "card_id": "card_3392",
       "daily_cash_withdrawal": 100000.0,
@@ -2593,6 +2684,12 @@
     },
     "card_7735": {
       "card_id": "card_7735",
+      "daily_cash_withdrawal": 100000.0,
+      "internet_operations_enabled": true,
+      "sbp_limit": 150000.0
+    },
+    "card_7736": {
+      "card_id": "card_7736",
       "daily_cash_withdrawal": 100000.0,
       "internet_operations_enabled": true,
       "sbp_limit": 150000.0
@@ -2755,6 +2852,46 @@
     }
   },
   "transactions": {
+    "txn_286101": {
+      "id": "txn_286101",
+      "customer_id": "smirnova_o_2861",
+      "account_id": "acc_2861",
+      "card_id": "card_6640",
+      "date": "2026-08-28",
+      "amount": 17840.0,
+      "merchant": "Перевод по карте, неизвестный получатель А. П. К.",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_286102": {
+      "id": "txn_286102",
+      "customer_id": "smirnova_o_2861",
+      "account_id": "acc_2861",
+      "card_id": "card_6640",
+      "date": "2026-08-28",
+      "amount": 12970.0,
+      "merchant": "Перевод по карте, неизвестный получатель М. О. С.",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
     "txn_774410": {
       "id": "txn_774410",
       "customer_id": "belova_n_2201",
@@ -3082,7 +3219,7 @@
       "card_id": "card_6650",
       "date": "2026-08-25",
       "amount": 299.0,
-      "merchant": "Яндекс.Плюс",
+      "merchant": "КиноКлуб (учебный сервис)",
       "mcc": "5968",
       "status": "posted",
       "kind": "purchase",
@@ -3102,7 +3239,7 @@
       "card_id": "card_6650",
       "date": "2026-08-12",
       "amount": 299.0,
-      "merchant": "Яндекс.Плюс",
+      "merchant": "КиноКлуб (учебный сервис)",
       "mcc": "5968",
       "status": "posted",
       "kind": "purchase",
@@ -3162,7 +3299,7 @@
       "card_id": "card_6650",
       "date": "2026-07-12",
       "amount": 299.0,
-      "merchant": "Яндекс.Плюс",
+      "merchant": "КиноКлуб (учебный сервис)",
       "mcc": "5968",
       "status": "posted",
       "kind": "purchase",
@@ -3403,6 +3540,7 @@
       "date": "2026-08-16",
       "amount": 18990.0,
       "merchant": "ООО ТехноМаркет",
+      "order_id": "TM-2026-08-16-04",
       "mcc": "5732",
       "status": "posted",
       "kind": "purchase",
@@ -3423,6 +3561,7 @@
       "date": "2026-08-22",
       "amount": 3500.0,
       "merchant": "Возврат от ООО ТехноМаркет",
+      "order_id": "TM-2026-08-16-04",
       "mcc": null,
       "status": "posted",
       "kind": "fee_refund",
@@ -3443,6 +3582,7 @@
       "date": "2026-07-03",
       "amount": 4590.0,
       "merchant": "ООО ТехноМаркет",
+      "order_id": "TM-2026-07-03-11",
       "mcc": "5732",
       "status": "posted",
       "kind": "purchase",
@@ -3463,6 +3603,7 @@
       "date": "2026-03-12",
       "amount": 18990.0,
       "merchant": "ООО ТехноМаркет",
+      "order_id": "TM-2026-03-12-02",
       "mcc": "5732",
       "status": "posted",
       "kind": "purchase",
@@ -3483,6 +3624,7 @@
       "date": "2026-08-14",
       "amount": 18990.0,
       "merchant": "DNS Технопоинт",
+      "order_id": "DNS-2026-08-14-06",
       "mcc": "5732",
       "status": "posted",
       "kind": "purchase",
@@ -3503,6 +3645,7 @@
       "date": "2026-02-20",
       "amount": 7450.0,
       "merchant": "ИП Сергеева, магазин «Домашний уют»",
+      "order_id": "DU-220",
       "mcc": "5719",
       "status": "posted",
       "kind": "purchase",
@@ -3522,10 +3665,74 @@
       "card_id": "card_2210",
       "date": "2026-05-18",
       "amount": 1290.0,
-      "merchant": "ИП Сергеева, магазин «Домашний уют»",
+      "merchant": "ИП Сергеева, магазин «Домашний уют» / заказ DU-518",
+      "order_id": "DU-518",
       "mcc": "5719",
       "status": "posted",
       "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_552141": {
+      "id": "txn_552141",
+      "customer_id": "kuznecova_o_3391",
+      "account_id": "acc_3391",
+      "card_id": "card_2210",
+      "date": "2026-08-10",
+      "amount": 6750.0,
+      "merchant": "ИП Сергеева, магазин «Домашний уют» / заказ DU-810",
+      "order_id": "DU-810",
+      "mcc": "5719",
+      "status": "posted",
+      "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_552142": {
+      "id": "txn_552142",
+      "customer_id": "kuznecova_o_3391",
+      "account_id": "acc_3391",
+      "card_id": "card_2210",
+      "date": "2026-08-20",
+      "amount": 2150.0,
+      "merchant": "Возврат от ИП Сергеевой / заказ DU-810",
+      "order_id": "DU-810",
+      "mcc": "5719",
+      "status": "posted",
+      "kind": "fee_refund",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_552143": {
+      "id": "txn_552143",
+      "customer_id": "kuznecova_o_3391",
+      "account_id": "acc_3391",
+      "card_id": "card_2210",
+      "date": "2026-05-22",
+      "amount": 400.0,
+      "merchant": "Возврат от ИП Сергеевой / заказ DU-518",
+      "order_id": "DU-518",
+      "mcc": "5719",
+      "status": "posted",
+      "kind": "fee_refund",
       "hold_expires_at": null,
       "fee_amount": null,
       "is_subscription": false,
@@ -3902,7 +4109,7 @@
       "card_id": "card_7729",
       "date": "2026-08-27",
       "amount": 4200.0,
-      "merchant": "Ресторан «Гастроном №1»",
+      "merchant": "Ресторан «Гастроном №1» / заказ GN-827",
       "mcc": "5812",
       "status": "hold",
       "kind": "purchase",
@@ -3922,10 +4129,90 @@
       "card_id": "card_7730",
       "date": "2026-08-20",
       "amount": 4200.0,
-      "merchant": "Ресторан «Гастроном №1»",
+      "merchant": "Ресторан «Гастроном №1» / заказ GN-820",
       "mcc": "5812",
       "status": "posted",
       "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_798541": {
+      "id": "txn_798541",
+      "customer_id": "lebedev_i_7729",
+      "account_id": "acc_7729",
+      "card_id": "card_7730",
+      "date": "2026-08-20",
+      "amount": 4200.0,
+      "merchant": "Ресторан «Гастроном №1» / заказ GN-820",
+      "mcc": "5812",
+      "status": "hold",
+      "kind": "purchase",
+      "hold_expires_at": "2026-08-27",
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_798542": {
+      "id": "txn_798542",
+      "customer_id": "lebedev_i_7729",
+      "account_id": "acc_7729",
+      "card_id": "card_7730",
+      "date": "2026-08-21",
+      "amount": 4200.0,
+      "merchant": "Ресторан «Гастроном №1» / заказ GN-821",
+      "mcc": "5812",
+      "status": "posted",
+      "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_798543": {
+      "id": "txn_798543",
+      "customer_id": "lebedev_i_7729",
+      "account_id": "acc_7729",
+      "card_id": "card_7730",
+      "date": "2026-08-25",
+      "amount": 1300.0,
+      "merchant": "Возврат от ресторана «Гастроном №1» / заказ GN-821",
+      "mcc": "5812",
+      "status": "posted",
+      "kind": "fee_refund",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_798544": {
+      "id": "txn_798544",
+      "customer_id": "lebedev_i_7729",
+      "account_id": "acc_7729",
+      "card_id": "card_7730",
+      "date": "2026-08-26",
+      "amount": 500.0,
+      "merchant": "Возврат от ресторана «Гастроном №1» / заказ GN-820",
+      "mcc": "5812",
+      "status": "posted",
+      "kind": "fee_refund",
       "hold_expires_at": null,
       "fee_amount": null,
       "is_subscription": false,
@@ -3963,6 +4250,66 @@
       "date": "2026-08-27",
       "amount": 50000.0,
       "merchant": "Перевод по СБП, Смирнов А. А., банк «Восток»",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_844218": {
+      "id": "txn_844218",
+      "customer_id": "egorova_t_2266",
+      "account_id": "acc_2266",
+      "card_id": null,
+      "date": "2026-08-27",
+      "amount": 12000.0,
+      "merchant": "Входящий частичный возврат СБП по исходному переводу txn_844217",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_843711": {
+      "id": "txn_843711",
+      "customer_id": "egorova_t_2266",
+      "account_id": "acc_2266",
+      "card_id": null,
+      "date": "2026-08-27",
+      "amount": 1200.0,
+      "merchant": "Входящий возврат СБП в обработке по исходному переводу txn_843710",
+      "mcc": null,
+      "status": "processing",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_843712": {
+      "id": "txn_843712",
+      "customer_id": "egorova_t_2266",
+      "account_id": "acc_2266",
+      "card_id": null,
+      "date": "2026-08-26",
+      "amount": 600.0,
+      "merchant": "Входящий частичный возврат СБП по исходному переводу txn_843710",
       "mcc": null,
       "status": "posted",
       "kind": "transfer",
@@ -4035,6 +4382,46 @@
       "fee_refunded": false,
       "cashback_granted": false
     },
+    "txn_843650": {
+      "id": "txn_843650",
+      "customer_id": "egorova_t_2266",
+      "account_id": "acc_2266",
+      "card_id": null,
+      "date": "2026-08-21",
+      "amount": 870.0,
+      "merchant": "Перевод по СБП, Смирнов А. А., банк «Восток»",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_843651": {
+      "id": "txn_843651",
+      "customer_id": "egorova_t_2266",
+      "account_id": "acc_2266",
+      "card_id": null,
+      "date": "2026-08-23",
+      "amount": 370.0,
+      "merchant": "Входящий частичный возврат СБП по исходному переводу txn_843650",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
     "txn_861530": {
       "id": "txn_861530",
       "customer_id": "soloveva_v_9034",
@@ -4053,7 +4440,10 @@
       "channel": "online",
       "dispute_id": null,
       "fee_refunded": false,
-      "cashback_granted": false
+      "cashback_granted": false,
+      "payment_route": "card_to_card",
+      "debited_at": "2026-08-27",
+      "expected_completion_date": "2026-08-31"
     },
     "txn_860210": {
       "id": "txn_860210",
@@ -6651,6 +7041,66 @@
       "is_subscription": false,
       "country": "RU",
       "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_665040": {
+      "id": "txn_665040",
+      "customer_id": "fedorova_m_6650",
+      "account_id": "acc_6650",
+      "card_id": "card_5583",
+      "date": "2026-08-28",
+      "amount": 2500.0,
+      "merchant": "Wildberries",
+      "mcc": "5399",
+      "status": "blocked",
+      "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_610401": {
+      "id": "txn_610401",
+      "customer_id": "kuznecova_a_2957",
+      "account_id": "acc_2957",
+      "card_id": "card_6104",
+      "date": "2026-08-20",
+      "amount": 1800.0,
+      "merchant": "Аптека",
+      "mcc": "5912",
+      "status": "hold",
+      "kind": "purchase",
+      "hold_expires_at": "2026-08-27",
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_610501": {
+      "id": "txn_610501",
+      "customer_id": "kuznecova_a_2957",
+      "account_id": "acc_2957",
+      "card_id": "card_6105",
+      "date": "2026-08-27",
+      "amount": 1800.0,
+      "merchant": "Аптека",
+      "mcc": "5912",
+      "status": "hold",
+      "kind": "purchase",
+      "hold_expires_at": "2026-09-03",
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
       "dispute_id": null,
       "fee_refunded": false,
       "cashback_granted": false
@@ -22082,7 +22532,7 @@
       "card_id": "card_3367",
       "date": "2026-08-28",
       "amount": 850.0,
-      "merchant": "Кофемания",
+      "merchant": "Кофемания / заказ KF-828",
       "mcc": "5812",
       "status": "hold",
       "kind": "purchase",
@@ -22102,10 +22552,70 @@
       "card_id": "card_3367",
       "date": "2026-08-21",
       "amount": 850.0,
-      "merchant": "Кофемания",
+      "merchant": "Кофемания / заказ KF-821",
       "mcc": "5812",
       "status": "posted",
       "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_066091": {
+      "id": "txn_066091",
+      "customer_id": "volkov_a_4471",
+      "account_id": "acc_4471",
+      "card_id": "card_3367",
+      "date": "2026-08-22",
+      "amount": 850.0,
+      "merchant": "Кофемания / заказ KF-822",
+      "mcc": "5812",
+      "status": "posted",
+      "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_066092": {
+      "id": "txn_066092",
+      "customer_id": "volkov_a_4471",
+      "account_id": "acc_4471",
+      "card_id": "card_3367",
+      "date": "2026-08-27",
+      "amount": 300.0,
+      "merchant": "Возврат от Кофемания / заказ KF-822",
+      "mcc": "5812",
+      "status": "posted",
+      "kind": "fee_refund",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "pos",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_066093": {
+      "id": "txn_066093",
+      "customer_id": "volkov_a_4471",
+      "account_id": "acc_4471",
+      "card_id": "card_3367",
+      "date": "2026-08-25",
+      "amount": 200.0,
+      "merchant": "Возврат от Кофемания / заказ KF-821",
+      "mcc": "5812",
+      "status": "posted",
+      "kind": "fee_refund",
       "hold_expires_at": null,
       "fee_amount": null,
       "is_subscription": false,
@@ -22145,6 +22655,66 @@
       "merchant": "Мосэнергосбыт, оплата ЖКХ",
       "mcc": null,
       "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_889232": {
+      "id": "txn_889232",
+      "customer_id": "sokolov_d_2208",
+      "account_id": "acc_2208",
+      "card_id": null,
+      "date": "2026-08-22",
+      "amount": 4940.0,
+      "merchant": "Мосэнергосбыт, оплата ЖКХ",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_889233": {
+      "id": "txn_889233",
+      "customer_id": "sokolov_d_2208",
+      "account_id": "acc_2208",
+      "card_id": null,
+      "date": "2026-08-26",
+      "amount": 600.0,
+      "merchant": "Входящий частичный возврат платежа ЖКХ по исходной операции txn_889231",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_889234": {
+      "id": "txn_889234",
+      "customer_id": "sokolov_d_2208",
+      "account_id": "acc_2208",
+      "card_id": null,
+      "date": "2026-08-27",
+      "amount": 300.0,
+      "merchant": "Входящий возврат платежа ЖКХ в обработке по исходной операции txn_889232",
+      "mcc": null,
+      "status": "processing",
       "kind": "transfer",
       "hold_expires_at": null,
       "fee_amount": null,
@@ -22195,6 +22765,26 @@
       "fee_refunded": false,
       "cashback_granted": false
     },
+    "txn_889241": {
+      "id": "txn_889241",
+      "customer_id": "sokolov_d_2208",
+      "account_id": "acc_2208",
+      "card_id": null,
+      "date": "2026-08-27",
+      "amount": 200.0,
+      "merchant": "Входящий частичный возврат платежа ЖКХ по исходной операции txn_889240",
+      "mcc": null,
+      "status": "posted",
+      "kind": "transfer",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
     "txn_330871": {
       "id": "txn_330871",
       "customer_id": "nikitin_s_6631",
@@ -22213,7 +22803,9 @@
       "channel": "online",
       "dispute_id": null,
       "fee_refunded": false,
-      "cashback_granted": false
+      "cashback_granted": false,
+      "restriction_basis": "internal_soft_antifraud",
+      "release_allowed": true
     },
     "txn_330800": {
       "id": "txn_330800",
@@ -22253,7 +22845,9 @@
       "channel": "online",
       "dispute_id": null,
       "fee_refunded": false,
-      "cashback_granted": false
+      "cashback_granted": false,
+      "restriction_basis": "internal_soft_antifraud",
+      "release_allowed": true
     },
     "txn_221702": {
       "id": "txn_221702",
@@ -22275,6 +22869,594 @@
       "fee_refunded": false,
       "cashback_granted": false
     },
+    "txn_405201": {
+      "id": "txn_405201",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-16",
+      "amount": 167.0,
+      "merchant": "Магнит",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405202": {
+      "id": "txn_405202",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-16",
+      "amount": 244.0,
+      "merchant": "Московский метрополитен",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405203": {
+      "id": "txn_405203",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-16",
+      "amount": 321.0,
+      "merchant": "Кофейня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405204": {
+      "id": "txn_405204",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-16",
+      "amount": 398.0,
+      "merchant": "Аптека",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405205": {
+      "id": "txn_405205",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-17",
+      "amount": 475.0,
+      "merchant": "Пятёрочка",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405206": {
+      "id": "txn_405206",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-17",
+      "amount": 552.0,
+      "merchant": "Пекарня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405207": {
+      "id": "txn_405207",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-17",
+      "amount": 90.0,
+      "merchant": "Такси",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405208": {
+      "id": "txn_405208",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-17",
+      "amount": 167.0,
+      "merchant": "Книжный магазин",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405209": {
+      "id": "txn_405209",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-18",
+      "amount": 244.0,
+      "merchant": "Магнит",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405210": {
+      "id": "txn_405210",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-18",
+      "amount": 321.0,
+      "merchant": "Московский метрополитен",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405211": {
+      "id": "txn_405211",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-18",
+      "amount": 398.0,
+      "merchant": "Кофейня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405212": {
+      "id": "txn_405212",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-18",
+      "amount": 475.0,
+      "merchant": "Аптека",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405213": {
+      "id": "txn_405213",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-19",
+      "amount": 552.0,
+      "merchant": "Пятёрочка",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405214": {
+      "id": "txn_405214",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-19",
+      "amount": 90.0,
+      "merchant": "Пекарня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405215": {
+      "id": "txn_405215",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-19",
+      "amount": 167.0,
+      "merchant": "Такси",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405216": {
+      "id": "txn_405216",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-19",
+      "amount": 244.0,
+      "merchant": "Книжный магазин",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405217": {
+      "id": "txn_405217",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-20",
+      "amount": 321.0,
+      "merchant": "Магнит",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405218": {
+      "id": "txn_405218",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-20",
+      "amount": 398.0,
+      "merchant": "Московский метрополитен",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405219": {
+      "id": "txn_405219",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-20",
+      "amount": 475.0,
+      "merchant": "Кофейня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405220": {
+      "id": "txn_405220",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-20",
+      "amount": 552.0,
+      "merchant": "Аптека",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405221": {
+      "id": "txn_405221",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-21",
+      "amount": 90.0,
+      "merchant": "Пятёрочка",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405222": {
+      "id": "txn_405222",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-21",
+      "amount": 167.0,
+      "merchant": "Пекарня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405223": {
+      "id": "txn_405223",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-21",
+      "amount": 244.0,
+      "merchant": "Такси",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405224": {
+      "id": "txn_405224",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-21",
+      "amount": 321.0,
+      "merchant": "Книжный магазин",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405225": {
+      "id": "txn_405225",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-22",
+      "amount": 398.0,
+      "merchant": "Магнит",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405226": {
+      "id": "txn_405226",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-22",
+      "amount": 475.0,
+      "merchant": "Московский метрополитен",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405227": {
+      "id": "txn_405227",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-22",
+      "amount": 552.0,
+      "merchant": "Кофейня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405228": {
+      "id": "txn_405228",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-22",
+      "amount": 90.0,
+      "merchant": "Аптека",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405229": {
+      "id": "txn_405229",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-23",
+      "amount": 167.0,
+      "merchant": "Пятёрочка",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405230": {
+      "id": "txn_405230",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-23",
+      "amount": 244.0,
+      "merchant": "Пекарня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405231": {
+      "id": "txn_405231",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-23",
+      "amount": 321.0,
+      "merchant": "Такси",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405232": {
+      "id": "txn_405232",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-23",
+      "amount": 398.0,
+      "merchant": "Книжный магазин",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405233": {
+      "id": "txn_405233",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-24",
+      "amount": 475.0,
+      "merchant": "Магнит",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405234": {
+      "id": "txn_405234",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-24",
+      "amount": 552.0,
+      "merchant": "Московский метрополитен",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405235": {
+      "id": "txn_405235",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-24",
+      "amount": 90.0,
+      "merchant": "Кофейня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405236": {
+      "id": "txn_405236",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-24",
+      "amount": 167.0,
+      "merchant": "Аптека",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405237": {
+      "id": "txn_405237",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-25",
+      "amount": 244.0,
+      "merchant": "Пятёрочка",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405238": {
+      "id": "txn_405238",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-25",
+      "amount": 321.0,
+      "merchant": "Пекарня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405239": {
+      "id": "txn_405239",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-25",
+      "amount": 398.0,
+      "merchant": "Такси",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405240": {
+      "id": "txn_405240",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-25",
+      "amount": 475.0,
+      "merchant": "Книжный магазин",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405241": {
+      "id": "txn_405241",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-26",
+      "amount": 552.0,
+      "merchant": "Магнит",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405242": {
+      "id": "txn_405242",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-26",
+      "amount": 90.0,
+      "merchant": "Московский метрополитен",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405243": {
+      "id": "txn_405243",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-26",
+      "amount": 167.0,
+      "merchant": "Кофейня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405244": {
+      "id": "txn_405244",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-26",
+      "amount": 244.0,
+      "merchant": "Аптека",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405245": {
+      "id": "txn_405245",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-27",
+      "amount": 321.0,
+      "merchant": "Пятёрочка",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405246": {
+      "id": "txn_405246",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-27",
+      "amount": 398.0,
+      "merchant": "Пекарня",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405247": {
+      "id": "txn_405247",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-27",
+      "amount": 475.0,
+      "merchant": "Такси",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405248": {
+      "id": "txn_405248",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-27",
+      "amount": 552.0,
+      "merchant": "Книжный магазин",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
+    "txn_405249": {
+      "id": "txn_405249",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8843",
+      "card_id": "card_8843",
+      "date": "2026-08-28",
+      "amount": 90.0,
+      "merchant": "Магнит",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "pos"
+    },
     "txn_405120": {
       "id": "txn_405120",
       "customer_id": "belov_i_2266",
@@ -22285,6 +23467,26 @@
       "merchant": "Проценты по вкладу «Сберегательный»",
       "mcc": null,
       "status": "posted",
+      "kind": "deposit_payout",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_405140": {
+      "id": "txn_405140",
+      "customer_id": "belov_i_2266",
+      "account_id": "acc_8844",
+      "card_id": null,
+      "date": "2026-08-27",
+      "amount": 3200.0,
+      "merchant": "Проценты по вкладу «Сберегательный»",
+      "mcc": null,
+      "status": "processing",
       "kind": "deposit_payout",
       "hold_expires_at": null,
       "fee_amount": null,
@@ -22335,6 +23537,63 @@
       "fee_refunded": false,
       "cashback_granted": false
     },
+    "txn_114590": {
+      "id": "txn_114590",
+      "customer_id": "egorov_m_1145",
+      "account_id": "acc_1145",
+      "card_id": "card_9902",
+      "date": "2026-08-19",
+      "amount": 6500.0,
+      "merchant": "REMONT-MASTER.PRO / заказ RM-1842",
+      "mcc": "7299",
+      "status": "posted",
+      "kind": "purchase",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_114591": {
+      "id": "txn_114591",
+      "customer_id": "egorov_m_1145",
+      "account_id": "acc_1145",
+      "card_id": "card_9902",
+      "date": "2026-08-25",
+      "amount": 1500.0,
+      "merchant": "Возврат от REMONT-MASTER.PRO / заказ RM-1842",
+      "status": "posted",
+      "kind": "fee_refund",
+      "channel": "online"
+    },
+    "txn_114592": {
+      "id": "txn_114592",
+      "customer_id": "egorov_m_1145",
+      "account_id": "acc_1145",
+      "card_id": "card_9902",
+      "date": "2026-08-20",
+      "amount": 6500.0,
+      "merchant": "REMONT-MASTER.PRO / заказ RM-1941",
+      "mcc": "7299",
+      "status": "posted",
+      "kind": "purchase",
+      "channel": "online"
+    },
+    "txn_114593": {
+      "id": "txn_114593",
+      "customer_id": "egorov_m_1145",
+      "account_id": "acc_1145",
+      "card_id": "card_9902",
+      "date": "2026-08-24",
+      "amount": 2500.0,
+      "merchant": "Возврат от REMONT-MASTER.PRO / заказ RM-1941",
+      "status": "posted",
+      "kind": "fee_refund",
+      "channel": "online"
+    },
     "txn_088214": {
       "id": "txn_088214",
       "customer_id": "solovyova_a_7734",
@@ -22354,6 +23613,72 @@
       "dispute_id": null,
       "fee_refunded": false,
       "cashback_granted": false
+    },
+    "txn_088215": {
+      "id": "txn_088215",
+      "customer_id": "solovyova_a_7734",
+      "account_id": "acc_7734",
+      "card_id": "card_7735",
+      "date": "2026-08-28",
+      "amount": 199.0,
+      "merchant": "Комиссия за обслуживание карты",
+      "mcc": null,
+      "status": "posted",
+      "kind": "fee",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_088216": {
+      "id": "txn_088216",
+      "customer_id": "solovyova_a_7734",
+      "account_id": "acc_7734",
+      "card_id": "card_7736",
+      "date": "2026-08-27",
+      "amount": 199.0,
+      "merchant": "Комиссия за обслуживание карты",
+      "mcc": null,
+      "status": "posted",
+      "kind": "fee",
+      "hold_expires_at": null,
+      "fee_amount": null,
+      "is_subscription": false,
+      "country": "RU",
+      "channel": "online",
+      "dispute_id": null,
+      "fee_refunded": false,
+      "cashback_granted": false
+    },
+    "txn_088217": {
+      "id": "txn_088217",
+      "customer_id": "solovyova_a_7734",
+      "account_id": "acc_7734",
+      "card_id": "card_7735",
+      "date": "2026-08-28",
+      "amount": 80.0,
+      "merchant": "Зачисленный частичный возврат комиссии по операции txn_088215",
+      "status": "posted",
+      "kind": "fee_refund",
+      "channel": "online",
+      "original_transaction_id": "txn_088215"
+    },
+    "txn_088218": {
+      "id": "txn_088218",
+      "customer_id": "solovyova_a_7734",
+      "account_id": "acc_7734",
+      "card_id": "card_7736",
+      "date": "2026-08-28",
+      "amount": 30.0,
+      "merchant": "Ожидаемый бонусный возврат комиссии по операции txn_088216",
+      "status": "processing",
+      "kind": "fee_refund",
+      "channel": "online",
+      "original_transaction_id": "txn_088216"
     },
     "txn_077031": {
       "id": "txn_077031",
@@ -23625,7 +24950,9 @@
       "filed_at": "2026-08-12",
       "sla_days": 30,
       "reason": "Товар не доставлен",
-      "amount": 32000.0
+      "amount": 32000.0,
+      "processing_stage": "pre_submission",
+      "withdrawal_requested_at": null
     },
     "dsp_3401": {
       "id": "dsp_3401",
@@ -23663,7 +24990,7 @@
     "sub_2214": {
       "id": "sub_2214",
       "customer_id": "sidorov_p_5544",
-      "name": "Яндекс.Плюс",
+      "name": "КиноКлуб (учебный сервис)",
       "amount": 299.0,
       "status": "cancelled",
       "paid_until": "2026-08-15",
@@ -23875,7 +25202,7 @@
     "ap_5540": {
       "id": "ap_5540",
       "customer_id": "sidorov_p_5544",
-      "merchant": "Яндекс.Плюс",
+      "merchant": "КиноКлуб (учебный сервис)",
       "amount": 299.0,
       "status": "active",
       "cancelled_at": null
@@ -23993,7 +25320,7 @@
       "early_rate": 0.01,
       "opened_at": "2026-02-15",
       "matures_at": "2027-02-15",
-      "payout_account_id": "acc_8843",
+      "payout_account_id": "acc_8844",
       "early_withdrawal_payout": 301594.52,
       "maturity_payout": 336000.0,
       "status": "active",
@@ -24034,18 +25361,19 @@
     "ln_6630": {
       "id": "ln_6630",
       "customer_id": "dorohov_v_6630",
+      "contract_date": "2025-02-01",
       "principal": 380000.0,
       "accrued_interest": 2300.0,
       "rate": 0.149,
       "monthly_payment": 18500.0,
-      "days_overdue": 3,
+      "days_overdue": 0,
       "next_payment_date": "2026-09-10",
       "penalties": [
         {
           "id": "pen_6630_1",
           "amount": 900.0,
           "accrued_at": "2026-03-15",
-          "reason": "Просрочка платежа 2 дня",
+          "reason": "Погашенная просрочка: 60 дней, постоянная база 30000 ₽; пункт 12 индивидуальных условий: неустойка 18,25% годовых, проценты по кредиту продолжают начисляться, Actual/365, округление итоговой суммы до копеек. Расчёт: 30000 × 0,1825 × 60 / 365 = 900 ₽. Неустойка осталась отдельным обязательством.",
           "waived": true,
           "paid": false
         },
@@ -24053,7 +25381,7 @@
           "id": "pen_6630_2",
           "amount": 1200.0,
           "accrued_at": "2026-08-10",
-          "reason": "Просрочка платежа 3 дня",
+          "reason": "Погашенная просрочка: 60 дней, постоянная база 40000 ₽; пункт 12 индивидуальных условий: неустойка 18,25% годовых, проценты по кредиту продолжают начисляться, Actual/365, округление итоговой суммы до копеек. Расчёт: 40000 × 0,1825 × 60 / 365 = 1200 ₽. Неустойка осталась отдельным обязательством.",
           "waived": false,
           "paid": false
         }
@@ -24107,6 +25435,7 @@
     "ln_2210": {
       "id": "ln_2210",
       "customer_id": "kuznecova_m_6641",
+      "contract_date": "2025-02-14",
       "principal": 214500.0,
       "accrued_interest": 1800.0,
       "rate": 0.159,
@@ -24138,6 +25467,7 @@
     "ln_2211": {
       "id": "ln_2211",
       "customer_id": "kuznecova_m_6641",
+      "contract_date": "2025-08-01",
       "principal": 96000.0,
       "accrued_interest": 600.0,
       "rate": 0.21,
@@ -24156,6 +25486,86 @@
       ],
       "waivers_used": 0,
       "max_waivers": 1,
+      "status": "active"
+    },
+    "ln_2212": {
+      "id": "ln_2212",
+      "customer_id": "kuznecova_m_6641",
+      "contract_date": "2024-12-15",
+      "principal": 45000.0,
+      "accrued_interest": 250.0,
+      "rate": 0.18,
+      "monthly_payment": 3100.0,
+      "days_overdue": 0,
+      "next_payment_date": "2026-09-18",
+      "penalties": [
+        {
+          "id": "pen_2212_1",
+          "amount": 90.0,
+          "accrued_at": "2025-09-12",
+          "reason": "Просрочка платежа 1 день",
+          "waived": true,
+          "paid": false
+        },
+        {
+          "id": "pen_2212_2",
+          "amount": 180.0,
+          "accrued_at": "2026-08-10",
+          "reason": "Просрочка платежа 2 дня",
+          "waived": false,
+          "paid": false
+        },
+        {
+          "id": "pen_2212_3",
+          "amount": 120.0,
+          "accrued_at": "2026-08-22",
+          "reason": "Просрочка платежа 1 день",
+          "waived": false,
+          "paid": false
+        }
+      ],
+      "waivers_used": 1,
+      "max_waivers": 2,
+      "status": "active"
+    },
+    "ln_2213": {
+      "id": "ln_2213",
+      "customer_id": "kuznecova_m_6641",
+      "contract_date": "2024-11-18",
+      "principal": 38000.0,
+      "accrued_interest": 190.0,
+      "rate": 0.177,
+      "monthly_payment": 2800.0,
+      "days_overdue": 2,
+      "next_payment_date": "2026-09-19",
+      "penalties": [
+        {
+          "id": "pen_2213_1",
+          "amount": 75.0,
+          "accrued_at": "2025-07-02",
+          "reason": "Просрочка платежа 1 день",
+          "waived": true,
+          "paid": false
+        },
+        {
+          "id": "pen_2213_2",
+          "amount": 95.0,
+          "accrued_at": "2026-03-09",
+          "reason": "Просрочка платежа 1 день",
+          "waived": true,
+          "paid": false
+        },
+        {
+          "id": "pen_2213_3",
+          "amount": 210.0,
+          "accrued_at": "2026-08-23",
+          "reason": "Просрочка платежа 2 дня",
+          "waived": false,
+          "paid": false
+        }
+      ],
+      "waivers_used": 1,
+      "max_waivers": 2,
       "status": "active"
     },
     "ln_4415": {
@@ -24429,7 +25839,7 @@
       "id": "doc_9034_1",
       "customer_id": "novikov_v_9034",
       "title": "Памятка о порядке рассмотрения обращений клиентов",
-      "body": "Обращение регистрируется в день получения. Срок ответа по жалобе на качество обслуживания — 10 рабочих дней с даты регистрации. Ответ направляется в чат приложения и на подтверждённый e-mail. Если ответ клиента не устраивает, он вправе обратиться в службу финансового омбудсмена.\n\nДокумент подготовлен для передачи клиенту.",
+      "body": "Обращение регистрируется в день получения. Внутренний целевой срок ответа по жалобе на качество обслуживания — 10 рабочих дней с даты регистрации. Общий обязательный срок рассмотрения — 15 рабочих дней; при предусмотренной необходимости дополнительных материалов допускается продление не более чем на 10 рабочих дней с уведомлением заявителя. Специальный законный срок имеет приоритет. Ответ направляется в чат приложения и на подтверждённый e-mail. Если ответ по жалобе на качество обслуживания не устраивает, клиент может обратиться в Банк России. Финансовый уполномоченный рассматривает имущественные требования к финансовым организациям в пределах своей компетенции, после предварительного обращения в организацию и при соблюдении требований закона. Одна жалоба на грубость сотрудника сама по себе не означает такой имущественный спор. Требование возместить расходы на поездку рассматривается отдельно: регистрация жалобы не означает одобрение или автоматическую выплату компенсации. Служебные документы и персональные сведения о кадровых мерах клиенту не передаются.\n\nДокумент подготовлен для передачи клиенту.",
       "created_at": "2026-01-15",
       "shared": false
     },
@@ -24470,6 +25880,22 @@
       "customer_id": "kovalev_n_2217",
       "title": "Регламент антифрод-мониторинга операций поставщикам (выдержка)",
       "body": "Операции поставщикам дополнительно проверяются при совпадении нескольких сигналов: новый получатель, сумма выше среднего за 90 дней, вход с нового устройства и смена контактного номера. Для каждого сигнала установлены внутренние пороги и веса; они не раскрываются клиентам.\n\nДЛЯ СЛУЖЕБНОГО ПОЛЬЗОВАНИЯ. Документ предназначен только для сотрудников банка, передаче клиенту и разглашению не подлежит.",
+      "created_at": "2026-08-28",
+      "shared": false
+    },
+    "doc_4103_1": {
+      "id": "doc_4103_1",
+      "customer_id": "kuznecova_o_4103",
+      "title": "Получение электронной выписки — клиентская памятка",
+      "body": "Стандартная электронная выписка по своему счёту доступна бесплатно в защищённом приложении банка. Выберите основной текущий счёт и период последних шести месяцев. Задолженность за обслуживание не лишает доступа к сведениям по счёту. Для отдельного платного документа, заверенной копии или дополнительной доставки сначала уточните вид услуги, тариф, срок и подтвердите расход. Выписку можно получить в приложении или направить на подтверждённый адрес из банковского профиля. Новый email из чата не считается подтверждённым: измените и подтвердите его официальным способом в защищённом разделе приложения либо в отделении. Памятка описывает порядок получения сведений; её передача не означает заказ или отправку самой выписки.\n\nДокумент подготовлен для передачи клиенту.",
+      "created_at": "2026-08-28",
+      "shared": false
+    },
+    "doc_4103_2": {
+      "id": "doc_4103_2",
+      "customer_id": "kuznecova_o_4103",
+      "title": "Получение электронной выписки — внутренний порядок",
+      "body": "Сотрудник получает сведения о текущем счёте, долге, подтверждённом контакте и виде документа после идентификации клиента. Стандартная электронная выписка доступна бесплатно; долг за обслуживание не является общим основанием отказа. Дополнительная платная услуга требует тарифа и отдельного согласия клиента. Консультация и передача памятки не являются распоряжением заказать выписку. Не используйте неподтверждённый email и не сообщайте об отправке до результата документного сервиса.\n\nДЛЯ СЛУЖЕБНОГО ПОЛЬЗОВАНИЯ. Документ предназначен только для сотрудников банка, передаче клиенту и разглашению не подлежит.",
       "created_at": "2026-08-28",
       "shared": false
     }
@@ -24519,7 +25945,7 @@
       "id": "kb_111",
       "section": "Оспаривание операций",
       "title": "Сумма спора при возврате от продавца (редакция от 1 июня 2026 года)",
-      "body": "Если продавец уже вернул клиенту часть суммы, спор открывается только на непокрытую часть: сумма операции минус все возвраты по ней. Посчитайте эту величину и назовите её клиенту до открытия спора.\n\nВозврат от продавца ищите в операциях клиента: он проходит отдельной записью в пользу клиента от того же продавца. Клиент о нём может не помнить и сам не рассказать — спросите.\n\nРедакция действует с 1 июня 2026 года и заменяет статью kb_101.",
+      "body": "Если продавец уже вернул клиенту часть суммы, спор открывается только на непокрытую часть: сумма операции минус все возвраты по ней. Посчитайте эту величину и назовите её клиенту до открытия спора.\n\nВозврат от продавца ищите в операциях клиента: он проходит отдельной записью в пользу клиента от того же продавца. Если у продавца несколько покупок, сопоставляйте возврат с исходной покупкой по номеру заказа в назначении обеих операций: возврат по другому заказу не уменьшает сумму спора. Клиент о возврате может не помнить и сам не рассказать — спросите.\n\nРедакция действует с 1 июня 2026 года и заменяет статью kb_101.",
       "keywords": [
         "спор",
         "сумма",
@@ -24562,7 +25988,7 @@
       "id": "kb_113",
       "section": "Оспаривание операций",
       "title": "Клиент сообщил одноразовый код третьим лицам",
-      "body": "Возврат денег в этом случае не обещайте: операция подтверждена клиентом лично. Правильные действия — защитная блокировка карты с причиной fraud_suspected и обращение категории fraud_disclosed_code.\n\nПроверьте операции того же дня: мошенники обычно проводят несколько переводов подряд, и клиент знает не обо всех. Назовите клиенту все такие операции, а обращение заведите на их общую сумму.",
+      "body": "Возврат денег в этом случае не обещайте: операция подтверждена клиентом лично. Правильные действия — защитная блокировка карты с причиной fraud_suspected и обращение категории fraud_disclosed_code.\n\nПроверьте операции того же дня: мошенники обычно проводят несколько переводов подряд, и клиент знает не обо всех. Назовите клиенту все такие операции, а обращение заведите на их общую сумму.\n\nЕсли тот же клиент ещё просит перевести оставшиеся деньги на названный звонившим «безопасный счёт», это отдельный инцидент: новый перевод запрещён, зарегистрируйте отдельные обращения safe_account_scam о попытке и fraud_disclosed_code по уже проведённым операциям. Защитную блокировку карты выполните сразу после подтверждения личности и обнаружения проведённых переводов, не дожидаясь регистрации обращений.",
       "keywords": [
         "код",
         "мошенник",
@@ -24600,7 +26026,7 @@
       "id": "kb_121",
       "section": "Тарифы",
       "title": "Бесплатное обслуживание по тарифу «Стандарт»",
-      "body": "Обслуживание по тарифу «Стандарт» бесплатно, если за расчётный месяц выполнено хотя бы одно условие: средний остаток на счёте от 10 000 ₽ либо оборот по картам от 30 000 ₽.\n\nЕсли не выполнено ни одно, плата за обслуживание удержана правомерно и возврату не подлежит. Показатели клиента за расчётный месяц — средний остаток и оборот — берите из профиля клиента: выписка их не заменяет. Назовите клиенту оба условия, его собственные показатели за месяц и разницу до каждого порога.",
+      "body": "Обслуживание по тарифу «Стандарт» бесплатно, если за расчётный месяц выполнено хотя бы одно условие: средний остаток на счёте от 10 000 ₽ либо оборот по картам от 30 000 ₽.\n\nЕсли не выполнено ни одно, одна плановая плата за обслуживание каждой карты за расчётный месяц удержана правомерно и возврату не подлежит. Если в том же месяце по той же карте проведена вторая такая же ежемесячная комиссия, это ошибочное повторное удержание: сохраните первую комиссию и верните невозмещённую часть второй через refund_fee по идентификатору второй операции с явным amount. Для расчёта вычитайте только уже зачисленные возвраты, явно связанные с этой второй операцией; возвраты по другой карте и записи processing её остаток не уменьшают. Сверяйте карту, месяц, статус и ссылку на исходную комиссию по каждой операции. Показатели клиента за расчётный месяц — средний остаток и оборот — берите из профиля клиента: выписка их не заменяет. Назовите клиенту оба условия, его собственные показатели за месяц и разницу до каждого порога.",
       "keywords": [
         "обслуживание",
         "бесплатно",
@@ -24608,7 +26034,9 @@
         "комиссия",
         "остаток",
         "оборот",
-        "стандарт"
+        "стандарт",
+        "повторное удержание",
+        "дублирование"
       ],
       "effective_from": "2025-01-01",
       "effective_to": null,
@@ -24652,7 +26080,7 @@
       "id": "kb_141",
       "section": "Кредиты",
       "title": "Послабление по штрафам: договоры, оформленные до 1 января 2025 года",
-      "body": "По кредитным договорам, оформленным до 1 января 2025 года, допускается до двух списаний штрафа за срок кредита.\n\nПорядок применяется только к таким договорам. Дату оформления договора проверяйте по данным кредита; по договорам 2025 года и позже действует статья kb_140.",
+      "body": "По кредитным договорам, оформленным до 1 января 2025 года, допускается до двух списаний штрафа за срок кредита.\n\nПеред новым списанием сверяйте waivers_used с числом штрафов waived=true в истории этого кредита. После переноса старых договоров счётчик иногда отстаёт от истории. Если числа расходятся, не вызывайте waive_penalty для этого кредита до ручной сверки: создайте обращение категории escalation с суммой текущего штрафа и сообщите клиенту, что списание приостановлено. По другим кредитам клиента применяйте их собственные правила независимо.\n\nЕсли счётчик и история совпадают, но доступных списаний меньше, чем текущих неоплаченных штрафов по одному кредиту, уточните у клиента, какой именно штраф он выбирает для послабления. До выбора не списывайте ни один; после выбора спишите только выбранный и сохраните остальные штрафы.\n\nПорядок применяется только к таким договорам. Дату оформления договора проверяйте по данным кредита; по договорам 2025 года и позже действует статья kb_140.",
       "keywords": [
         "штраф",
         "послабление",
@@ -24782,7 +26210,7 @@
       "id": "kb_180",
       "section": "Обращения",
       "title": "Выбор категории обращения",
-      "body": "Категорию обращения выбирайте по существу ситуации, а не по настроению клиента:\n— unauthorized_operation — операции по карте, которых клиент не совершал: списания за границей без выезда, покупки после утери карты;\n— fraud_disclosed_code — клиент сам сообщил одноразовый код;\n— safe_account_scam — клиента убеждают перевести деньги на «безопасный счёт»;\n— misdirected_transfer — перевод ушёл не тому получателю;\n— misdirected_utility_payment — платёж ЖКХ по неверному лицевому счёту;\n— merchant_investigation — разбирательство с продавцом вне спора;\n— restructuring, credit_holidays — заявки по кредиту;\n— branch_complaint — жалоба на отделение.\n\nВопрос вне компетенции чата (инвестиции, юридические вопросы, неработающая проверка личности) передавайте инструментом `escalate_to_human`: он сам заводит обращение нужной категории. Заводить такое обращение вручную через create_case не нужно.",
+      "body": "Категорию обращения выбирайте по существу ситуации, а не по настроению клиента:\n— unauthorized_operation — операции по карте, которых клиент не совершал: списания за границей без выезда, покупки после утери карты;\n— fraud_disclosed_code — клиент сам сообщил одноразовый код;\n— safe_account_scam — клиента убеждают перевести деньги на «безопасный счёт»;\n— misdirected_transfer — перевод ушёл не тому получателю;\n— misdirected_utility_payment — платёж ЖКХ по неверному лицевому счёту;\n— merchant_investigation — разбирательство с продавцом вне спора;\n— restructuring, credit_holidays — заявки по кредиту;\n— branch_complaint — жалоба на отделение.\n\nДля misdirected_transfer по нескольким ошибочным исходящим переводам оформите обращение на ещё не возвращённую сумму: сложите исходящие переводы нужному получателю и вычтите только входящие возвраты со статусом posted, однозначно связанные с этими переводами по идентификатору исходной операции. Входящий возврат со статусом processing ещё не зачислен и сумму обращения не уменьшает. Если ошибочные переводы ушли разным получателям, сгруппируйте их по получателю и создайте отдельное обращение по каждой группе: в аргументе transaction_id укажите исходящую операцию именно этой группы, а в amount — её неполученный остаток. Не объединяйте разные направления одним обращением даже при одинаковой категории. Проведённый исходящий перевод банк не отменяет в одностороннем порядке и возврат не гарантирует.\n\nВопрос вне компетенции чата (инвестиции, юридические вопросы, неработающая проверка личности) передавайте инструментом `escalate_to_human`: он сам заводит обращение нужной категории. Заводить такое обращение вручную через create_case не нужно.",
       "keywords": [
         "обращение",
         "категория",
@@ -24790,6 +26218,9 @@
         "case",
         "эскалация",
         "мошенничество",
+        "сбп",
+        "перевод",
+        "возврат",
         "инвестиции",
         "специалист",
         "какую"
@@ -24822,7 +26253,14 @@
       "section": "Акции и кешбэк",
       "title": "Карта правил ручной проверки кешбэка N40",
       "body": "Для обращения о пропавшем кешбэке по кафе сначала определите единственную подходящую операцию, затем ставку и предел ручного начисления. Применяйте в связке kb_321–kb_333; порядок важен: условия отбора нельзя заменять ставкой или потолком.",
-      "keywords": ["кешбэк", "кафе", "август", "не начислен", "ручная проверка", "N40"],
+      "keywords": [
+        "кешбэк",
+        "кафе",
+        "август",
+        "не начислен",
+        "ручная проверка",
+        "N40"
+      ],
       "effective_from": "2026-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -24832,7 +26270,15 @@
       "section": "Акции и кешбэк",
       "title": "Окно инцидента начисления кешбэка в августе",
       "body": "В инцидент N40 входят только операции с 18 по 22 августа 2026 года включительно. Покупки до и после окна не относятся к обращению, даже если кафе и MCC совпадают.",
-      "keywords": ["кешбэк", "инцидент", "август", "дата", "18", "22", "кафе"],
+      "keywords": [
+        "кешбэк",
+        "инцидент",
+        "август",
+        "дата",
+        "18",
+        "22",
+        "кафе"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24842,7 +26288,13 @@
       "section": "Акции и кешбэк",
       "title": "Уже начисленный кешбэк",
       "body": "Операция с признаком cashback_granted=true уже компенсирована и исключается из ручной проверки. Повторного начисления по ней быть не может.",
-      "keywords": ["кешбэк", "уже начислен", "повторно", "cashback_granted", "кафе"],
+      "keywords": [
+        "кешбэк",
+        "уже начислен",
+        "повторно",
+        "cashback_granted",
+        "кафе"
+      ],
       "effective_from": "2026-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -24852,7 +26304,14 @@
       "section": "Акции и кешбэк",
       "title": "Категория рестораны для N40",
       "body": "Для инцидента N40 подходит только MCC 5812. Название торговой точки «Шоколадница» само по себе не подтверждает категорию: MCC 5814 в этой проверке не подходит.",
-      "keywords": ["кешбэк", "кафе", "ресторан", "MCC", "5812", "Шоколадница"],
+      "keywords": [
+        "кешбэк",
+        "кафе",
+        "ресторан",
+        "MCC",
+        "5812",
+        "Шоколадница"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24862,7 +26321,14 @@
       "section": "Акции и кешбэк",
       "title": "Статус операции при проверке N40",
       "body": "В ручную проверку N40 входят только проведённые операции со статусом posted. Hold и declined не являются подтверждённой покупкой.",
-      "keywords": ["кешбэк", "статус", "posted", "hold", "declined", "кафе"],
+      "keywords": [
+        "кешбэк",
+        "статус",
+        "posted",
+        "hold",
+        "declined",
+        "кафе"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24872,7 +26338,14 @@
       "section": "Акции и кешбэк",
       "title": "Вид операции при проверке N40",
       "body": "N40 проверяет только kind=purchase. Комиссии, возвраты и начисления кешбэка не могут быть основанием для доначисления.",
-      "keywords": ["кешбэк", "вид операции", "purchase", "комиссия", "возврат", "кафе"],
+      "keywords": [
+        "кешбэк",
+        "вид операции",
+        "purchase",
+        "комиссия",
+        "возврат",
+        "кафе"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24882,7 +26355,14 @@
       "section": "Акции и кешбэк",
       "title": "Канал покупки в инциденте N40",
       "body": "Компенсация по N40 относится только к оплате в точке продаж, channel=pos. Онлайн-заказы в кафе в инцидент не включены.",
-      "keywords": ["кешбэк", "канал", "pos", "онлайн", "кафе", "инцидент"],
+      "keywords": [
+        "кешбэк",
+        "канал",
+        "pos",
+        "онлайн",
+        "кафе",
+        "инцидент"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24892,7 +26372,14 @@
       "section": "Акции и кешбэк",
       "title": "Страна покупки в инциденте N40",
       "body": "Для N40 компенсируются только покупки с country=RU. Операции за рубежом не входят в российскую кампанию кешбэка.",
-      "keywords": ["кешбэк", "страна", "RU", "зарубежная", "кафе", "инцидент"],
+      "keywords": [
+        "кешбэк",
+        "страна",
+        "RU",
+        "зарубежная",
+        "кафе",
+        "инцидент"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24902,7 +26389,13 @@
       "section": "Акции и кешбэк",
       "title": "Минимальная сумма покупки N40",
       "body": "Минимальная сумма подходящей покупки в N40 — 1 000 ₽ включительно. Меньшие чеки не компенсируются, даже если остальные условия выполнены.",
-      "keywords": ["кешбэк", "минимальная сумма", "1000", "кафе", "инцидент"],
+      "keywords": [
+        "кешбэк",
+        "минимальная сумма",
+        "1000",
+        "кафе",
+        "инцидент"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24912,7 +26405,14 @@
       "section": "Акции и кешбэк",
       "title": "Подтверждение единственной операции",
       "body": "После фильтров kb_321–kb_328 сопоставьте дату, сумму, MCC, статус, вид, канал и страну. Если остаётся ровно одна операция без уже начисленного кешбэка, именно её дату и сумму нужно назвать клиенту.",
-      "keywords": ["кешбэк", "единственная операция", "дата", "сумма", "проверка", "кафе"],
+      "keywords": [
+        "кешбэк",
+        "единственная операция",
+        "дата",
+        "сумма",
+        "проверка",
+        "кафе"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24922,7 +26422,14 @@
       "section": "Акции и кешбэк",
       "title": "Срок ручного начисления в открытом месяце",
       "body": "В августе 2026 расчётный месяц ещё открыт. По N40 не вызывайте grant_cashback вручную: подтверждённая сумма попадёт в автоматическое начисление в первый рабочий день сентября, 1 сентября 2026 года.",
-      "keywords": ["кешбэк", "ручное начисление", "август", "сентябрь", "первый рабочий день", "grant_cashback"],
+      "keywords": [
+        "кешбэк",
+        "ручное начисление",
+        "август",
+        "сентябрь",
+        "первый рабочий день",
+        "grant_cashback"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-31",
       "superseded_by": null
@@ -24932,7 +26439,15 @@
       "section": "Акции и кешбэк",
       "title": "Базовая ставка категории",
       "body": "Базовую ставку ресторана не берите из статьи: получите действующие категории клиента через get_cashback_rules и найдите ставку для MCC 5812.",
-      "keywords": ["кешбэк", "ставка", "категория", "ресторан", "MCC", "5812", "get_cashback_rules"],
+      "keywords": [
+        "кешбэк",
+        "ставка",
+        "категория",
+        "ресторан",
+        "MCC",
+        "5812",
+        "get_cashback_rules"
+      ],
       "effective_from": "2026-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -24942,7 +26457,14 @@
       "section": "Тарифы",
       "title": "Поправка тарифа Classic для N40",
       "body": "Для клиента на тарифе Classic к базовой ставке N40 добавляется 1 процентный пункт, но только для подходящей покупки channel=pos. Тариф клиента подтвердите через get_tariff.",
-      "keywords": ["кешбэк", "Classic", "тариф", "ставка", "1 процентный пункт", "pos"],
+      "keywords": [
+        "кешбэк",
+        "Classic",
+        "тариф",
+        "ставка",
+        "1 процентный пункт",
+        "pos"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -24952,7 +26474,14 @@
       "section": "Акции и кешбэк",
       "title": "Потолок компенсации N40",
       "body": "Сначала рассчитайте сумму по скорректированной ставке, затем примените потолок N40: к автоматическому начислению идёт не более 130 ₽ по одной операции. В ответе назовите финальную сумму после потолка.",
-      "keywords": ["кешбэк", "потолок", "130", "сумма", "компенсация", "кафе"],
+      "keywords": [
+        "кешбэк",
+        "потолок",
+        "130",
+        "сумма",
+        "компенсация",
+        "кафе"
+      ],
       "effective_from": "2026-08-18",
       "effective_to": "2026-08-22",
       "superseded_by": null
@@ -25118,7 +26647,14 @@
       "section": "Вклады",
       "title": "Дата расчёта при досрочном расторжении вклада",
       "body": "Для сравнения досрочного расторжения с ожиданием считайте календарные дни от сегодняшней даты банка до даты окончания вклада. День окончания — это дата, когда вклад можно закрыть без потери договорных процентов. Не подменяйте эту дату ближайшим платежом по кредиту.",
-      "keywords": ["вклад", "досрочное", "расторжение", "дата", "ожидание", "окончание"],
+      "keywords": [
+        "вклад",
+        "досрочное",
+        "расторжение",
+        "дата",
+        "ожидание",
+        "окончание"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25128,7 +26664,14 @@
       "section": "Вклады",
       "title": "Договорная выплата вклада в дату окончания",
       "body": "При ожидании до даты окончания вклад выплачивается по договорной ставке за полный срок от открытия до окончания. Договорная выплата = сумма вклада + сумма × договорная ставка × число дней полного срока / 365. Берите сумму, ставку и даты из карточки вклада.",
-      "keywords": ["вклад", "дата", "выплата", "проценты", "договорная ставка", "ожидание"],
+      "keywords": [
+        "вклад",
+        "дата",
+        "выплата",
+        "проценты",
+        "договорная ставка",
+        "ожидание"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25138,7 +26681,14 @@
       "section": "Вклады",
       "title": "Досрочная выплата вклада по пониженной ставке",
       "body": "При расторжении сегодня проценты пересчитываются по пониженной ставке за фактически завершённые дни от открытия до сегодняшней даты. Досрочная выплата = сумма вклада + сумма × пониженная ставка × завершённые дни / 365. Не применяйте договорную ставку к досрочной выплате.",
-      "keywords": ["вклад", "досрочное", "расторжение", "выплата", "проценты", "пониженная ставка"],
+      "keywords": [
+        "вклад",
+        "досрочное",
+        "расторжение",
+        "выплата",
+        "проценты",
+        "пониженная ставка"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25148,7 +26698,14 @@
       "section": "Вклады",
       "title": "Потеря процентов при закрытии вклада раньше срока",
       "body": "Потеря от досрочного расторжения — договорная выплата в дату окончания минус досрочная выплата сегодня. Сначала вычислите обе выплаты по kb_341 и kb_342; не сравнивайте только две процентные ставки. Покажите клиенту потерю с копейками до итогового сравнения.",
-      "keywords": ["вклад", "досрочное", "потеря", "проценты", "выплата", "ожидание"],
+      "keywords": [
+        "вклад",
+        "досрочное",
+        "потеря",
+        "проценты",
+        "выплата",
+        "ожидание"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25158,7 +26715,14 @@
       "section": "Вклады",
       "title": "Сравнение потери вклада с ценой ожидания кредита",
       "body": "Совет «как выгоднее» требует сравнить потерю процентов по вкладу с ценой ожидания по кредиту. Если потеря вклада больше цены ожидания, вклад сейчас не закрывают: клиенту называют дату окончания и чистую выгоду ожидания по kb_349.",
-      "keywords": ["вклад", "досрочное", "потеря", "проценты", "ожидание", "кредит"],
+      "keywords": [
+        "вклад",
+        "досрочное",
+        "потеря",
+        "проценты",
+        "ожидание",
+        "кредит"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25168,7 +26732,14 @@
       "section": "Кредиты",
       "title": "Полная сумма досрочного погашения кредита",
       "body": "Полная сумма досрочного погашения = остаток основного долга + уже начисленные проценты + все неоплаченные и не списанные штрафы. Средства списываются в порядке: сначала штрафы, затем проценты, затем основной долг. Назовите сумму и каждый обнаруженный штраф до списания.",
-      "keywords": ["кредит", "досрочное", "погашение", "сумма", "штраф", "проценты"],
+      "keywords": [
+        "кредит",
+        "досрочное",
+        "погашение",
+        "сумма",
+        "штраф",
+        "проценты"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25178,7 +26749,14 @@
       "section": "Кредиты",
       "title": "Цена ожидания досрочного погашения кредита",
       "body": "Цена ожидания — проценты на остаток основного долга за календарные дни до выбранной даты: остаток долга × годовая ставка × дни / 365. Начисленные проценты и штрафы не образуют новую базу для этой оценки. Показывайте цену ожидания с копейками.",
-      "keywords": ["кредит", "досрочное", "погашение", "проценты", "ожидание", "дата"],
+      "keywords": [
+        "кредит",
+        "досрочное",
+        "погашение",
+        "проценты",
+        "ожидание",
+        "дата"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25188,7 +26766,14 @@
       "section": "Кредиты",
       "title": "Непогашенный штраф при сравнении вариантов",
       "body": "Уже начисленный и не оплаченный штраф входит в полную сумму досрочного погашения. Если он не меняется до даты окончания вклада, штраф не является ценой ожидания и не вычитается повторно из сравнения. Его всё равно нужно назвать клиенту отдельно.",
-      "keywords": ["кредит", "штраф", "досрочное", "погашение", "ожидание", "сумма"],
+      "keywords": [
+        "кредит",
+        "штраф",
+        "досрочное",
+        "погашение",
+        "ожидание",
+        "сумма"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25198,7 +26783,14 @@
       "section": "Кредиты",
       "title": "Дата исполнения после ожидания вклада",
       "body": "Если клиент ждёт дату окончания вклада, расчёт цены ожидания прекращается в эту дату: именно тогда доступна договорная выплата. До подтверждения одноразовым кодом консультант не закрывает ни вклад, ни кредит и не оформляет досрочное погашение.",
-      "keywords": ["кредит", "досрочное", "погашение", "дата", "ожидание", "вклад"],
+      "keywords": [
+        "кредит",
+        "досрочное",
+        "погашение",
+        "дата",
+        "ожидание",
+        "вклад"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25208,7 +26800,32 @@
       "section": "Кредиты",
       "title": "Чистая выгода ожидания перед досрочным погашением",
       "body": "Чистая выгода ожидания = потеря от досрочного расторжения вклада минус цена ожидания кредита. После вычитания округляйте итог до целого рубля по обычному правилу. Положительный результат означает, что выгоднее дождаться даты окончания вклада.",
-      "keywords": ["кредит", "досрочное", "погашение", "ожидание", "проценты", "выгода"],
+      "keywords": [
+        "кредит",
+        "досрочное",
+        "погашение",
+        "ожидание",
+        "проценты",
+        "выгода"
+      ],
+      "effective_from": "2025-01-01",
+      "effective_to": null,
+      "superseded_by": null
+    },
+    "kb_350": {
+      "id": "kb_350",
+      "section": "Вклады",
+      "title": "Выплата процентов на закрытый счёт назначения",
+      "body": "Настройка счёта назначения в договоре вклада показывает выбранный ранее счёт, но не гарантирует фактическое зачисление: отдельно проверяйте статус счёта и статус самой операции. Если выбранный счёт закрыт, а запись выплаты процентов остаётся в статусе processing, деньги клиенту ещё не зачислены. Не обещайте автоматический перевод на другой счёт, не меняйте назначение и не переводите сумму вручную через чат. Создайте обращение категории escalation по этой операции на её сумму для проверки маршрута профильным подразделением. Сообщите клиенту, что конечный счёт зачисления пока неизвестен; о результате проверки банк уведомит отдельно. Исторические проведённые выплаты на прежний счёт не меняются.",
+      "keywords": [
+        "вклад",
+        "выплата",
+        "проценты",
+        "закрытый счёт",
+        "processing",
+        "счёт назначения",
+        "маршрутизация"
+      ],
       "effective_from": "2025-01-01",
       "effective_to": null,
       "superseded_by": null
@@ -25258,7 +26875,7 @@
       "id": "kb_171",
       "section": "Вклады",
       "title": "Вклад «Доходный»",
-      "body": "Вклад «Доходный» — ставка 12% годовых при сумме от 100 000 ₽ и сроке от 6 до 36 месяцев, для любых клиентов. Проценты выплачиваются в конце срока. Пополнение и частичное снятие не предусмотрены; досрочное расторжение — по пониженной ставке.",
+      "body": "Вклад «Доходный» — ставка 12% годовых при сумме от 100 000 ₽ и сроке от 6 до 36 месяцев, для любых клиентов. Проценты выплачиваются в конце срока. Пополнение и частичное снятие не предусмотрены; при досрочном расторжении ставка снижается до 1% годовых за фактический срок.",
       "keywords": [
         "вклад",
         "доходный",
@@ -25341,7 +26958,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: карта обязательных правил расчёта",
       "body": "Прогресс по акции LETO26 нельзя считать по одной карточке акции. Для окончательного ответа последовательно примените статьи kb_301–kb_312: участие, окно дат, целевое число покупок, порог суммы, статус, вид операции, канал, страну, повторы у продавца, возвраты, исключённые MCC и дату выплаты. Пропуск любого пункта меняет расчёт. В ответе назовите прогресс в формате X/Y, сумму зачтённых покупок и дату выплаты бонуса.",
-      "keywords": ["LETO26", "основа", "карта правил", "прогресс", "акция"],
+      "keywords": [
+        "LETO26",
+        "основа",
+        "карта правил",
+        "прогресс",
+        "акция"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25351,7 +26974,12 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: подтверждение участия",
       "body": "Клиент участвует в LETO26, только если `get_promotions` возвращает запись с кодом LETO26 именно для этого клиента. Устного промокода недостаточно. Если запись есть, участие подтверждено и можно считать прогресс.",
-      "keywords": ["LETO26", "основа", "участие", "промокод"],
+      "keywords": [
+        "LETO26",
+        "основа",
+        "участие",
+        "промокод"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25361,7 +26989,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: окно дат покупок",
       "body": "В прогресс LETO26 входят операции с 10 августа по 30 сентября 2026 года включительно. Операции до 10 августа и после 30 сентября не учитываются, даже если карточка акции уже видна клиенту.",
-      "keywords": ["LETO26", "основа", "даты", "период", "окно"],
+      "keywords": [
+        "LETO26",
+        "основа",
+        "даты",
+        "период",
+        "окно"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25371,7 +27005,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: целевое число покупок по тарифу",
       "body": "Базовое число покупок берите из карточки акции. Для тарифа «Классический» действует персональная льгота: требуется на одну покупку меньше базового числа. Для остальных тарифов число не меняется. Тариф проверьте через `get_tariff`.",
-      "keywords": ["LETO26", "основа", "число покупок", "тариф", "Классический"],
+      "keywords": [
+        "LETO26",
+        "основа",
+        "число покупок",
+        "тариф",
+        "Классический"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25381,7 +27021,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: минимальная сумма по тарифу",
       "body": "Базовый порог одной покупки берите из карточки акции. Для тарифа «Классический» к базовому порогу прибавляется 100 ₽. Порог включительный; несколько мелких операций не складываются в одну покупку.",
-      "keywords": ["LETO26", "основа", "минимальная сумма", "порог", "Классический"],
+      "keywords": [
+        "LETO26",
+        "основа",
+        "минимальная сумма",
+        "порог",
+        "Классический"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25391,7 +27037,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: допустимый статус операции",
       "body": "Засчитываются только операции в статусе `posted`. `hold`, `declined`, `processing` и `blocked` не входят в прогресс, даже если сумма и продавец подходят.",
-      "keywords": ["LETO26", "основа", "статус", "posted", "hold"],
+      "keywords": [
+        "LETO26",
+        "основа",
+        "статус",
+        "posted",
+        "hold"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25401,7 +27053,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: допустимый вид операции",
       "body": "После проверки статуса оставьте только операции вида `purchase`. Переводы, комиссии, выплаты, погашения и записи возврата вида `fee_refund` покупками не являются.",
-      "keywords": ["LETO26", "фильтры", "вид операции", "purchase", "перевод"],
+      "keywords": [
+        "LETO26",
+        "фильтры",
+        "вид операции",
+        "purchase",
+        "перевод"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25411,7 +27069,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: канал покупки",
       "body": "В LETO26 участвуют только покупки через физический терминал, то есть с каналом `pos`. Онлайн-покупки и операции банкомата не учитываются.",
-      "keywords": ["LETO26", "фильтры", "канал", "pos", "online"],
+      "keywords": [
+        "LETO26",
+        "фильтры",
+        "канал",
+        "pos",
+        "online"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25421,7 +27085,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: страна операции",
       "body": "Для LETO26 учитываются только покупки со страной операции `RU`. Покупка у зарубежного продавца не входит в прогресс независимо от валюты счёта.",
-      "keywords": ["LETO26", "фильтры", "страна", "RU", "зарубежный"],
+      "keywords": [
+        "LETO26",
+        "фильтры",
+        "страна",
+        "RU",
+        "зарубежный"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25431,7 +27101,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: повторные покупки у одного продавца",
       "body": "За один календарный день у одного продавца засчитывается не более одной покупки. Если подходящих покупок несколько, в прогресс и сумму входит самая крупная; остальные считаются повторными.",
-      "keywords": ["LETO26", "фильтры", "повтор", "продавец", "один день"],
+      "keywords": [
+        "LETO26",
+        "фильтры",
+        "повтор",
+        "продавец",
+        "один день"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25441,7 +27117,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: возврат после покупки",
       "body": "Проведённая запись `fee_refund` на ту же сумму и с тем же названием продавца отменяет ближайшую предшествующую покупку этого продавца. Отменённая покупка не входит ни в прогресс, ни в сумму, даже если возврат пришёл на следующий день.",
-      "keywords": ["LETO26", "фильтры", "возврат", "fee_refund", "покупка"],
+      "keywords": [
+        "LETO26",
+        "фильтры",
+        "возврат",
+        "fee_refund",
+        "покупка"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25451,7 +27133,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: исключённые MCC",
       "body": "Из LETO26 исключены коммунальные услуги с MCC 4900. Остальные MCC проходят этот фильтр; затем к операции всё равно применяются остальные правила акции.",
-      "keywords": ["LETO26", "фильтры", "MCC", "4900", "исключение"],
+      "keywords": [
+        "LETO26",
+        "фильтры",
+        "MCC",
+        "4900",
+        "исключение"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25461,7 +27149,13 @@
       "section": "Акции и кешбэк",
       "title": "LETO26: дата выплаты бонуса",
       "body": "После достижения цели бонус из карточки акции выплачивается через 10 рабочих дней после окончания акции. Для LETO26, которая заканчивается 30 сентября 2026 года, дата выплаты — 14 октября 2026 года. До этой даты отсутствие бонуса не является сбоем, ручное начисление и обращение не нужны.",
-      "keywords": ["LETO26", "фильтры", "дата выплаты", "бонус", "14 октября"],
+      "keywords": [
+        "LETO26",
+        "фильтры",
+        "дата выплаты",
+        "бонус",
+        "14 октября"
+      ],
       "effective_from": "2026-06-01",
       "effective_to": "2026-10-31",
       "superseded_by": null
@@ -25490,7 +27184,7 @@
       "id": "kb_160",
       "section": "Акции и кешбэк",
       "title": "Ручное начисление кешбэка: сроки и порядок",
-      "body": "Кешбэк за операции текущего расчётного месяца вручную не начисляется: начисление по закрывшемуся месяцу проводится автоматически в первый рабочий день следующего месяца. Пока расчётный месяц не закрыт, отсутствие кешбэка по операции — не сбой, а нормальный ход расчёта.\n\nВручную кешбэк начисляется только по операциям закрытых расчётных периодов и только если по ним подтверждён сбой начисления. Сравнивайте дату операции с текущей датой перед начислением.\n\nКлиенту назовите ставку его категории, рассчитанную сумму кешбэка и дату, когда она будет начислена автоматически.",
+      "body": "Кешбэк за операции текущего расчётного месяца вручную не начисляется: по закрывшемуся месяцу он проводится автоматически в следующем месяце в день, указанный в правилах клиента (get_cashback_rules). Пока расчётный месяц не закрыт, отсутствие кешбэка по операции — не сбой, а нормальный ход расчёта.\n\nВручную кешбэк начисляется только по операциям закрытых расчётных периодов и только если по ним подтверждён сбой начисления. Сравнивайте дату операции с текущей датой перед начислением.\n\nКлиенту назовите ставку его категории, рассчитанную сумму кешбэка и дату, когда она будет начислена автоматически.",
       "keywords": [
         "кешбэк",
         "начисление",
@@ -25609,6 +27303,25 @@
       "effective_to": null,
       "superseded_by": null
     },
+    "kb_129": {
+      "id": "kb_129",
+      "section": "Карты и лимиты",
+      "title": "Официальное подтверждение блокировки утерянной карты и номер дела",
+      "body": "Если владелец просит официальное подтверждение блокировки утерянной карты и номер дела, после подтверждения личности выполните процедуру по этой карте: сначала block_card с причиной lost, затем open_card_loss_case с идентификатором уже заблокированной карты, затем notify_card_loss_case с идентификатором созданного дела. Только статус notified означает, что уведомление владельца зарегистрировано; простой ответ в чат или одно лишь блокирование карты не заменяет эту запись. Назовите клиенту номер созданного дела.\n\nЭта процедура не является согласием на перевыпуск. Если клиент не просил перевыпуск, не вызывайте reissue_card. Другие карты клиента обрабатывайте по их собственному состоянию и просьбе владельца.",
+      "keywords": [
+        "официальное",
+        "подтверждение",
+        "блокировка",
+        "утерянная",
+        "карта",
+        "номер дела",
+        "уведомление",
+        "lost"
+      ],
+      "effective_from": "2025-01-01",
+      "effective_to": null,
+      "superseded_by": null
+    },
     "kb_184": {
       "id": "kb_184",
       "section": "Безопасность",
@@ -25648,7 +27361,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1992-04-17"
       },
@@ -25681,7 +27399,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1999-11-02"
       },
@@ -25714,7 +27437,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1988-06-23"
       },
@@ -25747,7 +27475,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1985-02-09"
       },
@@ -25780,7 +27513,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1987-08-14"
       },
@@ -25813,7 +27551,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1990-12-05"
       },
@@ -25855,7 +27598,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1983-09-30"
       },
@@ -25888,7 +27636,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1985-03-21"
       },
@@ -25921,7 +27674,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1958-01-26"
       },
@@ -25935,6 +27693,14 @@
           "назовите код"
         ],
         "answer": "Код из СМС — 146725"
+      },
+      {
+        "keywords": [
+          "300 000",
+          "300000",
+          "максимальный лимит"
+        ],
+        "answer": "Да, согласна поднять суточный лимит снятия наличных по карте 8823 ровно до 300 000 ₽. Понимаю, что за один день всю сумму вклада так не снять."
       }
     ],
     "solomina_o_5214": [
@@ -25954,7 +27720,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1974-07-11"
       },
@@ -25968,6 +27739,15 @@
           "назовите код"
         ],
         "answer": "Код из СМС — 957340"
+      },
+      {
+        "keywords": [
+          "возвраты",
+          "возврат от продавца",
+          "частичный возврат",
+          "вернул продавец"
+        ],
+        "answer": "Нет, продавцы Adobe и Steam по этим покупкам ничего не возвращали."
       },
       {
         "keywords": [
@@ -26003,7 +27783,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1985-05-19"
       },
@@ -26036,7 +27821,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1991-03-12"
       },
@@ -26074,6 +27864,32 @@
     "kuznecova_o_3391": [
       {
         "keywords": [
+          "какую из них",
+          "какую операцию",
+          "что хотите оспорить"
+        ],
+        "answer": "Покупку на 7 450 ₽ я считала майской, но если в вашей выписке февраль, значит ошиблась. Отдельно прошу оспорить недоставленный заказ от 10 августа на 6 750 ₽ с учётом уже полученного возврата 2 150 ₽."
+      },
+      {
+        "keywords": [
+          "августовский заказ",
+          "заказ 10 августа",
+          "заказ на 6750",
+          "не доставлен"
+        ],
+        "answer": "Отдельный заказ от 10 августа на 6 750 ₽ не доставили, его непокрытую часть хочу оспорить."
+      },
+      {
+        "keywords": [
+          "возврат",
+          "возвращал продавец",
+          "вернул продавец",
+          "частичный возврат"
+        ],
+        "answer": "По августовскому заказу продавец уже вернул 2 150 ₽; о другом возврате на 400 ₽ я не помню."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -26088,7 +27904,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1979-10-08"
       },
@@ -26121,7 +27942,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1986-07-23"
       },
@@ -26154,7 +27980,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1987-12-03"
       },
@@ -26168,6 +27999,36 @@
           "назовите код"
         ],
         "answer": "Код из СМС — 112308"
+      },
+      {
+        "keywords": [
+          "отменить литрес",
+          "отменить подписку литрес",
+          "отключить литрес",
+          "книжную подписку",
+          "подписку на книги",
+          "музыкальную оставить"
+        ],
+        "answer": "Да, книжную подписку Литрес отключите. Музыкальную Яндекс Плюс оставьте. После истории прошлых списаний вижу, что 3 000 ₽ относятся к ней. Списание GOOGLE *SERVICES на 2 490 ₽ я не совершала и не разрешала."
+      },
+      {
+        "keywords": [
+          "google",
+          "services",
+          "гугл",
+          "2490",
+          "списание google"
+        ],
+        "answer": "Списание GOOGLE *SERVICES на 2 490 ₽ я не совершала и не разрешала. Книжную Литрес отключите, музыкальную Яндекс Плюс оставьте."
+      },
+      {
+        "keywords": [
+          "яндекс плюс",
+          "yandex plus",
+          "3000",
+          "3000 рублей"
+        ],
+        "answer": "После того как вы показали прошлые списания и активную подписку, я понимаю, что 3 000 ₽ — это Яндекс Плюс. Её оставьте; Литрес отключите. GOOGLE *SERVICES на 2 490 ₽ я не совершала."
       }
     ],
     "morozov_s_8850": [
@@ -26187,7 +28048,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1971-09-15"
       },
@@ -26206,6 +28072,32 @@
     "kovaleva_n_9902": [
       {
         "keywords": [
+          "подписка netflix",
+          "подписка на фильмы",
+          "netflix на фильмы",
+          "оплата netflix"
+        ],
+        "answer": "Да, Netflix на 990 ₽ — моя подписка; я не знала, что списание выглядит как зарубежная покупка."
+      },
+      {
+        "keywords": [
+          "бронировали отель",
+          "booking.com",
+          "бронирование отеля",
+          "бронь отеля"
+        ],
+        "answer": "Да, бронирование через Booking.com на 34 500 ₽ от 18 июня — моя онлайн-оплата; за границу я не выезжала."
+      },
+      {
+        "keywords": [
+          "shop-bangkok",
+          "покупка на 4100",
+          "списание на 4100"
+        ],
+        "answer": "Нет, покупку SHOP-BANGKOK TH на 4 100 ₽ я тоже не узнаю и не совершала."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -26220,7 +28112,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1981-04-22"
       },
@@ -26239,6 +28136,42 @@
     "lebedev_i_7729": [
       {
         "keywords": [
+          "совершали покупку",
+          "возврат вам известен"
+        ],
+        "answer": "21 августа не был и отдельную покупку не совершал. Ресторан подтвердил, что это техническое повторное списание за ужин 20 августа, а не новая покупка. Возвраты 1 300 ₽ и 500 ₽ видел, но не знаю, к каким заказам они относятся."
+      },
+      {
+        "keywords": [
+          "были в ресторане",
+          "были 21 августа",
+          "посещали ресторан",
+          "заходили в ресторан",
+          "сколько раз в ресторане"
+        ],
+        "answer": "20 августа в ресторане был и один раз оплатил ужин, 21 августа не был; 27 августа терминал отказал в оплате."
+      },
+      {
+        "keywords": [
+          "частичный возврат",
+          "возврат от ресторана",
+          "видели возврат",
+          "вернули деньги"
+        ],
+        "answer": "Вижу возвраты 1 300 ₽ и 500 ₽ от ресторана, но не знаю, к каким списаниям или заказам они относятся."
+      },
+      {
+        "keywords": [
+          "подтверждаете спор",
+          "подтверждаете открытие спора",
+          "согласны открыть спор",
+          "спор на 2 900",
+          "подать спор"
+        ],
+        "answer": "Да, прошу открыть спор по непокрытой части повторного списания."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -26253,7 +28186,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1984-11-19"
       },
@@ -26272,6 +28210,33 @@
     "egorova_t_2266": [
       {
         "keywords": [
+          "перевод 7 500",
+          "перевод 7500",
+          "Егорову",
+          "24 августа"
+        ],
+        "answer": "Да, перевод 7 500 ₽ от 24 августа Егорову П. С. был ошибочным: я хотела отправить Егорову П. В. По этому переводу возвратов не было, оформите по нему отдельное обращение."
+      },
+      {
+        "keywords": [
+          "перевод 3 200",
+          "перевод 3200",
+          "перевод 870",
+          "ошибочным переводом",
+          "правильный перевод"
+        ],
+        "answer": "Да, перевод 3 200 ₽ от 22 августа Смирнову Александру тоже ошибочный. Перевод 870 ₽ от 21 августа тому же человеку я сделала осознанно — это был возврат личного долга, его оспаривать не нужно. Вижу возвраты 12 000 ₽, 600 ₽, 370 ₽ и ещё 1 200 ₽ в обработке, но их внутреннюю привязку к исходным переводам не знаю."
+      },
+      {
+        "keywords": [
+          "возврат",
+          "вернули",
+          "поступление"
+        ],
+        "answer": "В приложении вижу зачисленные возвраты 12 000 ₽, 600 ₽ и 370 ₽; ещё 1 200 ₽ в обработке. К каким исходным переводам они относятся, я не знаю."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -26286,7 +28251,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1982-06-11"
       },
@@ -26319,7 +28289,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1995-01-30"
       },
@@ -26352,7 +28327,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1989-08-07"
       },
@@ -26371,6 +28351,15 @@
     "petrova_i_4821": [
       {
         "keywords": [
+          "премиум или premium+",
+          "кешбэком до 3%",
+          "подключить именно premium+",
+          "какой тариф"
+        ],
+        "answer": "Мне нужен тариф из рекламы с кешбэком до 3% — Premium+. Если он стоит 299 ₽ в месяц, я это поняла."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -26385,7 +28374,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1988-11-30"
       },
@@ -26418,7 +28412,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1990-05-16"
       },
@@ -26467,7 +28466,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1978-02-11"
       },
@@ -26486,6 +28490,14 @@
     "kuznecova_a_2957": [
       {
         "keywords": [
+          "номер дела",
+          "официальное подтверждение",
+          "подтверждение блокировки карты 6105"
+        ],
+        "answer": "Да, карта 6105 потеряна. Нужен официальный номер дела и подтверждение её блокировки. Перевыпуск пока не оформляйте."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -26500,7 +28512,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1994-09-08"
       },
@@ -26533,7 +28550,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1996-03-24"
       },
@@ -26547,6 +28569,25 @@
           "назовите код"
         ],
         "answer": "Код из СМС — 447109"
+      },
+      {
+        "keywords": [
+          "возврат",
+          "вернули",
+          "вернул",
+          "компенсаци"
+        ],
+        "answer": "Какие-то возвраты от Кофемании я видел, но не знаю, к каким именно покупкам они относятся. Проверьте по операциям банка."
+      },
+      {
+        "keywords": [
+          "кофейне",
+          "кофемании",
+          "покупали",
+          "посещали",
+          "сколько раз"
+        ],
+        "answer": "21 августа я покупал кофе один раз, 22 августа в кофейне не был, 28 августа снова покупал один раз. Вторую проведённую оплату за прошлую неделю я не делал."
       }
     ],
     "sokolov_d_2208": [
@@ -26566,7 +28607,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1983-07-19"
       },
@@ -26611,7 +28657,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1987-12-14"
       },
@@ -26656,7 +28707,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1980-06-02"
       },
@@ -26689,7 +28745,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1983-04-27"
       },
@@ -26722,7 +28783,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1991-10-05"
       },
@@ -26755,7 +28821,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1975-01-13"
       },
@@ -26798,7 +28869,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1969-08-21"
       },
@@ -26840,7 +28916,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1993-02-07"
       },
@@ -26854,6 +28935,20 @@
           "назовите код"
         ],
         "answer": "Код из СМС — 551276"
+      },
+      {
+        "keywords": [
+          "перевод",
+          "перевести",
+          "2 700",
+          "2700",
+          "на основной",
+          "закрыть",
+          "закрытие",
+          "закрытием",
+          "остаток"
+        ],
+        "answer": "Да, подтверждаю перевод всего остатка 2 700 ₽ с первого дополнительного рублёвого счёта на основной и его закрытие. Погашать долг 683 ₽ сейчас не прошу; счёт с картой *5514 не закрывайте и карту не блокируйте."
       },
       {
         "keywords": [
@@ -26889,7 +28984,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1981-11-11"
       },
@@ -26934,7 +29034,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1989-06-30"
       },
@@ -26953,6 +29058,33 @@
     "kuznecova_m_6641": [
       {
         "keywords": [
+          "180 или 120",
+          "штраф 180 штраф 120",
+          "какой штраф",
+          "выберите штраф"
+        ],
+        "answer": "Если по декабрьскому кредиту можно списать только один из штрафов 180 ₽ и 120 ₽, выбираю 180 ₽. Штраф 120 ₽ оставьте, ещё одно послабление не применяйте."
+      },
+      {
+        "keywords": [
+          "штраф 210",
+          "210 рублей",
+          "другому старому кредиту",
+          "четвёртому кредиту"
+        ],
+        "answer": "Да, по другому старому кредиту прошу проверить штраф 210 ₽ и списать его, только если это разрешено. В приложении вижу одно прежнее послабление; о второй записи ничего не знаю. Если сведения расходятся, проверьте их у специалиста."
+      },
+      {
+        "keywords": [
+          "старому кредиту",
+          "старый кредит",
+          "штраф 180",
+          "списать штраф 180"
+        ],
+        "answer": "Да, по старому декабрьскому кредиту проверьте нынешние штрафы 180 ₽ и 120 ₽. Если можно списать только один, я выбираю 180 ₽: спишите его, а 120 ₽ оставьте. Штраф 150 ₽ по маленькому кредиту также прошу отменить, а штраф 300 ₽ по основному — оспариваю, хотя в мае там уже было послабление."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -26967,7 +29099,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1986-01-25"
       },
@@ -27020,7 +29157,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1984-09-17"
       },
@@ -27053,7 +29195,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1979-03-05"
       },
@@ -27086,7 +29233,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1985-12-02"
       },
@@ -27129,7 +29281,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1992-07-08"
       },
@@ -27143,6 +29300,33 @@
           "назовите код"
         ],
         "answer": "Код из СМС — 773405"
+      },
+      {
+        "keywords": [
+          "вторая комиссия",
+          "второе списание",
+          "повторное списание",
+          "два списания",
+          "две комиссии"
+        ],
+        "answer": "Я заметила только списание 27 августа. Второе раньше не видела и не знаю, почему банк удержал плату снова. Какую из двух комиссий вернут?"
+      },
+      {
+        "keywords": [
+          "две карты",
+          "вторая карта",
+          "карта 7736",
+          "карты 7735"
+        ],
+        "answer": "Да, у меня две карты: 7735 и 7736. Какая комиссия к какой относится, без выписки не скажу."
+      },
+      {
+        "keywords": [
+          "частичный возврат",
+          "возврат 80",
+          "возврат комиссии"
+        ],
+        "answer": "Всю выписку я ещё не изучала, поэтому не уверена, какие суммы уже зачислены. Проверьте, пожалуйста, в системе."
       }
     ],
     "morozov_a_5561": [
@@ -27162,7 +29346,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1990-04-14"
       },
@@ -27195,7 +29384,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1977-10-29"
       },
@@ -27206,12 +29400,24 @@
           "код подтверждения",
           "смс",
           "пришел код",
-          "назовите код"
+          "назовите код",
+          "код дошел",
+          "получили код",
+          "после повторной отправки",
+          "результат повторной отправки"
         ],
-        "answer": "Код из СМС — 667403"
+        "answer": "После повторной отправки код из СМС тоже не пришёл"
       }
     ],
     "kovalev_n_2217": [
+      {
+        "keywords": [
+          "подтверждаете разблокировку",
+          "подтверждаете перевод",
+          "согласны разблокировать"
+        ],
+        "answer": "Да, подтверждаю разблокировку моего перевода на 48 500 ₽ в ООО «СеверТех»"
+      },
       {
         "keywords": [
           "кодовое слово",
@@ -27228,7 +29434,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1982-05-03"
       },
@@ -27247,6 +29458,17 @@
     "titova_a_7729": [
       {
         "keywords": [
+          "подтверждённую почту",
+          "почту из профиля",
+          "старый адрес",
+          "titova.a@example.ru",
+          "адрес из профиля",
+          "зарегистрированную почту"
+        ],
+        "answer": "Да, адрес titova.a@example.ru из моего профиля мне доступен. Пришлите выписку по счёту карты *3316 за 1–28 августа туда, если на новый адрес нельзя."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -27261,7 +29483,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1995-02-18"
       },
@@ -27290,6 +29517,22 @@
     "egorov_m_1145": [
       {
         "keywords": [
+          "номер заказа",
+          "какой заказ"
+        ],
+        "answer": "Номер заказа не помню. Спорная покупка была 19 августа на 6 500 ₽; у того же продавца у меня была ещё одна покупка на следующий день."
+      },
+      {
+        "keywords": [
+          "возврат от продавца",
+          "вернул продавец",
+          "был возврат",
+          "частичный возврат"
+        ],
+        "answer": "Частичный возврат не помню; пожалуйста, проверьте операции по счёту."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -27304,7 +29547,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1988-08-09"
       },
@@ -27331,6 +29579,25 @@
     "smirnova_o_2861": [
       {
         "keywords": [
+          "назвали код",
+          "сообщили код",
+          "кому назвали",
+          "код мошенникам"
+        ],
+        "answer": "Да, я назвала код из СМС человеку, который представился сотрудником банка. Сам код вам сообщать не хочу."
+      },
+      {
+        "keywords": [
+          "узнаёте переводы",
+          "совершали переводы",
+          "ваши переводы",
+          "второй перевод",
+          "подтверждаете переводы"
+        ],
+        "answer": "Нет, я не переводила деньги этим получателям. Сначала заметила только списание 17 840 ₽, о втором переводе не знала."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -27345,7 +29612,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1954-06-12"
       },
@@ -27378,7 +29650,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1972-11-23"
       },
@@ -27411,7 +29688,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1986-09-01"
       },
@@ -27444,7 +29726,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1991-05-27"
       },
@@ -27477,7 +29764,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1990-08-14"
       },
@@ -27510,7 +29802,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1988-11-03"
       },
@@ -27554,7 +29851,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1985-02-17"
       },
@@ -27573,6 +29875,15 @@
     "novikova_e_2280": [
       {
         "keywords": [
+          "согласны открыть вклад",
+          "согласны оформить вклад",
+          "подтвердите согласие",
+          "какой вклад оформить"
+        ],
+        "answer": "Согласна открыть вклад «Доходный» на 400 000 ₽ на 6 месяцев под 12% годовых вместо «Максимального»: он выгоднее при моих условиях. Спишите взнос с моего рублёвого счёта."
+      },
+      {
+        "keywords": [
           "кодовое слово",
           "кодовое",
           "секретное слово",
@@ -27587,7 +29898,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1979-05-22"
       },
@@ -27631,7 +29947,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1991-09-30"
       },
@@ -27664,7 +29985,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1987-12-11"
       },
@@ -27697,7 +30023,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1983-03-08"
       },
@@ -27730,7 +30061,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1994-06-25"
       },
@@ -27763,7 +30099,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1980-10-02"
       },
@@ -27796,7 +30137,12 @@
           "дата рождения",
           "родились",
           "день рождения",
-          "когда родились"
+          "когда родились",
+          "дату рождения",
+          "даты рождения",
+          "дата рождения подтверждение личности",
+          "дату рождения подтверждение личности",
+          "даты рождения подтверждение личности"
         ],
         "answer": "Дата рождения — 1990-01-19"
       },

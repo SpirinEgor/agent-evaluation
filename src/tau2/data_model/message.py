@@ -66,6 +66,9 @@ class ToolCall(BaseModel):
     id: str = Field(default="", description="The unique identifier for the tool call.")
     name: str = Field(description="The name of the tool.")
     arguments: dict = Field(description="The arguments of the tool.")
+    execution_order: Optional[int] = Field(
+        default=None, description="Trusted platform order of domain execution."
+    )
     requestor: ToolRequestor = Field(
         "assistant",
         description="The requestor of the tool call.",
@@ -564,6 +567,10 @@ class ToolMessage(BaseModel):
         description="The requestor of the tool call.",
     )
     error: bool = Field(description="Whether the tool call failed.", default=False)
+    execution_rejected: bool = Field(
+        default=False,
+        description="Trusted platform rejected this call before domain execution.",
+    )
     turn_idx: Optional[int] = Field(
         description="The index of the turn in the conversation.", default=None
     )

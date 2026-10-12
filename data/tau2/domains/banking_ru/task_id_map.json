@@ -1,0 +1,373 @@
+{
+  "schema_version": 1,
+  "as_of": "2026-10-07",
+  "order": "Original tasks.json order, preserved",
+  "tasks": [
+    {
+      "number": 1,
+      "id": "Bank 1",
+      "legacy_id": "bank_easy_01",
+      "python_id": "bank_1"
+    },
+    {
+      "number": 2,
+      "id": "Bank 2",
+      "legacy_id": "bank_easy_02",
+      "python_id": "bank_2"
+    },
+    {
+      "number": 3,
+      "id": "Bank 3",
+      "legacy_id": "bank_004",
+      "python_id": "bank_3"
+    },
+    {
+      "number": 4,
+      "id": "Bank 4",
+      "legacy_id": "bank_003",
+      "python_id": "bank_4"
+    },
+    {
+      "number": 5,
+      "id": "Bank 5",
+      "legacy_id": "bank_007",
+      "python_id": "bank_5"
+    },
+    {
+      "number": 6,
+      "id": "Bank 6",
+      "legacy_id": "bank_024",
+      "python_id": "bank_6"
+    },
+    {
+      "number": 7,
+      "id": "Bank 7",
+      "legacy_id": "bank_medium_01",
+      "python_id": "bank_7"
+    },
+    {
+      "number": 8,
+      "id": "Bank 8",
+      "legacy_id": "bank_medium_02",
+      "python_id": "bank_8"
+    },
+    {
+      "number": 9,
+      "id": "Bank 9",
+      "legacy_id": "bank_hard_01",
+      "python_id": "bank_9"
+    },
+    {
+      "number": 10,
+      "id": "Bank 10",
+      "legacy_id": "bank_hard_02",
+      "python_id": "bank_10"
+    },
+    {
+      "number": 11,
+      "id": "Bank 11",
+      "legacy_id": "bank_011",
+      "python_id": "bank_11"
+    },
+    {
+      "number": 12,
+      "id": "Bank 12",
+      "legacy_id": "bank_012",
+      "python_id": "bank_12"
+    },
+    {
+      "number": 13,
+      "id": "Bank 13",
+      "legacy_id": "bank_013",
+      "python_id": "bank_13"
+    },
+    {
+      "number": 14,
+      "id": "Bank 14",
+      "legacy_id": "bank_008",
+      "python_id": "bank_14"
+    },
+    {
+      "number": 15,
+      "id": "Bank 15",
+      "legacy_id": "bank_015",
+      "python_id": "bank_15"
+    },
+    {
+      "number": 16,
+      "id": "Bank 16",
+      "legacy_id": "bank_010",
+      "python_id": "bank_16"
+    },
+    {
+      "number": 17,
+      "id": "Bank 17",
+      "legacy_id": "bank_017",
+      "python_id": "bank_17"
+    },
+    {
+      "number": 18,
+      "id": "Bank 18",
+      "legacy_id": "bank_018",
+      "python_id": "bank_18"
+    },
+    {
+      "number": 19,
+      "id": "Bank 19",
+      "legacy_id": "bank_019",
+      "python_id": "bank_19"
+    },
+    {
+      "number": 20,
+      "id": "Bank 20",
+      "legacy_id": "bank_020",
+      "python_id": "bank_20"
+    },
+    {
+      "number": 21,
+      "id": "Bank 21",
+      "legacy_id": "bank_001",
+      "python_id": "bank_21"
+    },
+    {
+      "number": 22,
+      "id": "Bank 22",
+      "legacy_id": "bank_002",
+      "python_id": "bank_22"
+    },
+    {
+      "number": 23,
+      "id": "Bank 23",
+      "legacy_id": "bank_005",
+      "python_id": "bank_23"
+    },
+    {
+      "number": 24,
+      "id": "Bank 24",
+      "legacy_id": "bank_006",
+      "python_id": "bank_24"
+    },
+    {
+      "number": 25,
+      "id": "Bank 25",
+      "legacy_id": "bank_009",
+      "python_id": "bank_25"
+    },
+    {
+      "number": 26,
+      "id": "Bank 26",
+      "legacy_id": "bank_022",
+      "python_id": "bank_26"
+    },
+    {
+      "number": 27,
+      "id": "Bank 27",
+      "legacy_id": "bank_023",
+      "python_id": "bank_27"
+    },
+    {
+      "number": 28,
+      "id": "Bank 28",
+      "legacy_id": "bank_025",
+      "python_id": "bank_28"
+    },
+    {
+      "number": 29,
+      "id": "Bank 29",
+      "legacy_id": "bank_026",
+      "python_id": "bank_29"
+    },
+    {
+      "number": 30,
+      "id": "Bank 30",
+      "legacy_id": "bank_027",
+      "python_id": "bank_30"
+    },
+    {
+      "number": 31,
+      "id": "Bank 31",
+      "legacy_id": "bank_028",
+      "python_id": "bank_31"
+    },
+    {
+      "number": 32,
+      "id": "Bank 32",
+      "legacy_id": "bank_030",
+      "python_id": "bank_32"
+    },
+    {
+      "number": 33,
+      "id": "Bank 33",
+      "legacy_id": "bank_031",
+      "python_id": "bank_33"
+    },
+    {
+      "number": 34,
+      "id": "Bank 34",
+      "legacy_id": "bank_032",
+      "python_id": "bank_34"
+    },
+    {
+      "number": 35,
+      "id": "Bank 35",
+      "legacy_id": "bank_033",
+      "python_id": "bank_35"
+    },
+    {
+      "number": 36,
+      "id": "Bank 36",
+      "legacy_id": "bank_034",
+      "python_id": "bank_36"
+    },
+    {
+      "number": 37,
+      "id": "Bank 37",
+      "legacy_id": "bank_035",
+      "python_id": "bank_37"
+    },
+    {
+      "number": 38,
+      "id": "Bank 38",
+      "legacy_id": "bank_036",
+      "python_id": "bank_38"
+    },
+    {
+      "number": 39,
+      "id": "Bank 39",
+      "legacy_id": "bank_037",
+      "python_id": "bank_39"
+    },
+    {
+      "number": 40,
+      "id": "Bank 40",
+      "legacy_id": "bank_038",
+      "python_id": "bank_40"
+    },
+    {
+      "number": 41,
+      "id": "Bank 41",
+      "legacy_id": "bank_040",
+      "python_id": "bank_41"
+    },
+    {
+      "number": 42,
+      "id": "Bank 42",
+      "legacy_id": "bank_041",
+      "python_id": "bank_42"
+    },
+    {
+      "number": 43,
+      "id": "Bank 43",
+      "legacy_id": "bank_042",
+      "python_id": "bank_43"
+    },
+    {
+      "number": 44,
+      "id": "Bank 44",
+      "legacy_id": "bank_043",
+      "python_id": "bank_44"
+    },
+    {
+      "number": 45,
+      "id": "Bank 45",
+      "legacy_id": "bank_044",
+      "python_id": "bank_45"
+    },
+    {
+      "number": 46,
+      "id": "Bank 46",
+      "legacy_id": "bank_045",
+      "python_id": "bank_46"
+    },
+    {
+      "number": 47,
+      "id": "Bank 47",
+      "legacy_id": "bank_046",
+      "python_id": "bank_47"
+    },
+    {
+      "number": 48,
+      "id": "Bank 48",
+      "legacy_id": "bank_047",
+      "python_id": "bank_48"
+    },
+    {
+      "number": 49,
+      "id": "Bank 49",
+      "legacy_id": "bank_048",
+      "python_id": "bank_49"
+    },
+    {
+      "number": 50,
+      "id": "Bank 50",
+      "legacy_id": "bank_049",
+      "python_id": "bank_50"
+    },
+    {
+      "number": 51,
+      "id": "Bank 51",
+      "legacy_id": "bank_050",
+      "python_id": "bank_51"
+    },
+    {
+      "number": 52,
+      "id": "Bank 52",
+      "legacy_id": "bank_c01",
+      "python_id": "bank_52"
+    },
+    {
+      "number": 53,
+      "id": "Bank 53",
+      "legacy_id": "bank_c02",
+      "python_id": "bank_53"
+    },
+    {
+      "number": 54,
+      "id": "Bank 54",
+      "legacy_id": "bank_c03",
+      "python_id": "bank_54"
+    },
+    {
+      "number": 55,
+      "id": "Bank 55",
+      "legacy_id": "bank_c04",
+      "python_id": "bank_55"
+    },
+    {
+      "number": 56,
+      "id": "Bank 56",
+      "legacy_id": "bank_c05",
+      "python_id": "bank_56"
+    },
+    {
+      "number": 57,
+      "id": "Bank 57",
+      "legacy_id": "bank_c06",
+      "python_id": "bank_57"
+    },
+    {
+      "number": 58,
+      "id": "Bank 58",
+      "legacy_id": "bank_c07",
+      "python_id": "bank_58"
+    },
+    {
+      "number": 59,
+      "id": "Bank 59",
+      "legacy_id": "bank_c08",
+      "python_id": "bank_59"
+    },
+    {
+      "number": 60,
+      "id": "Bank 60",
+      "legacy_id": "bank_c09",
+      "python_id": "bank_60"
+    },
+    {
+      "number": 61,
+      "id": "Bank 61",
+      "legacy_id": "bank_c10",
+      "python_id": "bank_61"
+    }
+  ]
+}

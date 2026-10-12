@@ -65,14 +65,14 @@ def display_simulation_list(
     # Calculate number of successful and total trials for each task
     num_success = defaultdict(int)
     for sim in results.simulations:
-        reward = sim.reward_info.reward if sim.reward_info else None
+        reward = sim.reward_info.final_reward if sim.reward_info else None
         if reward is not None and is_successful(reward):
             num_success[sim.task_id] += 1
 
     # Filter simulations
     filtered_sims = []
     for i, sim in enumerate(results.simulations, 1):
-        reward = sim.reward_info.reward if sim.reward_info else None
+        reward = sim.reward_info.final_reward if sim.reward_info else None
         if only_show_failed:
             if reward is None or is_successful(reward):
                 continue
@@ -130,10 +130,12 @@ def display_simulation_list(
     }
 
     for i, sim in filtered_sims:
-        reward = sim.reward_info.reward if sim.reward_info else None
+        reward = sim.reward_info.final_reward if sim.reward_info else None
 
         # Pass/Fail
-        if reward is not None:
+        if sim.reward_info and sim.reward_info.grading_status == "needs_review":
+            pass_str = "[yellow]needs_review[/]"
+        elif reward is not None:
             pass_str = "[green]✓[/]" if is_successful(reward) else "[red]✗[/]"
         else:
             pass_str = "[dim]-[/]"

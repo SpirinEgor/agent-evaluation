@@ -134,6 +134,10 @@ def get_metrics_df(results: Results) -> tuple[pd.DataFrame, int]:
     Returns the maximum number of trials that can be used for pass^k metrics.
     """
     df = results.to_df()
+    if "grading_status" in df and (df.grading_status == "needs_review").any():
+        raise ValueError(
+            "Cannot publish success metrics while grading_status=needs_review"
+        )
 
     infra_count = (
         df.termination_reason == TerminationReason.INFRASTRUCTURE_ERROR

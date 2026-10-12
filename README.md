@@ -215,3 +215,8 @@ If you use a specific component of $\tau^3$-bench, please cite the corresponding
       url={https://openreview.net/forum?id=En2z9dckgP},
 }
 ```
+
+## Russian banking support benchmark
+
+The 61-task banking release, installation requirements, offline checks, and MCP usage
+are described in [the banking guide](data/tau2/domains/banking_ru/README.md).

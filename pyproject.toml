@@ -62,6 +62,9 @@ knowledge = [
 gym = [
     "gymnasium>=1.2.2",
 ]
+platform = [
+    "mcp>=2,<3",
+]
 dev = [
     "pytest>=8.3.5",
     "pytest-xdist>=3.5.0",
@@ -75,7 +78,7 @@ experiments = [
     "scikit-learn>=1.6.1",
 ]
 all = [
-    "tau2[voice,knowledge,gym,dev,experiments]",
+    "tau2[voice,knowledge,gym,platform,dev,experiments]",
 ]
 [project.urls]
 Homepage = "https://taubench.com/"
