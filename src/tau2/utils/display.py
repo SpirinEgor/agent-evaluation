@@ -627,7 +627,14 @@ class ConsoleDisplay:
             sim_info.append("User Cost: ", style=c.section_header)
             sim_info.append(f"${simulation.user_cost:.4f}\n")
         if simulation.reward_info:
-            marker = "✅" if is_successful(simulation.reward_info.reward) else "❌"
+            final_reward = simulation.reward_info.final_reward
+            marker = (
+                "needs_review"
+                if final_reward is None
+                else "✅"
+                if is_successful(final_reward)
+                else "❌"
+            )
             sim_info.append("Reward: ", style=c.section_header)
             if simulation.reward_info.reward_breakdown:
                 breakdown = sorted(
@@ -640,7 +647,7 @@ class ConsoleDisplay:
                 breakdown = []
 
             sim_info.append(
-                f"{marker} {simulation.reward_info.reward:.4f} ({', '.join(breakdown)})\n"
+                f"{marker} {'provisional' if final_reward is None else f'{final_reward:.4f}'} ({', '.join(breakdown)})\n"
             )
 
             # Add DB check info if present
@@ -2455,16 +2462,21 @@ class MarkdownDisplay:
 
         # Add reward info if present
         if sim.reward_info:
-            breakdown = sorted(
-                [
-                    f"{k.value}: {v:.1f}"
-                    for k, v in sim.reward_info.reward_breakdown.items()
-                ]
-            )
-            output.append(
-                f"**Reward**: {sim.reward_info.reward:.4f} ({', '.join(breakdown)})\n"
-            )
-            output.append(f"**Reward**: {sim.reward_info.reward:.4f}")
+            if sim.reward_info.grading_status == "needs_review":
+                output.append(
+                    "**Grading**: needs_review; numeric components are provisional.\n"
+                )
+            else:
+                breakdown = sorted(
+                    [
+                        f"{k.value}: {v:.1f}"
+                        for k, v in sim.reward_info.reward_breakdown.items()
+                    ]
+                )
+                output.append(
+                    f"**Reward**: {sim.reward_info.reward:.4f} ({', '.join(breakdown)})\n"
+                )
+                output.append(f"**Reward**: {sim.reward_info.reward:.4f}")
 
             # Add DB check info if present
             if sim.reward_info.db_check:

@@ -224,3 +224,9 @@ data/simulations/.credentials/
 
 # Cursor IDE
 .cursor/
+
+# Local banking runtime resources
+data/platform/
+*.lock.tmp
+data/tau2/domains/banking_ru/**/*.lock
+data/tau2/domains/banking_ru/*.lock

@@ -322,32 +322,39 @@ class Environment:
             """
             Get the actions from the messages.
             """
-            messages = deepcopy(messages)[::-1]
-            actions = []
-            while messages:
-                message = messages.pop()
-                if isinstance(message, ToolMessage):
-                    raise ValueError(
-                        "Tool message not expected. Tool messages should always follow a tool call."
-                    )
+            actions: list[tuple[ToolCall, ToolMessage | None]] = []
+            pending: dict[tuple[str, str], list[int]] = {}
+            for message in deepcopy(messages):
                 if (
                     isinstance(message, (AssistantMessage, UserMessage))
                     and message.is_tool_call()
                 ):
-                    tool_calls = message.tool_calls
-                    for tc in tool_calls:
-                        if len(messages) == 0:
-                            raise ValueError("Tool message expected. Got None.")
-                        tm = messages.pop()
-                        if not isinstance(tm, ToolMessage):
-                            raise ValueError(f"Tool message expected. Got {type(tm)}")
-                        if tc.id != tm.id:
-                            raise ValueError(
-                                f"Tool call id mismatch. Got {tc.id} and {tm.id}"
-                            )
-                        actions.append((tc, tm))
-
-            return actions
+                    for call in message.tool_calls:
+                        pending.setdefault((message.role, call.id), []).append(
+                            len(actions)
+                        )
+                        actions.append((call, None))
+                elif isinstance(message, ToolMessage):
+                    key = (message.requestor, message.id)
+                    if not pending.get(key):
+                        raise ValueError(
+                            f"Tool call id mismatch or unexpected result: {message.id}"
+                        )
+                    index = pending[key].pop(0)
+                    actions[index] = (actions[index][0], message)
+            if any(response is None for _, response in actions):
+                raise ValueError("Tool message expected. Got None.")
+            # Formation order determines source dependencies; server execution
+            # order determines state. These can differ across MCP endpoints.
+            ordered = sorted(
+                enumerate(actions),
+                key=lambda entry: (
+                    entry[1][0].execution_order
+                    if entry[1][0].execution_order is not None
+                    else entry[0]
+                ),
+            )
+            return [action for _, action in ordered]
 
         if initialization_data is not None:
             if initialization_data.agent_data is not None:
@@ -368,6 +375,10 @@ class Environment:
 
         action_responses = get_actions_from_messages(message_history)
         for tool_call, expected_response in action_responses:
+            if expected_response.error and expected_response.execution_rejected:
+                # A transport ownership rejection is an attempted canonical
+                # action for ACTION grading, but never a state mutation.
+                continue
             if not self._has_tool(tool_call.name):
                 # Hallucinated tool name. The live env returned a
                 # ToolMessage(error=True) for this call and made no state

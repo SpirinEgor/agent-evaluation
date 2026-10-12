@@ -31,6 +31,10 @@ def analyze_reward(
     """
     Analyze the reward breakdown.
     """
+    if reward_info.grading_status == "needs_review":
+        raise ValueError(
+            "Cannot publish success breakdown while grading_status=needs_review"
+        )
     reward_breakdown = reward_info.reward_breakdown
     try:
         if RewardType.COMMUNICATE in reward_info.reward_basis:

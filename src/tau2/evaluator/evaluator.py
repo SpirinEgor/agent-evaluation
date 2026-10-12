@@ -116,6 +116,22 @@ def evaluate_simulation(
     Returns:
         RewardInfo with the evaluation results.
     """
+    # Banking completion-only grades observable MCP work, never diagnostic prose.
+    # Copy before removing native text; original evidence remains immutable.
+    if domain == "banking_ru":
+        simulation = simulation.model_copy(deep=True)
+        for message in simulation.messages or []:
+            if message.role == "assistant":
+                message.content = None
+        for tick in simulation.ticks or []:
+            if tick.agent_chunk is not None:
+                tick.agent_chunk.content = None
+        if simulation.termination_reason != TerminationReason.AGENT_STOP:
+            return RewardInfo(
+                reward=0.0,
+                reward_basis=None,
+                info={"note": "Banking completion-only requires actual done"},
+            )
     if simulation.termination_reason not in {
         TerminationReason.AGENT_STOP,
         TerminationReason.USER_STOP,
@@ -139,6 +155,45 @@ def evaluate_simulation(
     # Select trajectory and evaluators based on mode
     is_full_duplex = mode == CommunicationMode.FULL_DUPLEX
     trajectory = simulation.ticks if is_full_duplex else simulation.messages
+
+    completion_errors = []
+    if task.evaluation_criteria.completion_mode == "completion_only":
+        # Diagnostic prose is not a customer channel. Preserve every tool call,
+        # result and its outgoing arguments, including failed attempts.
+        if is_full_duplex:
+            trajectory = [
+                tick.model_copy(update={"agent_chunk": None}) for tick in trajectory
+            ]
+        else:
+            trajectory = [
+                m.model_copy(update={"content": None}) if m.role == "assistant" else m
+                for m in trajectory
+            ]
+        if simulation.termination_reason != TerminationReason.AGENT_STOP:
+            completion_errors.append("missing_agent_completion")
+        metadata = simulation.info or {}
+        if metadata.get("platform") == "mcp":
+            events = metadata.get("mcp_events", [])
+            done = [
+                e
+                for e in events
+                if e.get("original_name") == "done"
+                and not e.get("error", True)
+                and not e.get("trace_call", True)
+            ]
+            if len(done) != 1:
+                completion_errors.append("missing_successful_done")
+            else:
+                boundary = done[0]["request_order"]
+                if any(
+                    e.get("trace_call")
+                    and (
+                        e.get("response_order") is None
+                        or e["response_order"] >= boundary
+                    )
+                    for e in events
+                ):
+                    completion_errors.append("done_before_received_results")
 
     # Select evaluator classes based on mode
     EnvEvaluator = (
@@ -348,4 +403,19 @@ def evaluate_simulation(
         )
     else:
         raise ValueError(f"Unknown evaluation type: {evaluation_type}")
+    if completion_errors:
+        reward_info.reward = 0.0
+        reward_info.reward_breakdown = {
+            **(reward_info.reward_breakdown or {}),
+            "ACTION": 0.0,
+        }
+        reward_info.info = {**(reward_info.info or {}), "completion": completion_errors}
+    # An unresolved component remains unresolved in the combined report even
+    # if its numeric diagnostic reward is zero or it is outside reward_basis.
+    component_info = reward_info.info or {}
+    if any(
+        (component_info.get(component) or {}).get("grading_status") == "needs_review"
+        for component in ("action", "env")
+    ):
+        reward_info.info["grading_status"] = "needs_review"
     return reward_info

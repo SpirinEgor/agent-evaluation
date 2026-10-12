@@ -1,3 +1,5 @@
+import inspect
+from itertools import product
 from typing import Callable
 
 from loguru import logger
@@ -9,9 +11,136 @@ from tau2.data_model.message import (
     UserMessage,
 )
 from tau2.data_model.simulation import DBCheck, EnvAssertionCheck, RewardInfo
-from tau2.data_model.tasks import RewardType, Task
+from tau2.data_model.tasks import Action, RewardType, Task
 from tau2.environment.environment import Environment
 from tau2.evaluator.evaluator_base import EvaluatorBase
+from tau2.evaluator.trace_evidence import (
+    ObservedCall,
+    evidence_from_messages,
+    evidence_from_ticks,
+)
+
+
+def _db_action_argument_variants(
+    action: Action, observed: list[ObservedCall]
+) -> list[dict]:
+    """Bind only declared fields; retain the canonical route and all other state."""
+    variants = [dict(action.arguments)]
+    if not action.db_bind_arguments:
+        return variants
+    for item in observed:
+        result = item.result
+        if (
+            result is None
+            or result.error
+            or result.id != item.call.id
+            or result.requestor != item.call.requestor
+            or item.result_position is None
+            or item.result_position <= item.call_position
+            or not action.compare_with_tool_call(item.call)
+        ):
+            continue
+        if any(
+            name not in item.call.arguments
+            or type(item.call.arguments[name]) is not type(action.arguments[name])
+            for name in action.db_bind_arguments
+        ):
+            continue
+        arguments = {
+            **action.arguments,
+            **{name: item.call.arguments[name] for name in action.db_bind_arguments},
+        }
+        if arguments not in variants:
+            variants.append(arguments)
+    return variants
+
+
+def _reference_db_hashes(
+    environment_constructor: Callable[[], Environment],
+    task: Task,
+    initialization_data,
+    initialization_actions,
+    message_history: list[Message],
+    env_kwargs: dict,
+    strict_replay: bool,
+    observed: list[ObservedCall] | None = None,
+) -> set[tuple[str | None, str | None]]:
+    """Replay canonical and explicitly declared equivalent exact end states."""
+    criteria = task.evaluation_criteria
+    assert criteria is not None
+    hashes = set()
+    for overrides, additions, replacements in product(
+        [{}, *criteria.db_alternative_action_overrides],
+        [[], *criteria.db_alternative_action_additions],
+        [{}, *criteria.db_alternative_action_replacements],
+    ):
+        actions = [
+            replacements.get(a.action_id, a)
+            for a in [*(criteria.actions or []), *additions]
+        ]
+        choices = [_db_action_argument_variants(a, observed or []) for a in actions]
+        for arguments_route in product(*choices):
+            gold_environment = environment_constructor(**env_kwargs)
+            gold_environment.set_state(
+                initialization_data=initialization_data,
+                initialization_actions=initialization_actions,
+                message_history=list(message_history),
+                strict=strict_replay,
+            )
+            for action, base_arguments in zip(actions, arguments_route):
+                arguments = {**base_arguments, **overrides.get(action.action_id, {})}
+                try:
+                    gold_environment.make_tool_call(
+                        tool_name=action.name,
+                        requestor=action.requestor,
+                        **arguments,
+                    )
+                except Exception as error:
+                    if overrides or additions or replacements:
+                        raise ValueError(
+                            f"Invalid DB alternative: {action.name}({arguments})"
+                        ) from error
+                    logger.warning(
+                        f"Error in golden actions {action.name}({arguments}): {error}"
+                    )
+            hashes.add(
+                (gold_environment.get_db_hash(), gold_environment.get_user_db_hash())
+            )
+    return hashes
+
+
+def _trajectory_constraints(
+    task: Task, trajectory: list, *, full: bool
+) -> RewardInfo | None:
+    """Preserve semantic/safety guards when ACTION only grades structural steps.
+
+    Successful arguments and received sources are ENV witnesses. Pure call-order
+    constraints are graded once in ACTION; only reception dependencies stay here.
+    """
+    criteria = task.evaluation_criteria
+    if criteria is None or criteria.action_reward_scope != "presence_and_order":
+        return None
+    from tau2.evaluator.evaluator_action import (
+        ActionEvaluator,
+        FullDuplexActionEvaluator,
+    )
+
+    guarded = task.model_copy(deep=True)
+    guarded.evaluation_criteria.action_reward_scope = "full_contract"
+    guarded.evaluation_criteria.action_order = [
+        pair for pair in criteria.action_order if pair.require_result_before_target
+    ]
+    evaluator = FullDuplexActionEvaluator if full else ActionEvaluator
+    result = evaluator.calculate_reward(guarded, trajectory)
+    info = dict(result.info or {})
+    failed = [
+        check.action.action_id
+        for check in result.action_checks or []
+        if not check.action_match
+    ]
+    if failed:
+        info["semantic_action_witnesses"] = failed
+    return result.model_copy(update={"info": info or None})
 
 
 class EnvironmentEvaluator(EvaluatorBase[Message]):
@@ -82,6 +211,10 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
         if env_kwargs is None:
             env_kwargs = {}
 
+        env_kwargs = dict(env_kwargs)
+        if "task_id" in inspect.signature(environment_constructor).parameters:
+            env_kwargs.setdefault("task_id", task.id)
+
         predicted_environment = environment_constructor(
             solo_mode=solo_mode, **env_kwargs
         )
@@ -93,35 +226,20 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
             strict=strict_replay,
         )
 
-        # Setting up gold environment
-        gold_environment = environment_constructor(**env_kwargs)
-        gold_environment.set_state(
-            initialization_data=initialization_data,
-            initialization_actions=initialization_actions,
-            message_history=message_history,
-            strict=strict_replay,
+        # Comparing the environments with any explicitly equivalent end state.
+        reference_hashes = _reference_db_hashes(
+            environment_constructor,
+            task,
+            initialization_data,
+            initialization_actions,
+            message_history,
+            env_kwargs,
+            strict_replay,
+            evidence_from_messages(full_trajectory).observed,
         )
-        golden_actions = task.evaluation_criteria.actions or []
-        for action in golden_actions:
-            try:
-                gold_environment.make_tool_call(
-                    tool_name=action.name,
-                    requestor=action.requestor,
-                    **action.arguments,
-                )
-            except Exception as e:
-                logger.warning(
-                    f"Error in golden actions {action.name}({action.arguments}): {e}"
-                )
-
-        # Comparing the environments
-        agent_db_hash = gold_environment.get_db_hash()
-        user_db_hash = gold_environment.get_user_db_hash()
         predicted_agent_db_hash = predicted_environment.get_db_hash()
         predicted_user_db_hash = predicted_environment.get_user_db_hash()
-        agent_db_match = agent_db_hash == predicted_agent_db_hash
-        user_db_match = user_db_hash == predicted_user_db_hash
-        if agent_db_match and user_db_match:
+        if (predicted_agent_db_hash, predicted_user_db_hash) in reference_hashes:
             db_reward = 1.0
             db_match = True
         else:
@@ -147,6 +265,9 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
             env_assertion_checks.append(res)
             env_assertion_reward *= res.reward
 
+        constraints = _trajectory_constraints(task, full_trajectory, full=False)
+        if constraints is not None:
+            env_assertion_reward *= constraints.reward
         reward = 1.0
         reward_breakdown = {}
         if RewardType.DB in task.evaluation_criteria.reward_basis:
@@ -162,6 +283,7 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
             env_assertions=env_assertion_checks,
             reward_basis=task.evaluation_criteria.reward_basis,
             reward_breakdown=reward_breakdown,
+            info=constraints.info if constraints is not None else None,
         )
 
 
@@ -203,7 +325,8 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
                     ),
                 )
                 messages.append(user_msg)
-                messages.extend(tick.user_tool_results)
+            # Results may arrive on a later tick without another request.
+            messages.extend(tick.user_tool_results)
 
             # 2. Agent tool calls second
             if tick.agent_tool_calls:
@@ -221,7 +344,7 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
                     ),
                 )
                 messages.append(agent_msg)
-                messages.extend(tick.agent_tool_results)
+            messages.extend(tick.agent_tool_results)
 
         return messages
 
@@ -251,6 +374,9 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
         """
         if env_kwargs is None:
             env_kwargs = {}
+        env_kwargs = dict(env_kwargs)
+        if "task_id" in inspect.signature(environment_constructor).parameters:
+            env_kwargs.setdefault("task_id", task.id)
         if task.evaluation_criteria is None:
             return RewardInfo(
                 reward=1.0,
@@ -300,35 +426,20 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
             strict=strict_replay,
         )
 
-        # Setting up gold environment
-        gold_environment = environment_constructor(**env_kwargs)
-        gold_environment.set_state(
-            initialization_data=initialization_data,
-            initialization_actions=initialization_actions,
-            message_history=message_history,
-            strict=strict_replay,
+        # Comparing the environments with any explicitly equivalent end state.
+        reference_hashes = _reference_db_hashes(
+            environment_constructor,
+            task,
+            initialization_data,
+            initialization_actions,
+            message_history,
+            env_kwargs,
+            strict_replay,
+            evidence_from_ticks(full_trajectory).observed,
         )
-        golden_actions = task.evaluation_criteria.actions or []
-        for action in golden_actions:
-            try:
-                gold_environment.make_tool_call(
-                    tool_name=action.name,
-                    requestor=action.requestor,
-                    **action.arguments,
-                )
-            except Exception as e:
-                logger.warning(
-                    f"Error in golden actions {action.name}({action.arguments}): {e}"
-                )
-
-        # Comparing the environments
-        agent_db_hash = gold_environment.get_db_hash()
-        user_db_hash = gold_environment.get_user_db_hash()
         predicted_agent_db_hash = predicted_environment.get_db_hash()
         predicted_user_db_hash = predicted_environment.get_user_db_hash()
-        agent_db_match = agent_db_hash == predicted_agent_db_hash
-        user_db_match = user_db_hash == predicted_user_db_hash
-        if agent_db_match and user_db_match:
+        if (predicted_agent_db_hash, predicted_user_db_hash) in reference_hashes:
             db_reward = 1.0
             db_match = True
         else:
@@ -354,6 +465,9 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
             env_assertion_checks.append(res)
             env_assertion_reward *= res.reward
 
+        constraints = _trajectory_constraints(task, full_trajectory, full=True)
+        if constraints is not None:
+            env_assertion_reward *= constraints.reward
         reward = 1.0
         reward_breakdown = {}
         if RewardType.DB in task.evaluation_criteria.reward_basis:
@@ -369,4 +483,5 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
             env_assertions=env_assertion_checks,
             reward_basis=task.evaluation_criteria.reward_basis,
             reward_breakdown=reward_breakdown,
+            info=constraints.info if constraints is not None else None,
         )

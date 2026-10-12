@@ -266,7 +266,10 @@ def create_checkpoint_fns(
                 id=sim.id,
                 task_id=sim.task_id,
                 trial=sim.trial,
-                reward=sim.reward_info.reward if sim.reward_info else None,
+                reward=sim.reward_info.final_reward if sim.reward_info else None,
+                grading_status=sim.reward_info.grading_status
+                if sim.reward_info
+                else None,
                 termination_reason=sim.termination_reason,
                 agent_cost=sim.agent_cost,
                 duration=sim.duration,

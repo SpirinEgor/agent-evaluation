@@ -1118,6 +1118,22 @@ class RewardInfo(BaseModel):
     ]
 
     @property
+    def grading_status(self) -> str:
+        """Expose unresolved grading without changing the diagnostic reward."""
+        info = self.info or {}
+        action = info.get("action")
+        if info.get("grading_status") == "needs_review" or (
+            isinstance(action, dict) and action.get("grading_status") == "needs_review"
+        ):
+            return "needs_review"
+        return "final"
+
+    @property
+    def final_reward(self) -> float | None:
+        """Only finalized grades may be projected as benchmark labels."""
+        return None if self.grading_status == "needs_review" else self.reward
+
+    @property
     def partial_action_reward(self) -> Optional[dict]:
         """
         Get the partial reward breakdown for actions.
@@ -1388,6 +1404,7 @@ class SimulationIndexEntry(BaseModel):
     task_id: int | str
     trial: int
     reward: float | None = None
+    grading_status: str | None = None
     termination_reason: str | None = None
     agent_cost: float | None = None
     duration: float | None = None
@@ -1462,7 +1479,10 @@ class Results(BaseModel):
                 id=sim.id,
                 task_id=sim.task_id,
                 trial=sim.trial,
-                reward=sim.reward_info.reward if sim.reward_info else None,
+                reward=sim.reward_info.final_reward if sim.reward_info else None,
+                grading_status=sim.reward_info.grading_status
+                if sim.reward_info
+                else None,
                 termination_reason=sim.termination_reason,
                 agent_cost=sim.agent_cost,
                 duration=sim.duration,
@@ -1673,7 +1693,10 @@ class Results(BaseModel):
             "task_id": sim.task_id,
             "trial": sim.trial,
             "seed": sim.seed,
-            "reward": sim.reward_info.reward if sim.reward_info else None,
+            "reward": sim.reward_info.final_reward if sim.reward_info else None,
+            "grading_status": sim.reward_info.grading_status
+            if sim.reward_info
+            else None,
             "agent_cost": sim.agent_cost,
             "user_cost": sim.user_cost,
             "termination_reason": sim.termination_reason,
