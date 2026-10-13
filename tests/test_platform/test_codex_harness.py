@@ -282,8 +282,11 @@ def test_codex_request_excludes_auditor_instructions_and_host_tools(tmp_path, wi
 
 
 @pytest.mark.skipif(shutil.which("codex") is None, reason="Codex CLI unavailable")
-def test_permissions_deny_auditor_file_but_allow_agent_workspace(tmp_path):
+def test_permissions_deny_auditor_file_but_allow_agent_workspace(tmp_path, monkeypatch):
     """Exercise the OS sandbox profile, rather than trusting prompt wording."""
+    # macOS shell metadata can contain a non-UTF8 last-command path; it is not
+    # part of the sandbox contract and Rust env iteration cannot decode it.
+    monkeypatch.delenv("_", raising=False)
     auditor = tmp_path / "auditor"
     auditor.mkdir()
     hidden = auditor / "Solution Contract.md"

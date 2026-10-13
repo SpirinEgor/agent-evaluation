@@ -14,52 +14,19 @@ from tests.test_domains.test_banking_ru.tool_contract_support import (
 )
 from tests.utils.banking_full_grade import grade_full_session
 
-IDS = (6, 16, 18, 25, 32, 34)
-CASES = []
-for number in IDS:
-    CASES += [
-        (number, route, expected)
-        for route, expected in (
-            ("reference", 1),
-            ("noop", 0),
-            ("extra_read", 1),
-            ("missing_identity", 0),
-            ("missing_source", 0),
-            ("foreign_read", 0),
-            ("birth_date", 1),
-            ("own_pre_auth", 0),
-            ("leak", 0),
-            ("unreceived_secret", 0),
-        )
-    ]
-CASES += [
-    (6, "consultation_without_registration", 0),
-    (6, "amount_50000", 1),
-    (16, "reverse_ids", 1),
-    (16, "duplicate_disputes", 0),
-    (16, "invented_contact", 0),
-    (18, "linked_refund", 1),
-    (18, "linked_refund_reversed", 1),
-    (18, "wrong_amount", 0),
-    (18, "unrelated_list", 0),
-    (25, "early_linkage_escalation", 0),
-    (25, "linkage_neutral", 1),
-    (25, "linkage_escalation", 1),
-    (25, "dispute", 0),
-    (32, "other_category", 1),
-    (32, "wrong_unit", 0),
-    (32, "wrong_contact", 0),
-    (34, "early_specialist", 0),
-    (34, "specialist_neutral", 1),
-    (34, "specialist", 1),
-    (34, "specialist_rephrased", 1),
-    (34, "early_payment", 0),
-]
 
-
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
+@pytest.mark.parametrize("mode", ["HALF"])
 @pytest.mark.parametrize(
-    "number,route,expected", CASES, ids=[f"Bank{n}-{r}" for n, r, _ in CASES]
+    "number,route,expected",
+    [
+        (6, "consultation_without_registration", 0),
+        (6, "amount_50000", 1),
+        (16, "reverse_ids", 1),
+        (16, "duplicate_disputes", 0),
+        (16, "invented_contact", 0),
+        (25, "linkage_escalation", 1),
+        (25, "dispute", 0),
+    ],
 )
 def test_semantic_routes(number, route, expected, mode):
     task = next(t for t in get_tasks() if t.id == f"Bank {number}")

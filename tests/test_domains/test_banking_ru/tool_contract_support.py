@@ -47,12 +47,19 @@ def reject(env: Environment, tool_name: str, error_code: str, /, **arguments):
 
 
 def identify(env: Environment, customer_id: str):
-    """Backend-unit-test setup, not proof of an agent-visible identity route."""
+    """Obtain a real structured client answer before checking identity."""
+    answer = succeed(
+        env,
+        "ask_client",
+        customer_id=customer_id,
+        request={"type": "identity", "method": "code_word"},
+    )
     succeed(
         env,
         "verify_identity",
         customer_id=customer_id,
-        credential=env.tools.db.customers[customer_id].code_word,
+        credential=answer["data"]["credential"],
+        answer_id=answer["answer_id"],
     )
 
 

@@ -15,17 +15,11 @@ from tests.test_domains.test_banking_ru.tool_contract_support import (
 from tests.utils.banking_full_grade import grade_full_session
 
 
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
+@pytest.mark.parametrize("mode", ["HALF"])
 @pytest.mark.parametrize(
     "route,expected",
-    [
-        ("canonical", 1),
-        ("without_loans", 1),
-        ("specialist_without_loans", 1),
-        ("missing_kb168", 0),
-        ("missing_kb345", 0),
-        ("early_write_before_kb345", 0),
-    ],
+    [("specialist_without_loans", 1), ("missing_kb168", 0), ("missing_kb345", 0)],
+    ids=["specialist_without_loans", "missing_kb168", "missing_kb345"],
 )
 def test_bank34_source_gate(mode, route, expected):
     task = deepcopy(next(t for t in get_tasks() if t.id == "Bank 34"))

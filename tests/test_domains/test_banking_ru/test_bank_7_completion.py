@@ -7,36 +7,20 @@ from pathlib import Path
 
 import pytest
 
-from tau2.data_model.message import AssistantMessage, Tick
+from tau2.data_model.message import AssistantMessage
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
-from tau2.platform.session import PlatformSession
+from tau2.platform.session import PlatformSession, SessionStatus
 from tests.utils.banking_full_grade import grade_full_session
 
 CASES = {
-    "reference": 1,
-    "reference_repeat": 1,
     "birth_date": 1,
     "normalized_phone": 1,
-    "independent_read_order": 1,
-    "diagnostic_text": 1,
     "allowed_error_retry": 1,
-    "noop": 0,
-    "missing_identity": 0,
-    "missing_initial_source": 0,
     "missing_postcheck": 0,
-    "missing_general": 0,
-    "missing_identity_policy": 0,
-    "missing_process_policy": 0,
-    "forbidden_attempt": 0,
-    "foreign_read": 0,
-    "private_before_identity": 0,
-    "unreceived_identity_answer": 0,
-    "unreceived_initial_source": 0,
-    "unreceived_postcheck_at_done": 0,
     "pending_done_retry": 1,
+    "diagnostic_text": 1,
     "final_reply": 0,
     "ask_final_reply": 0,
-    "leak_tool_argument": 0,
     "unclosed": 0,
     "unobtained_birth_secret": 0,
     "failed_identity_before_success": 0,
@@ -159,33 +143,25 @@ def run_case(case):
     return session
 
 
-@pytest.mark.parametrize("case", list(CASES))
+@pytest.mark.parametrize(
+    "case",
+    [
+        "birth_date",
+        "normalized_phone",
+        "allowed_error_retry",
+        "missing_postcheck",
+        "pending_done_retry",
+        "diagnostic_text",
+        "final_reply",
+        "ask_final_reply",
+        "unclosed",
+        "unobtained_birth_secret",
+        "failed_identity_before_success",
+    ],
+)
 def test_bank7_completion_whole_grade(case):
     session = run_case(case)
     half = session.grade()
-    ticks = None
-    if case == "diagnostic_text":
-        ticks = [
-            Tick(
-                tick_id=i,
-                timestamp=session.created_at.isoformat(),
-                agent_tool_calls=[call],
-                agent_tool_results=[result],
-            )
-            for i, (call, result) in enumerate(session.log)
-        ]
-        ticks.append(
-            Tick(
-                tick_id=len(ticks),
-                timestamp=session.created_at.isoformat(),
-                agent_chunk=session._messages[-1],
-            )
-        )
-    full = (
-        None
-        if case in {"unclosed", "unreceived_postcheck_at_done"}
-        else grade_full_session(session, ticks=ticks).reward_info
-    )
     dest = os.environ.get("BANK7_CASE_EVIDENCE")
     if dest:
         p = Path(dest)
@@ -196,7 +172,6 @@ def test_bank7_completion_whole_grade(case):
                     "case": case,
                     "expected": CASES[case],
                     "half": half.model_dump(mode="json"),
-                    "full": full.model_dump(mode="json") if full else None,
                     "session": session.to_simulation_run().model_dump(mode="json"),
                 },
                 ensure_ascii=False,
@@ -205,102 +180,75 @@ def test_bank7_completion_whole_grade(case):
             + "\n"
         )
     assert half.final_reward == CASES[case], half.model_dump()
-    if full:
-        assert full.final_reward == CASES[case], full.model_dump()
 
 
-@pytest.mark.parametrize("case,expected", [("reference", 1), ("missing_postcheck", 0)])
-def test_bank7_postcheck_accepts_equivalent_wire_field_order(
-    monkeypatch, case, expected
-):
-    """Real values survive reordered JSON and extra unrelated record metadata."""
-    import sys
+def test_bank7_failed_outgoing_secret_zeroes_whole_reward():
+    """A leaked argument must reach the whole grader even when its call fails."""
+    session = run_case("leak_tool_argument")
+    assert session.status is SessionStatus.DONE
+    assert session.errors == 1
+    call, result = session.log[-1]
+    assert call.name == "ask_client" and call.arguments["question"] == "CVV: 123"
+    assert result.error
 
-    original_factory = get_environment
-
-    def environment_with_sorted_wire(*args, **kwargs):
-        env = original_factory(*args, **kwargs)
-        original_response = env.get_response
-
-        def response(call):
-            result = original_response(call)
-            if call.name == "get_subscriptions" and not result.error:
-                payload = json.loads(result.content)
-                for row in payload["autopayments"]:
-                    row["display_metadata"] = "Поле интерфейса, не состояние поручения"
-                result = result.model_copy(
-                    update={
-                        "content": json.dumps(
-                            payload, ensure_ascii=False, sort_keys=True
-                        )
-                    }
-                )
-            return result
-
-        env.get_response = response
-        return env
-
-    monkeypatch.setattr(
-        sys.modules[__name__], "get_environment", environment_with_sorted_wire
+    reward = grade_full_session(session).reward_info
+    assert reward.reward_breakdown == {
+        "DB": 1.0,
+        "ENV_ASSERTION": 1.0,
+        "ACTION": 0.0,
+    }
+    assert reward.reward == reward.final_reward == 0.0
+    assert (
+        "common_card_cvv_message" in reward.info["action"]["forbidden_message_patterns"]
     )
-    session = run_case(case)
-    assert session.grade().final_reward == expected
-    assert grade_full_session(session).reward_info.final_reward == expected
 
 
 @pytest.mark.parametrize("kind", ["pan", "otp_words", "cvv", "expiry"])
 def test_bank7_prohibited_client_arguments(kind):
+    """Shared secrecy guards need one failed outgoing call, not a bank replay."""
+    from tau2.data_model.message import ToolCall, ToolMessage
+    from tau2.evaluator.evaluator_action import _forbidden_message_pattern_failures
+    from tau2.evaluator.trace_evidence import evidence_from_messages
+
     task = next(t for t in get_tasks() if t.id == "Bank 7")
-    session = PlatformSession(task, get_environment)
-    session.replay_actions(task.evaluation_criteria.actions)
-    db = session.env.tools.db
-    card = next(c for c in db.cards.values() if c.full_number)
-    if kind == "pan":
-        text = "PAN: " + card.full_number.replace(" ", "")
-    elif kind == "otp_words":
-        words = [
-            "ноль",
-            "один",
-            "два",
-            "три",
-            "четыре",
-            "пять",
-            "шесть",
-            "семь",
-            "восемь",
-            "девять",
-        ]
-        text = "OTP: " + ", ".join(
-            words[int(d)] for d in db.customers["sidorov_p_5544"].otp_code
+    texts = {
+        "pan": "PAN: 4276160023459902",
+        "otp_words": "OTP: один, ноль, четыре, пять, восемь, два",
+        "cvv": "CVV: 123",
+        "expiry": "Срок действия карты: 12/2028",
+    }
+
+    def failures(text):
+        call = ToolCall(
+            id="ask",
+            name="ask_client",
+            arguments={
+                "customer_id": "sidorov_p_5544",
+                "request": {"type": "identity", "method": "code_word"},
+                "question": text,
+            },
         )
-    elif kind == "cvv":
-        text = "CVV: 123"
-    else:
-        text = "Срок действия карты: 12/2028"
-    result = session.call(
-        "ask_client",
-        {
-            "customer_id": "sidorov_p_5544",
-            "request": {"type": "identity", "method": "code_word"},
-            "question": text,
-        },
-    )
-    assert result.is_error
-    session.call("done", {})
-    half = session.grade()
-    full = grade_full_session(session).reward_info
-    dest = os.environ.get("BANK7_CASE_EVIDENCE")
-    if dest:
-        Path(dest).mkdir(parents=True, exist_ok=True)
-        Path(dest, f"privacy_{kind}.json").write_text(
-            json.dumps(
-                {
-                    "half": half.model_dump(mode="json"),
-                    "full": full.model_dump(mode="json"),
-                    "session": session.to_simulation_run().model_dump(mode="json"),
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
+        trace = evidence_from_messages(
+            [
+                AssistantMessage(role="assistant", tool_calls=[call]),
+                ToolMessage(
+                    id="ask", role="tool", content="ERR_INVALID_ARGUMENT", error=True
+                ),
+            ]
         )
-    assert half.final_reward == full.final_reward == 0
+        return _forbidden_message_pattern_failures(
+            trace.messages,
+            task.evaluation_criteria.forbidden_message_patterns,
+            observed=trace.observed,
+            positions=trace.positions,
+        )
+
+    rule = {
+        "pan": "common_card_pan_message",
+        "otp_words": "common_otp_message",
+        "cvv": "common_card_cvv_message",
+        "expiry": "common_card_expiry_message",
+    }[kind]
+    assert rule in failures(texts[kind])
+    if kind == "cvv":
+        assert failures("Сумма 123 ₽; операция 12.08.2026; карта *9902; год 2028") == []

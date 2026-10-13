@@ -23,10 +23,21 @@ def find_customer_success(env):
 
 
 def verify_identity_success(env):
-    answer = succeed(env, "ask_client", customer_id=OWNER, question="Кодовое слово?")
-    assert answer == "Клиент: «Кодовое слово — капучино»"
+    answer = succeed(
+        env,
+        "ask_client",
+        customer_id=OWNER,
+        request={"type": "identity", "method": "code_word"},
+    )
+    assert answer["data"]["credential"] == "капучино"
     before_hash = env.get_db_hash()
-    result = succeed(env, "verify_identity", customer_id=OWNER, credential=" КАПУЧИНО ")
+    result = succeed(
+        env,
+        "verify_identity",
+        customer_id=OWNER,
+        credential=" КАПУЧИНО ",
+        answer_id=answer["answer_id"],
+    )
     assert "Белова Наталья Игоревна" in result
     assert env.tools.db.session.verified_customers == [OWNER]
     assert env.get_db_hash() == before_hash
@@ -51,8 +62,6 @@ def send_otp_success(env):
 
 def check_otp_success(env):
     succeed(env, "send_otp", customer_id=OWNER)
-    answer = succeed(env, "ask_client", customer_id=OWNER, question="Код из СМС?")
-    assert answer == "Клиент: «Код из СМС — 104582»"
     result = succeed(env, "check_otp", customer_id=OWNER, code="104582")
     assert result == "Код подтверждения принят."
     assert env.tools.db.session.otp_verified == [OWNER]
@@ -62,11 +71,14 @@ def check_otp_success(env):
 def ask_client_success(env):
     before = snapshot(env)
     result = succeed(
-        env, "ask_client", customer_id="orlov_p_8814", question="Куда доставить карту?"
+        env,
+        "ask_client",
+        customer_id=OWNER,
+        request={"type": "identity", "method": "birth_date"},
     )
-    assert result == (
-        "Клиент: «Новый адрес: г. Санкт-Петербург, ул. Марата, д. 22, кв. 9»"
-    )
+    assert result["customer_id"] == OWNER and result["status"] == "answered"
+    assert result["request_type"] == "identity" and result["answer_id"]
+    assert result["data"]["credential"] == "1992-04-17"
     assert snapshot(env) == before
 
 
@@ -92,6 +104,7 @@ def verify_identity_error(env):
         "ERR_IDENTITY_MISMATCH",
         customer_id=OWNER,
         credential="неверно",
+        answer_id="not-received",
     )
 
 
@@ -110,7 +123,12 @@ def check_otp_error(env):
 
 def ask_client_error(env):
     reject(
-        env, "ask_client", "ERR_INVALID_ARGUMENT", customer_id=OWNER, question=" \t "
+        env,
+        "ask_client",
+        "ERR_INVALID_ARGUMENT",
+        customer_id=OWNER,
+        request={"type": "identity", "method": "code_word"},
+        question="free text",
     )
 
 

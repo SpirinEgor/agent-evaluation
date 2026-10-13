@@ -9,6 +9,7 @@ from tau2.domains.banking_ru.environment import get_environment
 GROUPS = (
     "identity_message_tool_contracts",
     "read_tool_contracts",
+    "file_tool_contracts",
     "finance_tool_contracts",
     "card_case_tool_contracts",
 )

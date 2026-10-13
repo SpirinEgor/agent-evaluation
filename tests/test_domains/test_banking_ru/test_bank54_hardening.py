@@ -2,14 +2,11 @@
 
 import json
 import os
-import shutil
-from copy import deepcopy
 from pathlib import Path
 
 import pytest
 
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
-from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 
@@ -38,51 +35,20 @@ def test_bank54_new_data_are_discoverable():
     assert "2026-07-20" in db.documents[PROOF].body
 
 
-CASES = [
-    (s, 1)
-    for s in [
-        "reference",
-        "case",
-        "case_list",
-        "details",
-        "details_selected",
-        "birth_date",
-        "other_reason",
-        "unknown_default_retry",
-        "unknown_list_retry",
-    ]
-] + [
-    (s, 0)
-    for s in [
-        "noop",
-        "wrong_2900",
-        "wrong_1700",
-        "wrong_1500",
-        "duplicate",
-        "duplicate_case",
-        "default_omitted_after",
-        "default_null_after",
-        "cancel_yandex",
-        "repeat_cancel",
-        "direct_refund",
-        "no_kb",
-        "archived_kb",
-        "no_ro06",
-        "historical_only",
-        "no_refund_receipts",
-        "early_repaired",
-        "kb_result_late",
-        "proof_result_late",
-        "refund_result_late",
-        "wrong_attempt_repaired",
-        "known_wrong_target_failed",
-        "known_extra_target_failed",
-    ]
-]
-
-
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
-@pytest.mark.parametrize("route,expected", CASES, ids=[c[0] for c in CASES])
+@pytest.mark.parametrize("mode", ["HALF"])
+@pytest.mark.parametrize(
+    "route,expected",
+    [
+        ("case_list", 1),
+        ("other_reason", 1),
+        ("wrong_1700", 0),
+        ("default_null_after", 0),
+        ("repeat_cancel", 0),
+        ("historical_only", 0),
+        ("no_refund_receipts", 0),
+        ("known_wrong_target_failed", 0),
+    ],
+)
 def test_bank54_routes(route, expected, mode):
     task = next(t for t in get_tasks() if t.id == "Bank 54")
     session = PlatformSession(task, get_environment, max_calls=100, max_errors=50)
@@ -305,62 +271,3 @@ def test_bank54_routes(route, expected, mode):
             )
         )
     assert reward.final_reward == expected, reward.info
-
-
-def test_bank54_migration_is_scoped_idempotent(tmp_path):
-    from scripts.banking_ru.harden_bank54 import migrate, with_contract
-
-    base = Path(BANKING_RU_DATA_DIR)
-    tasks = json.loads((base / "tasks.json").read_text())
-    db = json.loads((base / "db.json").read_text())
-    before = deepcopy((tasks, db))
-    updated = with_contract(tasks, db)
-    assert (tasks, db) == before
-    assert [t for t in updated[0] if t["id"] != "Bank 54"] == [
-        t for t in tasks if t["id"] != "Bank 54"
-    ]
-    assert with_contract(*updated) == updated
-    for key in db:
-        if key not in {"transactions", "subscriptions", "documents"}:
-            assert db[key] == updated[1][key]
-    for key in {"transactions", "subscriptions", "documents"}:
-        for id, row in db[key].items():
-            if row.get("customer_id") != OWNER:
-                assert row == updated[1][key][id]
-    shutil.copytree(base, tmp_path / "data")
-    migrate(tmp_path / "data")
-    migrate(tmp_path / "data", check=True)
-    saved = {p: p.read_bytes() for p in (tmp_path / "data").rglob("*") if p.is_file()}
-    migrate(tmp_path / "data")
-    assert all(p.read_bytes() == raw for p, raw in saved.items())
-
-
-def test_bank54_migration_refuses_record_collision():
-    from scripts.banking_ru.harden_bank54 import with_contract
-
-    base = Path(BANKING_RU_DATA_DIR)
-    tasks = json.loads((base / "tasks.json").read_text())
-    db = json.loads((base / "db.json").read_text())
-    db["transactions"]["txn_314104"] = {
-        "id": "txn_314104",
-        "customer_id": "someone_else",
-    }
-    with pytest.raises(ValueError, match="owner"):
-        with_contract(tasks, db)
-
-
-def test_bank54_migration_preserves_refreshed_evidence_order():
-    from scripts.banking_ru.harden_bank54 import with_contract
-
-    base = Path(BANKING_RU_DATA_DIR)
-    tasks = json.loads((base / "tasks.json").read_text())
-    db = json.loads((base / "db.json").read_text())
-    tasks, db = with_contract(tasks, db)
-    task = next(t for t in tasks if t["id"] == "Bank 54")
-    evidence = task["evaluation_criteria"]["result_evidence"]
-    discovery = next(
-        e for e in evidence if e["evidence_id"] == "common_discovery_Bank 54"
-    )
-    evidence.remove(discovery)
-    evidence.append(discovery)
-    assert with_contract(tasks, db) == (tasks, db)

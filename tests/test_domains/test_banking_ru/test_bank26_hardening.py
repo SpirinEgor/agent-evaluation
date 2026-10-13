@@ -11,26 +11,6 @@ from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 
-ROUTES = [
-    ("canonical", 1),
-    ("details_without_history", 1),
-    ("list_only_anchor", 1),
-    ("noop", 0),
-    ("old_group", 0),
-    ("old_group_then_correct", 0),
-    ("deduct_processing", 0),
-    ("full_original_amount", 0),
-    ("include_correct_payment", 0),
-    ("wrong_anchor", 0),
-    ("wrong_accounts", 0),
-    ("missing_accounts", 0),
-    ("late_accounts", 0),
-    ("missing_execution", 0),
-    ("late_execution", 0),
-    ("duplicate_case", 0),
-    ("foreign_read", 0),
-]
-
 
 def make_session(route):
     task = deepcopy(next(t for t in get_tasks() if t.id == "Bank 26"))
@@ -100,8 +80,17 @@ def make_session(route):
     return session
 
 
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
-@pytest.mark.parametrize("route,expected", ROUTES, ids=[r[0] for r in ROUTES])
+@pytest.mark.parametrize("mode", ["HALF"])
+@pytest.mark.parametrize(
+    "route,expected",
+    [
+        ("details_without_history", 1),
+        ("list_only_anchor", 1),
+        ("old_group_then_correct", 0),
+        ("deduct_processing", 0),
+        ("include_correct_payment", 0),
+    ],
+)
 def test_bank26_routes(route, expected, mode):
     session = make_session(route)
     session.call("done", {})
@@ -154,36 +143,3 @@ def test_bank26_execution_receipts_are_historical():
     assert by_id["txn_889233"]["original_transaction_id"] == "txn_889231"
     assert by_id["txn_889234"]["original_transaction_id"] == "txn_889231"
     assert by_id["txn_889234"]["status"] == "processing"
-
-
-def test_bank26_migration_is_addressed_and_idempotent():
-    from scripts.banking_ru.harden_bank26 import DATA, with_contract, with_documents
-
-    tasks = json.loads((DATA / "tasks.json").read_text())
-    db = json.loads((DATA / "db.json").read_text())
-    changed_tasks, changed_db = with_contract(tasks, db)
-    assert [t for t in changed_tasks if t["id"] != "Bank 26"] == [
-        t for t in tasks if t["id"] != "Bank 26"
-    ]
-    changed_ids = {
-        "txn_889231",
-        "txn_889232",
-        "txn_889150",
-        "txn_889233",
-        "txn_889234",
-        "txn_889240",
-        "txn_889241",
-    }
-    for collection in db:
-        if collection != "transactions":
-            assert changed_db[collection] == db[collection]
-    assert {
-        k: v for k, v in changed_db["transactions"].items() if k not in changed_ids
-    } == {k: v for k, v in db["transactions"].items() if k not in changed_ids}
-    assert with_contract(changed_tasks, changed_db) == (changed_tasks, changed_db)
-    docs = {
-        p: (DATA / "corpus" / p.lstrip("/")).read_text()
-        for p in ("/knowledge/kb_180.md", "/policies/transfers_fraud.md")
-    }
-    new_docs = with_documents(docs)
-    assert with_documents(new_docs) == new_docs

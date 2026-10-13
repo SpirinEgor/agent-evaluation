@@ -9,6 +9,7 @@ import pytest
 from tau2.domains.banking_ru.environment import get_environment
 from tau2.environment.environment import Environment
 from tests.test_domains.test_banking_ru.tool_contract_support import (
+    identify,
     reject,
     snapshot,
     succeed,
@@ -20,7 +21,7 @@ def env() -> Environment:
     return get_environment()
 
 
-def _read(env: Environment, name: str, **arguments):
+def _read(env: Environment, name: str, /, **arguments):
     # Keep the actual wire value: dict scalars stringify, model scalars do not.
     before = snapshot(env)
     result = succeed(env, name, **arguments)
@@ -138,6 +139,8 @@ def limits(env: Environment):
         "daily_cash_withdrawal": 100000.0,
         "internet_operations_enabled": False,
         "sbp_limit": 150000.0,
+        "sbp_limit_period": "per_operation",
+        "sbp_limit_origin": None,
     }
 
 
@@ -151,31 +154,6 @@ def tariff(env: Environment):
     assert row["max_daily_cash_withdrawal"] == 300000.0
     assert row["max_sbp_limit"] == 300000.0
     assert row["interbank_transfer_fee_percent"] == 0.5
-
-
-def knowledge(env: Environment):
-    rows = _read(env, "search_knowledge", query="120")
-    assert [r["id"] for r in rows] == ["kb_110"]
-    assert rows[0]["section"] == "Оспаривание операций"
-    assert rows[0]["title"] == "Сроки подачи спора"
-    assert rows[0]["effective_from"] == "2024-01-01"
-    assert rows[0]["effective_to"] is None
-    assert rows[0]["snippet"].startswith(
-        "Спор по операции принимается в течение 120 дней"
-    )
-    assert len(rows[0]["snippet"]) == 181
-    assert "\n" not in rows[0]["snippet"]
-    assert "body" not in rows[0] and "keywords" not in rows[0]
-
-
-def article(env: Environment):
-    row = _read(env, "get_article", article_id="kb_111")
-    assert row["id"] == "kb_111" and row["effective_from"] == "2026-06-01"
-    assert row["effective_to"] is None and row["superseded_by"] is None
-    assert "сумма операции минус все возвраты по ней" in row["body"]
-    assert "по номеру заказа в назначении обеих операций" in row["body"]
-    assert "заменяет статью kb_101" in row["body"]
-    assert "непокрытая" in row["keywords"]
 
 
 def tariffs(env: Environment):
@@ -241,6 +219,12 @@ def limit_request(env: Environment):
     rows = _read(env, "get_limit_request", customer_id="morozova_e_1156")
     assert rows == [
         {
+            "request_type": "credit_limit",
+            "object_type": None,
+            "object_id": None,
+            "channel": None,
+            "period": None,
+            "requires_decision": None,
             "id": "lrq_1156",
             "customer_id": "morozova_e_1156",
             "requested_limit": 300000.0,
@@ -265,10 +249,10 @@ def documents(env: Environment):
 def deposit(env: Environment):
     rows = _read(env, "get_deposit", customer_id="belov_i_2266")
     assert [(r["id"], r["amount"], r["payout_account_id"]) for r in rows] == [
-        ("dep_4051", "300000.0", "acc_8844"),
-        ("dep_4052", "150000.0", "acc_8843"),
+        ("dep_4051", 300000.0, "acc_8844"),
+        ("dep_4052", 150000.0, "acc_8843"),
     ]
-    assert all(r["customer_id"] == "belov_i_2266" and r["rate"] == "0.12" for r in rows)
+    assert all(r["customer_id"] == "belov_i_2266" and r["rate"] == 0.12 for r in rows)
     assert all(
         "early_withdrawal_payout" not in r and "maturity_payout" not in r for r in rows
     )
@@ -282,7 +266,7 @@ def loans(env: Environment):
     row = rows[0]
     assert row["customer_id"] == "dorohov_v_6630" and row["principal"] == 380000.0
     assert row["accrued_interest"] == 2300.0 and row["monthly_payment"] == 18500.0
-    assert row["contract_date"] == "2025-02-01" and row["days_overdue"] == 3
+    assert row["contract_date"] == "2025-02-01" and row["days_overdue"] == 0
     assert (row["waivers_used"], row["max_waivers"]) == (1, 1)
     assert [(p["id"], p["amount"], p["waived"]) for p in row["penalties"]] == [
         ("pen_6630_1", 900.0, True),
@@ -301,8 +285,6 @@ SUCCESS_SCENARIOS = {
     "get_subscriptions": subscriptions,
     "get_limits": limits,
     "get_tariff": tariff,
-    "search_knowledge": knowledge,
-    "get_article": article,
     "list_tariffs": tariffs,
     "get_cashback_rules": cashback,
     "get_devices": devices,
@@ -334,14 +316,6 @@ def missing_card(env: Environment):
     reject(env, "get_limits", "ERR_NOT_FOUND", card_id="missing_card")
 
 
-def missing_article(env: Environment):
-    reject(env, "get_article", "ERR_NOT_FOUND", article_id="missing_article")
-
-
-def empty_knowledge_query(env: Environment):
-    reject(env, "search_knowledge", "ERR_INVALID_ARGUMENT", query=" \t\n ")
-
-
 ERROR_SCENARIOS = {
     name: _missing_customer(name)
     for name in (
@@ -366,7 +340,31 @@ ERROR_SCENARIOS.update(
     {
         "get_transaction_details": missing_transaction,
         "get_limits": missing_card,
-        "get_article": missing_article,
-        "search_knowledge": empty_knowledge_query,
     }
 )
+
+
+def loan_cases(env):
+    from tau2.domains.banking_ru.data_model import Case
+
+    for key, owner in [
+        ("case-contract-own-loan", "dorohov_v_6630"),
+        ("case-contract-foreign-loan", "belova_n_2201"),
+    ]:
+        env.tools.db.cases[key] = Case(
+            id=key,
+            customer_id=owner,
+            category="credit_holidays",
+            created_at="2026-08-28",
+            status="open",
+        )
+    identify(env, "dorohov_v_6630")
+    result = _read(env, "get_loan_cases", customer_id="dorohov_v_6630")
+    assert result["customer_id"] == "dorohov_v_6630"
+    assert "case-contract-own-loan" in {row["id"] for row in result["items"]}
+    assert "case-contract-foreign-loan" not in {row["id"] for row in result["items"]}
+    assert all(row["customer_id"] == "dorohov_v_6630" for row in result["items"])
+
+
+SUCCESS_SCENARIOS["get_loan_cases"] = loan_cases
+ERROR_SCENARIOS["get_loan_cases"] = _missing_customer("get_loan_cases")

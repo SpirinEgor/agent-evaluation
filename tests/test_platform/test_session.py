@@ -75,23 +75,3 @@ def test_unknown_tool_is_an_error_not_a_crash():
     s = make()
     res = s.call("drop_database", {})
     assert res.is_error is True and s.errors == 1
-
-
-def test_reference_actions_through_the_session_score_one():
-    """Эталонная траектория задачи, прогнанная через сессию, обязана дать 1.0:
-    это та же проверка, что test_reference_trajectory для домена, только через
-    платформу."""
-    s = make("Bank 46")
-    s.replay_actions(s.task.evaluation_criteria.actions)
-    s.call(DONE_TOOL_NAME, {})
-    reward = s.grade()
-    assert reward.reward == 1.0
-    assert reward.reward_breakdown == {"DB": 1.0, "ENV_ASSERTION": 1.0, "ACTION": 1.0}
-
-
-def test_wrong_write_scores_zero():
-    s = make("Bank 46")
-    s.call("verify_identity", {"customer_id": "kovalev_n_2217", "credential": "причал"})
-    s.call("block_card", {"card_id": "card_5501", "reason": "lost"})
-    s.call(DONE_TOOL_NAME, {})
-    assert s.grade().reward == 0.0

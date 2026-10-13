@@ -126,7 +126,8 @@ def test_incomplete_flow_over_mcp_scores_zero_and_persists(app, settings):
     }
     assert result["reward"] == 0.0
     assert result["reward_breakdown"]["ACTION"] == 0.0
-    assert result["env_assertions"], "reveal_checks=True отдаёт проверки"
+    # This completion-only task declares no explicit env_assertions.
+    assert result["env_assertions"] == []
     saved = json.loads((settings.results_dir / f"{token}.json").read_text())
     assert saved["task_id"] == "Bank 46" and saved["reward_info"]["reward"] == 0.0
 

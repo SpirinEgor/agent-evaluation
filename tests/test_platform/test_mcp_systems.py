@@ -64,7 +64,7 @@ def test_system_catalog_is_the_unchanged_bank1_catalog(tmp_path):
     catalogs = run_with_app(app, go)
     flattened = [t for tools in catalogs.values() for t in tools]
     expected = PlatformSession(get_tasks()[0], get_environment).mcp_tools
-    assert len(flattened) == len({t.name for t in flattened}) == 63
+    assert len(flattened) == len({t.name for t in flattened}) == 66
     assert {t.name: t.model_dump() for t in flattened} == {
         t.name: t.model_dump() for t in expected
     }
@@ -126,7 +126,7 @@ def test_identity_and_budgets_are_shared_across_systems():
     assert e.status is SessionStatus.TOO_MANY_ERRORS
 
 
-def test_wrong_system_forbidden_attempt_still_fails_action_grade():
+def test_wrong_system_forbidden_attempt_still_fails_whole_grade():
     s = PlatformSession(get_tasks()[0], get_environment)
     for action in s.task.evaluation_criteria.actions:
         s.call(action.name, action.arguments)
@@ -138,7 +138,9 @@ def test_wrong_system_forbidden_attempt_still_fails_action_grade():
     assert wrong.is_error
     s.call("done", {}, system="support")
     assert s.grade().reward_breakdown["DB"] == 1.0
-    assert s.grade().reward_breakdown["ACTION"] == 0.0
+    # Banking presence_and_order keeps trajectory safety in ENV.
+    assert s.grade().reward_breakdown["ENV_ASSERTION"] == 0.0
+    assert s.grade().final_reward == 0.0
     event = s.to_simulation_run().info["mcp_events"][-2]
     assert event["system"] == "cards" and event["canonical_name"] == "open_dispute"
     assert event["arguments"]["transaction_id"] == "txn_unknown"
@@ -281,8 +283,8 @@ def test_write_formed_while_source_response_is_held_fails_grade(tmp_path):
 
     result = run_with_app(app, go)
     assert result["reward_breakdown"]["DB"] == 1.0
-    assert result["reward_breakdown"]["ENV_ASSERTION"] == 1.0
-    assert result["reward_breakdown"]["ACTION"] == 0.0
+    # This banking scoring profile assigns received-source guards to ENV.
+    assert result["reward_breakdown"]["ENV_ASSERTION"] == 0.0
     assert result["reward"] == 0.0
 
 
