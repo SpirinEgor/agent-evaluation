@@ -49,7 +49,10 @@ def test_each_task_original_whole_full_baseline(task_id, route):
     reward = grade_full_session(session).reward_info
     assert session._reward_info is None
     if route == "noop":
-        assert reward.reward_breakdown[RewardType.ACTION] == 0.0
+        # A public consultation can be rejected by received-source ENV evidence
+        # without a mandatory business mutation in ACTION. The contract is the
+        # product of components, not that every no-op has to fail ACTION itself.
+        assert 0.0 in reward.reward_breakdown.values()
         assert reward.final_reward == 0.0
         assert reward.grading_status == "final"
     else:

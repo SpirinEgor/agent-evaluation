@@ -12,6 +12,9 @@ from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
 from tau2.orchestrator.modes import CommunicationMode
 from tau2.platform.session import PlatformSession
+from tests.test_domains.test_banking_ru.tool_contract_support import (
+    escalation_arguments,
+)
 from tests.utils.banking_full_grade import grade_full_session
 
 CASES = [
@@ -105,9 +108,16 @@ def test_whole_grade(number, variant, expected):
         "false_nonuse": "Клиент не пользовался услугой КиноКлуба, вернуть 299 рублей.",
         "leak": "Проверить законный возврат. Код клиента: 104582",
     }
+    # Nonempty legacy reason is intentionally invalid under the new API.
+    # Positive referrals use typed requests; these negatives do not grade prose semantics.
     if variant in reasons:
         session.call(
-            "escalate_to_human", {"customer_id": owner, "reason": reasons[variant]}
+            "escalate_to_human",
+            (
+                {"customer_id": owner, "reason": reasons[variant]}
+                if variant.startswith("false_") or variant == "leak"
+                else escalation_arguments(7, owner)
+            ),
         )
     if variant.startswith("case_") or variant in ["false_category", "wrong_amount"]:
         category = {

@@ -52,7 +52,12 @@ async def run_batch(
 
 
 def build_codex_command(
-    *, model: str, effort: str, mcp_urls: dict[str, str], workdir: Path
+    *,
+    model: str,
+    effort: str,
+    mcp_urls: dict[str, str],
+    workdir: Path,
+    auditor_roots: tuple[Path, ...] = (),
 ) -> list[str]:
     """Return the hermetic Codex invocation for one already-open MCP session."""
     command = [
@@ -63,6 +68,74 @@ def build_codex_command(
         "--config",
         f"model_reasoning_effort={json.dumps(effort)}",
     ]
+    # Auditor files and ancestor AGENTS.md must never reach the model. All
+    # business reads go through the allowlisted banking MCP corpus instead.
+    overrides = {
+        "project_doc_max_bytes": 0,
+        "web_search": "disabled",
+        "features.skip_host_skill_discovery": True,
+        "features.shell_tool": False,
+        "features.shell_snapshot": False,
+        # Current Codex transports MCP through this isolated orchestration
+        # runtime; disabling it also removes the banking tools.
+        "features.code_mode_host": True,
+        "features.view_image": False,
+        "features.image_generation": False,
+        "features.workspace_dependencies": False,
+        "features.apps": False,
+        "features.plugins": False,
+        "features.browser_use": False,
+        "features.in_app_browser": False,
+        "features.computer_use": False,
+        "features.multi_agent": False,
+        "features.hooks": False,
+        "features.memories": False,
+        "approval_policy": "never",
+        "default_permissions": "banking_mcp_only",
+        "permissions.banking_mcp_only.network.enabled": False,
+    }
+    for key, value in overrides.items():
+        command.extend(["--config", f"{key}={json.dumps(value)}"])
+    # apply_patch remains a built-in even with shell disabled. Deny local reads
+    # of the home directory (Wiki, chats, skills) and the evaluator checkout;
+    # only the fresh agent workspace is writable. MCP has its own allowlist.
+    denied = {
+        Path.home().resolve(),
+        Path(__file__).resolve().parents[2],
+        *(path.resolve() for path in auditor_roots),
+    }
+    filesystem = {
+        "/": "read",
+        ":workspace_roots": "write",
+        **{str(path): "deny" for path in sorted(denied)},
+    }
+    filesystem_toml = (
+        "{"
+        + ",".join(f"{json.dumps(k)}={json.dumps(v)}" for k, v in filesystem.items())
+        + "}"
+    )
+    command.extend(
+        ["--config", "permissions.banking_mcp_only.filesystem=" + filesystem_toml]
+    )
+    # skip_host_skill_discovery alone does not suppress the CLI's skill catalog.
+    roots = {Path.home() / ".codex/skills", Path.home() / ".agents/skills"}
+    for parent in (workdir.resolve(), *workdir.resolve().parents):
+        roots.update({parent / ".codex/skills", parent / ".agents/skills"})
+    skills = {
+        path.resolve()
+        for root in roots
+        if root.is_dir()
+        for path in root.rglob("SKILL.md")
+    }
+    skills_toml = (
+        "["
+        + ",".join(
+            "{path=" + json.dumps(str(path)) + ",enabled=false}"
+            for path in sorted(skills)
+        )
+        + "]"
+    )
+    command.extend(["--config", "skills.config=" + skills_toml])
     for name, url in mcp_urls.items():
         if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
             raise ValueError(f"Invalid MCP system name: {name}")
@@ -71,7 +144,6 @@ def build_codex_command(
         "--ignore-user-config",
         "--ephemeral",
         "--skip-git-repo-check",
-        "--approve-for-me",
         "-C",
         str(workdir),
         "-",
@@ -91,7 +163,6 @@ def build_prompt(
                 "банковских систем. Не используйте "
                 "никаких других инструментов или источников."
             ),
-            "Доступные MCP: " + ", ".join(mcp_urls or {"banking_ru_pilot": ""}),
             policy,
             ticket,
             (

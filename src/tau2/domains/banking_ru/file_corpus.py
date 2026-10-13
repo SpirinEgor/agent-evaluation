@@ -18,7 +18,7 @@ class FileCorpus:
         if self.manifest["version"] != 1:
             raise ValueError("Unsupported corpus manifest version")
         self.documents = {}
-        self._read_lines: dict[str, set[int]] = {}
+        self._read_paths: set[str] = set()
         for path, descriptor in self.manifest["documents"].items():
             self.validate_path(path)
             source = root / "corpus" / path.lstrip("/")
@@ -29,6 +29,8 @@ class FileCorpus:
                 raise ValueError("Corpus file exceeds 65536 bytes")
             if hashlib.sha256(content).hexdigest() != descriptor["sha256"]:
                 raise ValueError(f"Corpus hash mismatch: {path}")
+            if len(content.decode("utf-8").splitlines()) > 200:
+                raise ValueError(f"Corpus file exceeds 200 lines: {path}")
             self.documents[path] = {
                 **deepcopy(descriptor),
                 "content": content.decode("utf-8"),
@@ -59,69 +61,54 @@ class FileCorpus:
             raise ValueError("Corpus path not found")
         return paths
 
-    def read(self, path: str, start_line: int = 0, end_line: int = 0) -> dict:
-        """Return bounded text with exact snapshot, revision and completeness."""
+    def _contains_source(self, aggregate: dict, source: dict) -> bool:
+        """Require an actual source body and its declared immutable revision."""
+        body = source["content"]
+        if body.startswith("---\n"):
+            body = body.split("---", 2)[-1].strip()
+        revision = source["metadata"].get("revision_id")
+        return bool(
+            body
+            and body in aggregate["content"]
+            and revision is not None
+            and aggregate["metadata"]
+            .get("source_revisions", {})
+            .get(source["metadata"]["id"])
+            == revision
+        )
+
+    def read(self, path: str) -> dict:
+        """Return the exact whole file with snapshot and revision metadata."""
         self.validate_path(path)
         if path not in self.documents:
             raise ValueError("Corpus file not found")
         doc = self.documents[path]
-        lines = doc["content"].splitlines(keepends=True)
-        start = start_line or 1
-        end = end_line or len(lines)
-        if not 1 <= start <= end <= len(lines):
-            raise ValueError("Invalid inclusive line range")
-        covered = self._read_lines.setdefault(path, set())
-        covered.update(range(start, end + 1))
-        complete = len(covered) == len(lines)
-        requested_start, requested_end = start, end
-        if complete:
-            # Re-emit the entire text, so the receipt proves what was returned.
-            start, end = 1, len(lines)
+        self._read_paths.add(path)
         receipt = {
-            "requested_start_line": requested_start,
-            "requested_end_line": requested_end,
             "id": doc["metadata"]["id"],
             "path": path,
             "sha256": doc["sha256"],
             "snapshot_sha256": self.sha256,
             "metadata": deepcopy(doc["metadata"]),
-            "start_line": start,
-            "end_line": end,
-            "total_lines": len(lines),
-            "complete": complete,
-            "content": "".join(lines[start - 1 : end]),
+            "total_lines": len(doc["content"].splitlines()),
+            "complete": True,
+            "content": doc["content"],
         }
-        # A complete consolidated read may satisfy individual source obligations.
-        # Re-emit the actual verified source text, never synthesize a receipt from
-        # a title or metadata alone. Incomplete aggregates emit no source bodies.
+        # Only actual embedded bodies with matching revisions confer source credit.
         included = []
-        if complete:
-            for source_path in doc["metadata"].get("source_paths", []):
-                source = self.documents.get(source_path)
-                if source is None:
-                    continue
-                body = source["content"]
-                if body.startswith("---\n"):
-                    body = body.split("---", 2)[-1].strip()
-                revision = source["metadata"].get("revision_id")
-                if (
-                    not body
-                    or body not in doc["content"]
-                    or doc["metadata"]
-                    .get("source_revisions", {})
-                    .get(source["metadata"]["id"])
-                    != revision
-                ):
-                    continue
-                included.append(
-                    {
-                        "id": source["metadata"]["id"],
-                        "path": source_path,
-                        "sha256": source["sha256"],
-                        "complete": True,
-                        "content": source["content"],
-                    }
-                )
+        for source_path in doc["metadata"].get("source_paths", []):
+            source = self.documents.get(source_path)
+            if source is None or not self._contains_source(doc, source):
+                continue
+            included.append(
+                {
+                    "id": source["metadata"]["id"],
+                    "path": source_path,
+                    "sha256": source["sha256"],
+                    "complete": True,
+                    "content": source["content"],
+                }
+            )
         if included:
             receipt["included_documents"] = included
         equivalents = []
@@ -132,28 +119,21 @@ class FileCorpus:
                 or not sources
                 or path not in sources
                 or not all(
-                    source in self.documents
-                    and len(self._read_lines.get(source, set()))
-                    == len(self.documents[source]["content"].splitlines())
+                    source in self._read_paths
+                    and self._contains_source(aggregate, self.documents[source])
                     for source in sources
                 )
             ):
                 continue
-            # Return the actual consolidated text as part of this tool result.
-            # Do not mark it read or recurse: only actual source reads count.
-            total = len(aggregate["content"].splitlines())
+            # Emit the verified aggregate itself, never reconstruct it from links.
             equivalents.append(
                 {
-                    "requested_start_line": 1,
-                    "requested_end_line": total,
                     "id": aggregate["metadata"]["id"],
                     "path": aggregate_path,
                     "sha256": aggregate["sha256"],
                     "snapshot_sha256": self.sha256,
                     "metadata": deepcopy(aggregate["metadata"]),
-                    "start_line": 1,
-                    "end_line": total,
-                    "total_lines": total,
+                    "total_lines": len(aggregate["content"].splitlines()),
                     "complete": True,
                     "content": aggregate["content"],
                     "source_receipts": [

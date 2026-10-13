@@ -110,6 +110,9 @@ def _forbidden_argument_pattern_failures(
             value = call.arguments.get(rule.argument_name)
             if value is None:
                 continue
+            if rule.require_object and not isinstance(value, dict):
+                failures.append(rule.rule_id)
+                break
             target = (
                 value
                 if isinstance(value, str)
@@ -368,7 +371,17 @@ def _tool_access_failures(
                 source = dynamic_sources.get((collection, selector))
                 if source is not None and not _result_available_before(source, item):
                     violation(item, "resource_result_not_received", field, owner)
-        if call.name not in policy.pre_auth_tools:
+        pre_auth = call.name in policy.pre_auth_tools
+        selectors = policy.pre_auth_argument_values.get(call.name)
+        if pre_auth and selectors is not None:
+            pre_auth = Action(
+                action_id="pre_auth_exemption",
+                name=call.name,
+                arguments={},
+                compare_args=[],
+                argument_values=selectors,
+            ).compare_with_tool_call(call)
+        if not pre_auth:
             required = target_owners & allowed
             if not required:
                 required = allowed
@@ -385,6 +398,34 @@ def _tool_access_failures(
             payload = json.loads(item.result.content or "")
         except (ValueError, TypeError):
             continue
+        # refund_fee returns a link rather than a full transaction record.
+        # Its implementation creates the refund on the original owner's account.
+        # Only a declared, successful assistant result for this exact source may
+        # introduce the new ID; the receipt boundary remains in dynamic_sources.
+        if (
+            call.name == "refund_fee"
+            and "transactions" in policy.result_resource_collections.get(call.name, [])
+            and fields.get("transaction_id") == "transactions"
+            and item.result.id == call.id
+            and item.result.requestor == "assistant"
+            and isinstance(payload, dict)
+        ):
+            original = call.arguments.get("transaction_id")
+            refund = payload.get("refund_transaction_id")
+            owner = (
+                owners["transactions"].get(original)
+                if isinstance(original, str)
+                else None
+            )
+            if (
+                payload.get("original_transaction_id") == original
+                and isinstance(refund, str)
+                and refund
+                and owner in target_owners & allowed
+                and refund not in owners["transactions"]
+            ):
+                owners["transactions"][refund] = owner
+                dynamic_sources[("transactions", refund)] = item
         for collection in policy.result_resource_collections.get(call.name, []):
             for record in records(payload):
                 resource = record.get(policy.result_id_field)
@@ -571,6 +612,13 @@ def _result_evidence_calls(
     item: ResultEvidence,
 ) -> list[_ObservedCall]:
     """Check structured facts across successful reads without fixing pagination."""
+    if item.alternatives:
+        primary = item.model_copy(update={"alternatives": []})
+        found = _result_evidence_calls(observed, actions, primary)
+        for alternative in item.alternatives:
+            variant = primary.model_copy(update=alternative.model_dump())
+            found.extend(_result_evidence_calls(observed, actions, variant))
+        return found
     by_id = {action.action_id: action for action in actions}
 
     def records(value):
@@ -1193,6 +1241,14 @@ def _message_claim_findings(trace, contract, ticket=""):
     )
 
 
+def _semantic_actions(criteria):
+    """Optional DB routes are constraint anchors, never mandatory ACTION steps."""
+    return [
+        *(criteria.actions or []),
+        *(a for group in criteria.db_alternative_action_additions for a in group),
+    ]
+
+
 def _presence_and_order_reward(
     task: Task, trace: TraceEvidence, tool_types: Optional[dict[str, ToolType]]
 ) -> RewardInfo:
@@ -1350,13 +1406,16 @@ class ActionEvaluator(EvaluatorBase[Message]):
             )
         )
         evidence_failures = _result_evidence_failures(
-            observed, task.evaluation_criteria.actions or [], evidence_items
+            observed, _semantic_actions(task.evaluation_criteria), evidence_items
         )
         argument_failures = _argument_evidence_failures(
             observed, golden_actions, argument_items, trace, evidence_items
         )
         binding_failures = _result_argument_binding_failures(
-            observed, task.evaluation_criteria.actions or [], bindings, access_policy
+            observed,
+            _semantic_actions(task.evaluation_criteria),
+            bindings,
+            access_policy,
         )
         reward = (
             1.0
@@ -1557,13 +1616,16 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             )
         )
         evidence_failures = _result_evidence_failures(
-            observed, task.evaluation_criteria.actions or [], evidence_items
+            observed, _semantic_actions(task.evaluation_criteria), evidence_items
         )
         argument_failures = _argument_evidence_failures(
             observed, golden_actions, argument_items, trace, evidence_items
         )
         binding_failures = _result_argument_binding_failures(
-            observed, task.evaluation_criteria.actions or [], bindings, access_policy
+            observed,
+            _semantic_actions(task.evaluation_criteria),
+            bindings,
+            access_policy,
         )
         reward = (
             1.0

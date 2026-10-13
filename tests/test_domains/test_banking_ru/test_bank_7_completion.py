@@ -209,6 +209,45 @@ def test_bank7_completion_whole_grade(case):
         assert full.final_reward == CASES[case], full.model_dump()
 
 
+@pytest.mark.parametrize("case,expected", [("reference", 1), ("missing_postcheck", 0)])
+def test_bank7_postcheck_accepts_equivalent_wire_field_order(
+    monkeypatch, case, expected
+):
+    """Real values survive reordered JSON and extra unrelated record metadata."""
+    import sys
+
+    original_factory = get_environment
+
+    def environment_with_sorted_wire(*args, **kwargs):
+        env = original_factory(*args, **kwargs)
+        original_response = env.get_response
+
+        def response(call):
+            result = original_response(call)
+            if call.name == "get_subscriptions" and not result.error:
+                payload = json.loads(result.content)
+                for row in payload["autopayments"]:
+                    row["display_metadata"] = "Поле интерфейса, не состояние поручения"
+                result = result.model_copy(
+                    update={
+                        "content": json.dumps(
+                            payload, ensure_ascii=False, sort_keys=True
+                        )
+                    }
+                )
+            return result
+
+        env.get_response = response
+        return env
+
+    monkeypatch.setattr(
+        sys.modules[__name__], "get_environment", environment_with_sorted_wire
+    )
+    session = run_case(case)
+    assert session.grade().final_reward == expected
+    assert grade_full_session(session).reward_info.final_reward == expected
+
+
 @pytest.mark.parametrize("kind", ["pan", "otp_words", "cvv", "expiry"])
 def test_bank7_prohibited_client_arguments(kind):
     task = next(t for t in get_tasks() if t.id == "Bank 7")

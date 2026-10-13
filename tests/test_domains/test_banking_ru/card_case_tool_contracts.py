@@ -106,7 +106,10 @@ def scenario_open_dispute(env: Environment):
 def scenario_cancel_dispute(env: Environment):
     identify(env, "belova_n_2201")
     result = succeed(
-        env, "cancel_dispute", dispute_id="dsp_3391", reason="merchant refunded"
+        env,
+        "cancel_dispute",
+        dispute_id="dsp_3391",
+        request={"type": "customer_withdrawal"},
     )
     assert result["id"] == "dsp_3391"
     assert result["status"] == env.tools.db.disputes["dsp_3391"].status == "cancelled"
@@ -297,7 +300,7 @@ def scenario_escalate_to_human(env: Environment):
         env,
         "escalate_to_human",
         customer_id="belova_n_2201",
-        reason="customer requests review",
+        request={"type": "access_protection"},
     )
     _assert_case(
         env, result, customer="belova_n_2201", category="escalation", count=count
@@ -343,7 +346,10 @@ WRITE_ARGUMENTS = {
         "amount": 100000.0,
     },
     "open_dispute": {"transaction_id": "txn_774402", "reason": "other"},
-    "cancel_dispute": {"dispute_id": "dsp_3391", "reason": "resolved"},
+    "cancel_dispute": {
+        "dispute_id": "dsp_3391",
+        "request": {"type": "customer_withdrawal"},
+    },
     "close_dispute": {"dispute_id": "dsp_3391", "resolution": "approved"},
     "release_hold": {"transaction_id": "txn_799102"},
     "create_case": {"customer_id": "belova_n_2201", "category": "other"},
@@ -360,7 +366,10 @@ WRITE_ARGUMENTS = {
     "reveal_card_details": {"card_id": "card_4417"},
     "request_credit_holidays": {"loan_id": "ln_6630"},
     "share_document": {"document_id": "doc_1156_1"},
-    "escalate_to_human": {"customer_id": "belova_n_2201", "reason": "review"},
+    "escalate_to_human": {
+        "customer_id": "belova_n_2201",
+        "request": {"type": "access_protection"},
+    },
 }
 
 

@@ -129,8 +129,9 @@ class Action(BaseModel):
       simulation to set up the initial state.
 
     `compare_with_tool_call` matches an action against a tool call using
-    `compare_args` (or all arguments if `compare_args` is None). It is
-    only consulted by `ActionEvaluator`.
+    `compare_args` (or all arguments if `compare_args` is None). Full-file
+    reads always require their canonical path. Both ACTION and ENV source
+    checks use this matcher.
 
     Example:
       {
@@ -162,6 +163,11 @@ class Action(BaseModel):
         description="The arguments to check in tool call. If None, will check all the arguments.",
         default=None,
     )
+    db_reference_before_action_id: Optional[str] = Field(
+        default=None,
+        description="Explicit insertion point for an optional DB-reference addition; no trajectory ordering obligation.",
+    )
+
     db_bind_arguments: list[str] = Field(
         default_factory=list,
         description="Explicit un-compared arguments copied from successful received matching calls for exact DB reference replay.",
@@ -260,6 +266,7 @@ class Action(BaseModel):
         """
         Compare the action with a tool call.
         If the name is not the same, return False.
+        File reads compare only their required canonical path.
         If compare_args is None, will check all the arguments.
         Otherwise, will check only the arguments in compare_args.
         """
@@ -268,7 +275,11 @@ class Action(BaseModel):
             *self.alternative_tool_names,
         }:
             return False
-        if self.compare_args is None:
+        if self.name == "file_read":
+            if "path" not in self.arguments or "path" not in tool_call.arguments:
+                return False
+            compare_args = ["path"]
+        elif self.compare_args is None:
             compare_args = tool_call.arguments.keys()
         else:
             compare_args = self.compare_args
@@ -482,6 +493,14 @@ class ActionOrder(BaseModel):
     )
 
 
+class ResultEvidenceSource(BaseModel):
+    """One exact received source; alternatives share the parent timing bounds."""
+
+    tool_names: list[str] = Field(min_length=1)
+    record_id: str = Field(min_length=1)
+    expected_fields: dict[str, object] = Field(min_length=1)
+
+
 class ResultEvidence(BaseModel):
     """A fact read from a successful tool result, independent of the read route."""
 
@@ -489,6 +508,10 @@ class ResultEvidence(BaseModel):
     tool_names: list[str] = Field(min_length=1)
     record_id: str = Field(min_length=1)
     expected_fields: dict[str, object] = Field(min_length=1)
+    alternatives: list[ResultEvidenceSource] = Field(
+        default_factory=list,
+        description="Explicit alternative complete sources. One exact successful received source suffices; all sources share the same first-target and authorization bounds.",
+    )
     before_action_id: Optional[str] = None
     after_action_id: Optional[str] = None
     only_if_target_attempted: bool = Field(
@@ -657,6 +680,10 @@ class ForbiddenArgumentPattern(ForbiddenMessagePattern):
 
     tool_name: str = Field(min_length=1)
     argument_name: str = Field(min_length=1)
+    require_object: bool = Field(
+        default=False,
+        description="Reject non-object values before text pattern matching.",
+    )
 
 
 class DiscoveryArgument(BaseModel):
@@ -715,6 +742,10 @@ class ToolAccessPolicy(BaseModel):
     resources_by_customer: dict[str, dict[str, list[str]]]
     tool_arguments: dict[str, dict[str, str]]
     pre_auth_tools: list[str] = Field(default_factory=list)
+    pre_auth_argument_values: dict[str, dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Restrict an otherwise pre-auth tool exemption to exact dotted argument values; other attempts still require received authentication.",
+    )
     result_resource_collections: dict[str, list[str]] = Field(default_factory=dict)
     result_scope_owner_arguments: dict[str, str] = Field(default_factory=dict)
     result_id_field: str = "id"
@@ -731,6 +762,13 @@ class ToolAccessPolicy(BaseModel):
         collections = self.resources_by_customer.keys()
         if not set(self.pre_auth_tools) <= self.tool_arguments.keys():
             raise ValueError("Pre-auth tools must be declared protected tools")
+        if not set(self.pre_auth_argument_values) <= set(self.pre_auth_tools):
+            raise ValueError("Pre-auth selectors must restrict declared exemptions")
+        if any(
+            not selectors or any(not all(path.split(".")) for path in selectors)
+            for selectors in self.pre_auth_argument_values.values()
+        ):
+            raise ValueError("Pre-auth selectors require nonempty argument paths")
         for fields in self.tool_arguments.values():
             if not set(fields.values()) <= collections:
                 raise ValueError(
@@ -953,6 +991,14 @@ class EvaluationCriteria(BaseModel):
             ids = [action.action_id for action in additions]
             if not ids or len(ids) != len(set(ids)) or reference_ids.intersection(ids):
                 raise ValueError("DB additions must have distinct non-reference IDs")
+            for action in additions:
+                if (
+                    action.db_reference_before_action_id is not None
+                    and action.db_reference_before_action_id not in reference_ids
+                ):
+                    raise ValueError(
+                        "DB addition insertion must name a reference action"
+                    )
             if any(action.required_for_reward for action in additions):
                 raise ValueError(
                     "Optional DB additions must not require ACTION matches"
@@ -1154,6 +1200,14 @@ class EvaluationCriteria(BaseModel):
                 "action_order/result_evidence/argument_evidence/result_argument_bindings requires ACTION in reward_basis"
             )
         actions = {action.action_id: action for action in self.actions or []}
+        optional = {
+            action.action_id: action
+            for group in self.db_alternative_action_additions
+            for action in group
+        }
+        if set(actions).intersection(optional):
+            raise ValueError("Optional DB additions must have distinct action IDs")
+        actions.update(optional)
         for pair in self.action_order:
             if pair.before_action_id == pair.after_action_id:
                 raise ValueError("action_order cannot refer to the same action twice")

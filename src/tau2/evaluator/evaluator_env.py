@@ -74,10 +74,17 @@ def _reference_db_hashes(
         [[], *criteria.db_alternative_action_additions],
         [{}, *criteria.db_alternative_action_replacements],
     ):
-        actions = [
-            replacements.get(a.action_id, a)
-            for a in [*(criteria.actions or []), *additions]
-        ]
+        actions = [replacements.get(a.action_id, a) for a in criteria.actions or []]
+        for addition in additions:
+            if addition.db_reference_before_action_id is None:
+                actions.append(addition)
+            else:
+                index = next(
+                    i
+                    for i, a in enumerate(actions)
+                    if a.action_id == addition.db_reference_before_action_id
+                )
+                actions.insert(index, addition)
         choices = [_db_action_argument_variants(a, observed or []) for a in actions]
         for arguments_route in product(*choices):
             gold_environment = environment_constructor(**env_kwargs)

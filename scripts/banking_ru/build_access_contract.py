@@ -190,6 +190,7 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
             "resources_by_customer": catalog,
             "tool_arguments": arguments,
             "pre_auth_tools": PRE_AUTH_TOOLS,
+            "pre_auth_argument_values": {"ask_client": {"request.type": "identity"}},
             "result_resource_collections": RESULT_COLLECTIONS,
             "result_scope_owner_arguments": {"get_operations": "customer_id"},
             "discovery_tools": discovery_catalog(db),

@@ -276,13 +276,13 @@ def refund_fee_success(env):
         env,
         "refund_fee",
         transaction_id="txn_100002",
-        reason="ошибочная комиссия",
+        request={"type": "fee_correction"},
         amount=12.34,
     )
     assert result == wire_values(
         {
             "refunded": 12.34,
-            "reason": "ошибочная комиссия",
+            "request": {"type": "fee_correction"},
             "account_balance": 200012.34,
         }
     )
@@ -304,12 +304,12 @@ def refund_transaction_success(env):
         env,
         "refund_transaction",
         transaction_id="txn_100002",
-        reason="дублирование операции",
+        request={"type": "purchase_refund"},
     )
     assert result == wire_values(
         {
             "refunded": 1200.0,
-            "reason": "дублирование операции",
+            "request": {"type": "purchase_refund"},
             "account_balance": 201200.0,
         }
     )
@@ -475,8 +475,10 @@ WRITE_ARGUMENTS = {
     "close_deposit": dict(deposit_id="dep_1000", payout_account_id="acc_1001"),
     "early_repayment": dict(loan_id="ln_1000", amount=1000, mode="reduce_term"),
     "waive_penalty": dict(loan_id="ln_1000", penalty_id="pen_due"),
-    "refund_fee": dict(transaction_id="txn_100001", reason="ошибка"),
-    "refund_transaction": dict(transaction_id="txn_100002", reason="ошибка"),
+    "refund_fee": dict(transaction_id="txn_100001", request={"type": "fee_correction"}),
+    "refund_transaction": dict(
+        transaction_id="txn_100002", request={"type": "purchase_refund"}
+    ),
     "grant_cashback": dict(transaction_id="txn_100002", amount=24),
     "open_account": dict(customer_id=CUSTOMER, currency="USD"),
     "close_account": dict(account_id="acc_1001"),

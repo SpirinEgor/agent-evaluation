@@ -22,6 +22,7 @@ from math import isfinite
 from typing import Literal, Optional
 
 from loguru import logger
+from pydantic import TypeAdapter
 
 from tau2.domains.banking_ru.card_claims import (
     card_hold_message_patterns,
@@ -45,8 +46,12 @@ from tau2.domains.banking_ru.data_model import (
     DepositRows,
     Device,
     Dispute,
+    DisputeWithdrawalRequest,
     Document,
+    EscalationRequest,
+    FeeRefundRequest,
     InvestmentConsultation,
+    InvestmentEscalationRequest,
     LimitRequest,
     LimitType,
     Loan,
@@ -56,6 +61,7 @@ from tau2.domains.banking_ru.data_model import (
     Subscription,
     Tariff,
     Transaction,
+    TransactionRefundRequest,
 )
 from tau2.domains.banking_ru.limit_claims import has_false_limit_claim
 from tau2.environment.toolkit import ToolKitBase, ToolType, is_tool
@@ -187,6 +193,7 @@ class BankingTools(ToolKitBase):
         self._operation_confirmations: dict[str, dict] = {}
         self._loan_repayment_confirmations: dict[str, dict] = {}
         self._used_loan_repayment_confirmations: set[str] = set()
+        self._pending_limit_attempts: set[tuple[str, str]] = set()
 
     def get_db_hash(self) -> str:
         """Compare cases by content, not allocation order of generated IDs."""
@@ -215,6 +222,32 @@ class BankingTools(ToolKitBase):
         но не за неверное чтение.
         """
         self.db.tool_calls_log.append(tool_name)
+        if tool_name == "set_limit":
+            card_id, limit_type = kwargs.get("card_id"), kwargs.get("limit_type")
+            card = self.db.cards.get(card_id)
+            channel_period = {
+                "sbp": ("sbp", "per_operation"),
+                "daily_cash_withdrawal": ("cash", "daily"),
+            }
+            if card is not None and limit_type in channel_period:
+                channel, period = channel_period[limit_type]
+                for request in self.db.limit_requests.values():
+                    objects = {
+                        "card": card.id,
+                        "account": card.account_id,
+                        "customer": card.customer_id,
+                    }
+                    if (
+                        request.customer_id == card.customer_id
+                        and request.request_type == "spending_limit"
+                        and request.status == "pending"
+                        and request.requires_decision is True
+                        and request.channel == channel
+                        and request.period == period
+                        and request.object_type in objects
+                        and request.object_id == objects[request.object_type]
+                    ):
+                        self._pending_limit_attempts.add((card.id, limit_type))
         result = super().use_tool(tool_name=tool_name, **kwargs)
         self._successful_tool_calls.append(tool_name)
         return result
@@ -417,7 +450,10 @@ class BankingTools(ToolKitBase):
 
     @is_tool(ToolType.WRITE)
     def send_otp(
-        self, customer_id: str, channel: str = "sms", resend: bool = False
+        self,
+        customer_id: str,
+        channel: Literal["sms", "push"] = "sms",
+        resend: bool = False,
     ) -> str:
         """
         Отправить клиенту одноразовый код подтверждения.
@@ -433,6 +469,8 @@ class BankingTools(ToolKitBase):
         Raises:
             ValueError: Если клиент не найден.
         """
+        if channel not in {"sms", "push"}:
+            raise _error(ERR_INVALID_ARGUMENT, "Неизвестный канал OTP.")
         customer = self._get_customer(customer_id)
         if customer_id not in self.db.session.otp_sent:
             self.db.session.otp_sent.append(customer_id)
@@ -474,7 +512,8 @@ class BankingTools(ToolKitBase):
     def get_customer_profile(self, customer_id: str) -> Customer:
         """
         Получить профиль клиента: ФИО, дату рождения, контакты, адрес, тариф
-        и, если заданы, средний месячный остаток и карточный оборот.
+        и, если заданы, средний месячный остаток, карточный оборот и историю
+        условий обслуживания с датами действия и областью продукта.
 
         Args:
             customer_id: Идентификатор клиента.
@@ -618,6 +657,8 @@ class BankingTools(ToolKitBase):
     def get_transaction_details(self, transaction_id: str) -> Transaction:
         """
         Получить детали операции: статус, номер заказа, срок холда, подписку и спор.
+        Если заданы, возвращаются реквизиты исполнения, редакция и история
+        шаблона, расчётный период и редакция тарифа.
 
         Args:
             transaction_id: Идентификатор операции.
@@ -650,8 +691,9 @@ class BankingTools(ToolKitBase):
     @is_tool(ToolType.READ)
     def get_subscriptions(self, customer_id: str) -> dict:
         """
-        Получить подписки и автоплатежи клиента. Это независимые записи:
-        отмена подписки не отключает автоплатёж.
+        Получить банковские разрешения на повторные списания (subscriptions)
+        и автоплатежи клиента. Это независимые записи: отмена разрешения
+        не отключает автоплатёж и не расторгает договор услуги продавца.
 
         Args:
             customer_id: Идентификатор клиента.
@@ -892,10 +934,8 @@ class BankingTools(ToolKitBase):
         """
         Получить заявки клиента на изменение лимитов и решения по ним.
 
-        Тип заявки, объект, канал и период задают область действия. Pending
-        блокирует повторное изменение только совпадающей расходной настройки
-        при requires_decision=true; кредитная или неопределённая заявка сама
-        по себе не запрещает изменение лимита СБП.
+        Возвращает тип, объект, канал, период, статус и параметры процесса
+        каждой заявки клиента.
 
         Args:
             customer_id: Идентификатор клиента.
@@ -944,12 +984,8 @@ class BankingTools(ToolKitBase):
         до индивидуального годового налогообложения. comparison_terms задаёт
         договор, дату расчёта, базу дней, уже выплаченные проценты и предпосылки;
         comparison_quotes содержит суммы и дату доступности на обе даты.
-        Получите обе системные котировки и котировки get_loans до сравнения через
-        calculate. Выгода ожидания = разница выплат минус разница полной стоимости
-        кредита, включая платежи в интервале; не вычитайте неизменный штраф дважды.
         Пустые котировки означают отсутствие точного расчёта, не нулевые расходы.
         Это консультационный расчёт, без закрытия и перевода.
-        Условия начисления сверяйте с договором продукта в файловом корпусе.
 
         Args:
             customer_id: Идентификатор клиента.
@@ -1231,7 +1267,17 @@ class BankingTools(ToolKitBase):
 
     @is_tool(ToolType.WRITE)
     def open_dispute(
-        self, transaction_id: str, reason: str, amount: Optional[float] = None
+        self,
+        transaction_id: str,
+        reason: Literal[
+            "fraud_suspected",
+            "service_not_provided",
+            "duplicate_charge",
+            "subscription_after_cancel",
+            "wrong_amount",
+            "other",
+        ],
+        amount: Optional[float] = None,
     ) -> Dispute:
         """
         Открыть спор по операции.
@@ -1293,7 +1339,9 @@ class BankingTools(ToolKitBase):
         return dispute
 
     @is_tool(ToolType.WRITE)
-    def cancel_dispute(self, dispute_id: str, reason: str) -> Dispute:
+    def cancel_dispute(
+        self, dispute_id: str, request: DisputeWithdrawalRequest
+    ) -> Dispute:
         """
         Зарегистрировать отзыв и отменить подготовку спора до отправки в процессинг.
 
@@ -1303,7 +1351,7 @@ class BankingTools(ToolKitBase):
 
         Args:
             dispute_id: Идентификатор спора.
-            reason: Причина отзыва свободным текстом.
+            request: Структурированный отзыв клиента: type=customer_withdrawal; текст причины не передаётся.
 
         Returns:
             Обновлённый спор.
@@ -1312,6 +1360,7 @@ class BankingTools(ToolKitBase):
             ValueError: Если спор не найден, личность не подтверждена или спор
                 уже не находится на рассмотрении.
         """
+        request = DisputeWithdrawalRequest.model_validate(request)
         dispute = self.db.disputes.get(dispute_id)
         if dispute is None:
             raise _error(ERR_NOT_FOUND, f"Спор {dispute_id} не найден.")
@@ -1328,14 +1377,14 @@ class BankingTools(ToolKitBase):
                 "Прямая отмена разрешена только до отправки в процессинг; "
                 "для отправленного спора или неизвестной стадии нужна профильная обработка.",
             )
-        if not reason.strip():
-            raise _error(ERR_INVALID_ARGUMENT, "Укажите основание отзыва клиента.")
         dispute.withdrawal_requested_at = self.db.today
         dispute.status = "cancelled"
         return dispute
 
     @is_tool(ToolType.WRITE)
-    def close_dispute(self, dispute_id: str, resolution: str) -> Dispute:
+    def close_dispute(
+        self, dispute_id: str, resolution: Literal["approved", "rejected"]
+    ) -> Dispute:
         """
         Закрыть спор решением банка.
 
@@ -1407,7 +1456,15 @@ class BankingTools(ToolKitBase):
         transaction_ids: Optional[list[str]] = None,
         utility_wrong_account: Optional[str] = None,
         utility_correct_account: Optional[str] = None,
-        responsible_unit: Optional[str] = None,
+        responsible_unit: Optional[
+            Literal[
+                "support",
+                "deposit_settlements",
+                "credit_support",
+                "investment_products",
+                "Кредитное сопровождение",
+            ]
+        ] = None,
         next_contact_date: Optional[str] = None,
         notification_channel: Optional[Literal["bank_app"]] = None,
         loan_id: Optional[str] = None,
@@ -1448,7 +1505,9 @@ class BankingTools(ToolKitBase):
             next_contact_date: Согласованная дата следующего сообщения, ГГГГ-ММ-ДД.
                 Не ранее текущего дня. Это дата сообщения, не гарантия выплаты.
             notification_channel: bank_app, если клиент согласовал сообщение в приложении.
-                Передайте все три поля вместе. Регистрация не означает отправку уведомления.
+                Для следующего сообщения передайте все три поля вместе.
+                При ручной проверке штрафа подразделение допускается отдельно
+                как маршрутизация без обещания сообщения. Регистрация не отправляет уведомление.
             utility_wrong_account: Ошибочный лицевой счёт поставщика ЖКХ,
                 полученный через ask_client(utility_payment_accounts).
             utility_correct_account: Правильный лицевой счёт из того же ответа.
@@ -1463,6 +1522,15 @@ class BankingTools(ToolKitBase):
             ValueError: Если клиент или операция не найдены, личность не
                 подтверждена либо категория недопустима.
         """
+        if responsible_unit == "Кредитное сопровождение":
+            responsible_unit = "credit_support"
+        if responsible_unit is not None and responsible_unit not in {
+            "support",
+            "deposit_settlements",
+            "credit_support",
+            "investment_products",
+        }:
+            raise _error(ERR_INVALID_ARGUMENT, "Неизвестное подразделение.")
         self._get_customer(customer_id)
         self._require_verified(customer_id)
         if category not in CASE_CATEGORIES:
@@ -1579,7 +1647,11 @@ class BankingTools(ToolKitBase):
         elif amount is None and transaction_id is not None:
             amount = self.db.transactions[transaction_id].amount
         followup = (responsible_unit, next_contact_date, notification_channel)
-        if any(value is not None for value in followup):
+        if (
+            (responsible_unit is not None and penalty_id is None)
+            or next_contact_date is not None
+            or notification_channel is not None
+        ):
             if not all(followup) or notification_channel != "bank_app":
                 raise _error(
                     ERR_INVALID_ARGUMENT,
@@ -1667,7 +1739,9 @@ class BankingTools(ToolKitBase):
 
     @is_tool(ToolType.WRITE)
     def request_restructuring_documents(
-        self, case_id: str, documents: list[str]
+        self,
+        case_id: str,
+        documents: list[Literal["income_certificate", "employer_order"]],
     ) -> Case:
         """Зафиксировать пакет документов, запрошенный по делу о реструктуризации.
 
@@ -1701,7 +1775,9 @@ class BankingTools(ToolKitBase):
     @is_tool(ToolType.WRITE)
     def cancel_subscription(self, subscription_id: str) -> Subscription:
         """
-        Отменить подписку. Оплаченный период при этом сохраняется.
+        Отозвать банковское разрешение на будущие рекуррентные списания.
+        Договор услуги продавца не расторгается; оплаченный период сохраняется.
+        Отдельный банковский автоплатёж этим действием не отключается.
 
         Args:
             subscription_id: Идентификатор подписки.
@@ -1730,7 +1806,8 @@ class BankingTools(ToolKitBase):
     @is_tool(ToolType.WRITE)
     def cancel_autopayment(self, autopayment_id: str) -> dict:
         """
-        Отменить автоплатёж. Автоплатёж не связан с подпиской и отключается отдельно.
+        Отменить автоплатёж. Это отдельное банковское поручение: даже при связи
+        с тем же договором услуги оно отключается отдельно от рекуррентного разрешения.
 
         Args:
             autopayment_id: Идентификатор автоплатежа.
@@ -1762,7 +1839,7 @@ class BankingTools(ToolKitBase):
         self,
         customer_id: str,
         source_account_id: str,
-        name: str,
+        name: Literal["Максимальный", "Доходный", "Старт"],
         amount: float,
         term_months: int,
     ) -> dict:
@@ -2092,13 +2169,16 @@ class BankingTools(ToolKitBase):
 
     @is_tool(ToolType.WRITE)
     def refund_fee(
-        self, transaction_id: str, reason: str, amount: Optional[float] = None
+        self,
+        transaction_id: str,
+        request: FeeRefundRequest,
+        amount: Optional[float] = None,
     ) -> dict:
         """Вернуть невозмещённую комиссию по проведённой операции.
 
         Args:
             transaction_id: Проведённая операция, по которой удержана комиссия.
-            reason: Основание возврата.
+            request: Структурированное основание; свободный текст не передаётся.
             amount: Возвращаемая часть, ₽. Без указания запрашивается вся
                 исходная комиссия; при частичном возврате укажите остаток явно.
 
@@ -2109,6 +2189,7 @@ class BankingTools(ToolKitBase):
             ValueError: Нет идентификации, проведённой комиссии, активного
                 счёта или достаточного невозмещённого остатка.
         """
+        request = FeeRefundRequest.model_validate(request)
         transaction = self._get_transaction(transaction_id)
         self._require_verified(transaction.customer_id)
         account = self._get_account(transaction.account_id)
@@ -2175,20 +2256,22 @@ class BankingTools(ToolKitBase):
         self.db.transactions[refund.id] = refund
         return {
             "refunded": refund_amount,
-            "reason": reason,
+            "request": request.model_dump(),
             "account_balance": account.balance,
             "refund_transaction_id": refund.id,
             "original_transaction_id": transaction_id,
         }
 
     @is_tool(ToolType.WRITE)
-    def refund_transaction(self, transaction_id: str, reason: str) -> dict:
+    def refund_transaction(
+        self, transaction_id: str, request: TransactionRefundRequest
+    ) -> dict:
         """
         Вернуть клиенту всю сумму операции.
 
         Args:
             transaction_id: Операция, которую возвращаем.
-            reason: Основание возврата.
+            request: Структурированное основание; свободный текст не передаётся.
 
         Returns:
             Возвращённая сумма и остаток счёта.
@@ -2197,6 +2280,7 @@ class BankingTools(ToolKitBase):
             ValueError: Если операция не найдена, личность не подтверждена или
                 операция ещё не проведена.
         """
+        request = TransactionRefundRequest.model_validate(request)
         transaction = self._get_transaction(transaction_id)
         self._require_verified(transaction.customer_id)
         if transaction.status != "posted":
@@ -2219,7 +2303,7 @@ class BankingTools(ToolKitBase):
         self.db.transactions[refund.id] = refund
         return {
             "refunded": transaction.amount,
-            "reason": reason,
+            "request": request.model_dump(),
             "account_balance": account.balance,
         }
 
@@ -2785,49 +2869,134 @@ class BankingTools(ToolKitBase):
     def escalate_to_human(
         self,
         customer_id: str,
-        reason: str = "",
-        request: Optional[InvestmentConsultation] = None,
+        request: EscalationRequest,
+        case_id: Optional[str] = None,
+        transaction_id: Optional[str] = None,
+        card_id: Optional[str] = None,
+        loan_id: Optional[str] = None,
         responsible_unit: Optional[Literal["investment_products", "support"]] = None,
     ) -> Case:
-        """
-        Передать обращение клиента специалисту.
+        """Передать структурированный вопрос специалисту; текст формирует система.
 
         Args:
-            customer_id: Идентификатор клиента.
-            reason: Причина обычной эскалации. Не передавайте вместе с request.
-            request: Для выбора инвестиционных инструментов передайте topic=
-                investment_selection, instrument_type, available_amount, currency
-                и experience из обращения. Это вопрос, а не рекомендация купить.
-            responsible_unit: Для инвестиционного вопроса investment_products;
-                если не указан, маршрут определяется структурированным request.
-                Для обычной эскалации используется support.
+            customer_id: Идентифицированный владелец обращения.
+            request: Явный тип передачи. card_claim_referral требует case_id и
+                transaction_id; loan_repayment_review требует loan_id и amount;
+                investment_selection содержит instrument_type, available_amount,
+                currency, experience; deposit_consultation содержит amount и currency.
+                Остальные типы: access_protection, protected_address_confirmation,
+                service_claim_review, card_replacement_consultation,
+                refund_linkage_review, app_access_support.
+            case_id: Полученный ID зарегистрированной карточной претензии.
+            transaction_id: Своя операция, связанная с претензией или проверкой возврата.
+            card_id: Своя карта для консультации по замене или подтверждению адреса.
+            loan_id: Свой кредит для проверки досрочного погашения.
+            responsible_unit: support или investment_products согласно типу запроса.
+                Если не указан, инструмент определяет маршрут автоматически.
 
         Returns:
-            Созданное обращение категории escalation.
+            Зарегистрированное обращение с request и ссылками на предметные записи.
 
         Raises:
-            ValueError: Если клиент не найден или личность не подтверждена.
+            ValueError: Личность не подтверждена, тип/ссылки/маршрут несовместимы.
         """
         self._get_customer(customer_id)
         self._require_verified(customer_id)
-        if request is not None:
-            request = InvestmentConsultation.model_validate(request)
-            if reason.strip():
-                raise _error(
-                    ERR_INVALID_ARGUMENT, "Передайте request или reason, не оба."
-                )
-        elif not reason.strip():
+        request = TypeAdapter(EscalationRequest).validate_python(request)
+        kind = request.type
+        allowed_ids = {
+            "card_claim_referral": {"case_id", "transaction_id"},
+            "card_replacement_consultation": {"card_id"},
+            "protected_address_confirmation": {"card_id"},
+            "refund_linkage_review": {"transaction_id"},
+            "service_claim_review": {"transaction_id"},
+            "loan_repayment_review": {"loan_id"},
+        }.get(kind, set())
+        ids = {
+            "case_id": case_id,
+            "transaction_id": transaction_id,
+            "card_id": card_id,
+            "loan_id": loan_id,
+        }
+        if any(
+            value is not None and name not in allowed_ids for name, value in ids.items()
+        ):
             raise _error(
-                ERR_INVALID_ARGUMENT, "Нужен предмет эскалации: request или reason."
+                ERR_INVALID_ARGUMENT, "ID не относится к выбранному типу передачи."
             )
+        if kind == "card_claim_referral" and (
+            case_id is None or transaction_id is None
+        ):
+            raise _error(
+                ERR_INVALID_ARGUMENT, "Нужны полученные case_id и transaction_id."
+            )
+        if kind == "loan_repayment_review" and loan_id is None:
+            raise _error(ERR_INVALID_ARGUMENT, "Нужен loan_id своего кредита.")
+        for name, collection in (
+            ("case_id", self.db.cases),
+            ("transaction_id", self.db.transactions),
+            ("card_id", self.db.cards),
+            ("loan_id", self.db.loans),
+        ):
+            value = ids[name]
+            if value is None:
+                continue
+            record = collection.get(value)
+            if record is None:
+                raise _error(ERR_NOT_FOUND, "Связанный объект не найден.")
+            if record.customer_id != customer_id:
+                raise _error(
+                    ERR_INVALID_ARGUMENT,
+                    "Связанный объект принадлежит другому клиенту.",
+                )
+        if kind == "card_claim_referral":
+            original = self.db.cases[case_id]
+            if (
+                original.category
+                not in {"merchant_investigation", "other", "escalation"}
+                or original.transaction_id != transaction_id
+            ):
+                raise _error(
+                    ERR_INVALID_ARGUMENT, "Обращение не связано с выбранной покупкой."
+                )
+        unit = "investment_products" if kind == "investment_selection" else "support"
+        if responsible_unit is not None and responsible_unit != unit:
+            raise _error(
+                ERR_INVALID_ARGUMENT, "Подразделение не соответствует типу передачи."
+            )
+        labels = {
+            "access_protection": "Защита дистанционного доступа",
+            "protected_address_confirmation": "Защищённое подтверждение адреса доставки",
+            "service_claim_review": "Проверка оснований обращения по услуге",
+            "card_claim_referral": "Передача зарегистрированной карточной претензии специалисту",
+            "card_replacement_consultation": "Консультация о замене карты без заказа",
+            "refund_linkage_review": "Проверка связи возврата с исходной покупкой",
+            "loan_repayment_review": "Проверка досрочного погашения кредита",
+            "deposit_consultation": "Консультация о договорных условиях вклада",
+            "app_access_support": "Помощь с доступом к банковскому приложению",
+        }
+        investment = (
+            InvestmentConsultation.model_validate(
+                {
+                    "topic": "investment_selection",
+                    **request.model_dump(exclude={"type"}),
+                }
+            )
+            if isinstance(request, InvestmentEscalationRequest)
+            else None
+        )
         case = Case(
             id=self._next_case_id(),
             customer_id=customer_id,
             category="escalation",
-            investment_consultation=request,
-            escalation_reason=reason.strip() if request is None else None,
-            responsible_unit=responsible_unit
-            or ("investment_products" if request is not None else "support"),
+            escalation_request=request,
+            case_id=case_id,
+            transaction_id=transaction_id,
+            card_id=card_id,
+            loan_id=loan_id,
+            investment_consultation=investment,
+            escalation_reason=labels.get(kind),
+            responsible_unit=unit,
             created_at=self.db.today,
             status="open",
         )
@@ -8684,6 +8853,34 @@ class BankingTools(ToolKitBase):
     def assert_tool_call_count(self, tool_name: str, expected: int) -> bool:
         """Инструмент вызван ровно ожидаемое число раз."""
         return self.db.tool_calls_log.count(tool_name) == expected
+
+    def assert_exactly_one_claim(
+        self, customer_id: str, transaction_id: str, expected_amount: float
+    ) -> bool:
+        """По операции зарегистрировано ровно одно денежное требование любым маршрутом."""
+        transaction = self._get_transaction(transaction_id)
+        if transaction.customer_id != customer_id:
+            return False
+        claims = [
+            d for d in self.db.disputes.values() if d.transaction_id == transaction_id
+        ]
+        claims += [
+            c
+            for c in self.db.cases.values()
+            if c.customer_id == customer_id
+            and (
+                c.transaction_id == transaction_id
+                or transaction_id in c.transaction_ids
+            )
+            and c.category in {"merchant_investigation", "other", "escalation"}
+        ]
+        return len(claims) == 1 and claims[0].amount == expected_amount
+
+    def assert_no_pending_limit_change_attempts(
+        self, card_id: str, limit_type: str
+    ) -> bool:
+        """Ни одной попытки изменения при требующем решения совпадающем pending."""
+        return (card_id, limit_type) not in self._pending_limit_attempts
 
     def assert_no_reply(self, customer_id: str) -> bool:
         """Ответ клиенту не отправлялся."""

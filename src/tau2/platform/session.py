@@ -22,6 +22,7 @@ from tau2.data_model.simulation import RewardInfo, SimulationRun, TerminationRea
 from tau2.data_model.tasks import Action, Task
 from tau2.domains.banking_ru.mcp_systems import (
     SINGLE_SERVER,
+    SYSTEMS,
     MCPLayout,
     partition_tools,
     startup_policy,
@@ -322,7 +323,16 @@ class PlatformSession:
         """Низкоуровневый MCP-сервер, отдающий инструменты этой сессии."""
         if system is not None and system not in self.system_tools:
             raise ValueError(f"Unknown banking system: {system}")
-        server = Server(f"{system or SINGLE_SERVER}:{self.task.id}:{self.token[:8]}")
+        purpose = (
+            SYSTEMS[system]
+            if system is not None
+            else "Банковские системы: API операций и доступ к корпусу документов."
+        )
+        server = Server(
+            f"{system or SINGLE_SERVER}:{self.task.id}:{self.token[:8]}",
+            description=purpose,
+            instructions=purpose,
+        )
 
         async def list_tools(ctx, params: t.PaginatedRequestParams):
             return t.ListToolsResult(

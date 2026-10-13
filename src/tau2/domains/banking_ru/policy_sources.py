@@ -36,7 +36,7 @@ PROCESS_SOURCES = {
     29: ("accounts",),
     30: ("accounts",),
     31: ("accounts",),
-    32: ("accounts",),
+    32: ("deposits",),
     33: ("accounts",),
     34: ("loans",),
     35: ("loans",),

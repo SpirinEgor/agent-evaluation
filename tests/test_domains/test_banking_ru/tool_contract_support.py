@@ -65,3 +65,25 @@ def authorize_otp(env: Environment, customer_id: str):
         customer_id=customer_id,
         code=env.tools.db.customers[customer_id].otp_code,
     )
+
+
+def escalation_arguments(number, customer_id):
+    """Literal structured fixtures, independent of the task-contract generator."""
+    requests = {
+        7: {"type": "service_claim_review"},
+        22: {"type": "card_replacement_consultation"},
+        25: {"type": "refund_linkage_review"},
+        34: {"type": "loan_repayment_review", "amount": 65000},
+        55: {"type": "deposit_consultation", "amount": 400000, "currency": "RUB"},
+    }
+    links = {
+        7: {"transaction_id": "txn_990180"},
+        22: {"card_id": "card_7712"},
+        25: {"transaction_id": "txn_066091"},
+        34: {"loan_id": "ln_3391"},
+    }
+    return {
+        "customer_id": customer_id,
+        "request": dict(requests[number]),
+        **links.get(number, {}),
+    }

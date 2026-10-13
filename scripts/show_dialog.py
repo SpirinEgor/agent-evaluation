@@ -5,6 +5,7 @@
     uv run python scripts/show_dialog.py                # последний прогон
     uv run python scripts/show_dialog.py <путь|подстрока> [task_id]
 """
+
 import glob
 import json
 import sys
@@ -44,7 +45,9 @@ def show(sim: dict) -> None:
                     args = json.loads(args)
                 except Exception:
                     pass
-            print(f"\n[{role} → инструмент] {tc.get('name')}({json.dumps(args, ensure_ascii=False)})")
+            print(
+                f"\n[{role} → инструмент] {tc.get('name')}({json.dumps(args, ensure_ascii=False)})"
+            )
         if m.get("role") == "tool" and m.get("error"):
             print("   ↑ ошибка инструмента")
 
@@ -59,7 +62,9 @@ def show(sim: dict) -> None:
     for a in ri.get("env_assertions") or []:
         mark = "✅" if a.get("met") else "❌"
         ea = a.get("env_assertion") or {}
-        print(f"  {mark} {ea.get('func_name')}({json.dumps(ea.get('arguments'), ensure_ascii=False)})")
+        print(
+            f"  {mark} {ea.get('func_name')}({json.dumps(ea.get('arguments'), ensure_ascii=False)})"
+        )
 
 
 def main() -> None:

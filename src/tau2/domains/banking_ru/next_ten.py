@@ -78,7 +78,10 @@ class NextTenAssertions:
             c
             for c in cases
             if c.category == "escalation"
-            and c.transaction_id is None
+            and c.escalation_request is not None
+            and c.escalation_request.type == "card_claim_referral"
+            and c.transaction_id == "txn_540117"
+            and any(c.case_id == statement.id for statement in scoped)
             and c.amount is None
             and c.status == "open"
             and c.created_at == self.db.today

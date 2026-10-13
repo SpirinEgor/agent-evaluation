@@ -71,17 +71,13 @@ class FileBankingTools(BankingTools):
         return FileResponse(self.corpus.search(pattern, root, limit))
 
     @is_tool(ToolType.READ)
-    def file_read(
-        self, path: str, start_line: int = 0, end_line: int = 0
-    ) -> FileResponse:
-        """Read a corpus file with revision, SHA256, line range and completeness.
+    def file_read(self, path: str) -> FileResponse:
+        """Read an entire corpus file with revision, SHA256 and completeness.
 
         Args:
             path: Canonical absolute virtual file path obtained from the corpus.
-            start_line: Inclusive 1-based start; 0 means first line.
-            end_line: Inclusive 1-based end; 0 means last line. Files <=65536 bytes.
         """
-        return FileResponse(self.corpus.read(path, start_line, end_line))
+        return FileResponse(self.corpus.read(path))
 
     def assert_file_is_reachable(self, path: str, pattern: str) -> bool:
         """Private assertion: the required document is available via file search."""

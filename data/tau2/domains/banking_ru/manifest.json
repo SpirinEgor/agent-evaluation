@@ -2,7 +2,7 @@
   "version": 1,
   "documents": {
     "/AGENTS.md": {
-      "sha256": "6a59e9b82d1791ec92fb078a26faa73b14f76ad4714d1b72935aaeab14fc7e5c",
+      "sha256": "b437b7964a236f383720085b6997ce8a3ef63375660642b4d21659a0e2949349",
       "metadata": {
         "id": "agent-start",
         "revision_id": "2026-10-08-bank1",
@@ -74,7 +74,7 @@
       }
     },
     "/knowledge/kb_111.md": {
-      "sha256": "ec2f428c3b8d947e6a375924141bcfad1882d7a7503f32d4dc602fe65052ae44",
+      "sha256": "334d49dc95b149bc516f6370756f1a1271a5f987f7dd8b94b3e1edf13ed8ec4f",
       "metadata": {
         "id": "kb_111",
         "section": "Оспаривание операций",
@@ -93,17 +93,17 @@
         "effective_from": "2026-06-01",
         "effective_to": null,
         "superseded_by": null,
-        "revision_id": "cfa7520ea1bcd02b",
+        "revision_id": "2026-10-13-scope-refund-hardening",
         "document_type": "bank-operating-procedure",
         "trust": "bank-policy",
         "owner": "Карточные претензии",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-13",
         "basis": "Собственные условия продукта, кампании или операционный порядок банка",
         "regulatory_source_ids": []
       }
     },
     "/knowledge/kb_112.md": {
-      "sha256": "6459acc7f174fe82e0613b74d99e6b2ee16ea38ffb745feb27f4ce5204328a78",
+      "sha256": "8bd9bd29ad47f78d8ba61a6ea0a6687f6bc1fdd37ae5f7a1337d9f8cde047406",
       "metadata": {
         "id": "kb_112",
         "section": "Оспаривание операций",
@@ -125,11 +125,11 @@
         "effective_from": "2024-01-01",
         "effective_to": null,
         "superseded_by": null,
-        "revision_id": "1b27a027d1ebfb0c",
+        "revision_id": "2026-10-12-single-subscription-regulation",
         "document_type": "bank-operating-procedure",
         "trust": "bank-policy",
         "owner": "Карточные претензии",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-12",
         "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
         "regulatory_source_ids": [
           "S01",
@@ -194,7 +194,7 @@
       }
     },
     "/knowledge/kb_121.md": {
-      "sha256": "821bbd2646eb06d1bc33bee5028cf2bbbe5f54379377b5bde90d10c62c14c01b",
+      "sha256": "abcc3a04d56bf4453c25d17db856040ba5d10f235ab71a544121e72d5d088c5f",
       "metadata": {
         "id": "kb_121",
         "section": "Тарифы",
@@ -213,7 +213,7 @@
         "effective_from": "2025-01-01",
         "effective_to": null,
         "superseded_by": null,
-        "revision_id": "c04222deca5d660f",
+        "revision_id": "2026-10-13-temporal-scope-hardening",
         "document_type": "bank-knowledge",
         "trust": "bank-policy"
       }
@@ -430,7 +430,7 @@
       }
     },
     "/knowledge/kb_190.md": {
-      "sha256": "1f7da465a604046413f3baab81270c779db7a44abb1fbbe367bec11c41bcfe6a",
+      "sha256": "7d82a6c208c90e57d92d209b1734197bd8641ce7cc13da1abd3481b017d37892",
       "metadata": {
         "id": "kb_190",
         "section": "Инструменты",
@@ -460,7 +460,7 @@
       }
     },
     "/knowledge/kb_180.md": {
-      "sha256": "0850d8bb921c0908d79f900ae79fb82ed14baef05554e6547752db160d2187a1",
+      "sha256": "b158492e50a0d3d45f866355628788950517640507b4b1cf7ff80c7570d9caf3",
       "metadata": {
         "id": "kb_180",
         "section": "Обращения",
@@ -482,11 +482,11 @@
         "effective_from": "2025-01-01",
         "effective_to": null,
         "superseded_by": null,
-        "revision_id": "9eeaf90895a4533a",
+        "revision_id": "2026-10-13-scope-refund-hardening",
         "document_type": "bank-operating-procedure",
         "trust": "bank-policy",
         "owner": "Клиентские обращения",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-13",
         "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
         "regulatory_source_ids": [
           "S14"
@@ -518,7 +518,7 @@
       }
     },
     "/knowledge/kb_320.md": {
-      "sha256": "efbee55b2832938ea0e83c375121a9dbbe1fc12c5a03fb031d9047d09e4921c7",
+      "sha256": "0ffa547a010120a9c1168f4cf63acfd42a07bd9996b24c041d59e5d7e086e0a6",
       "metadata": {
         "id": "kb_320",
         "section": "Акции и кешбэк",
@@ -534,11 +534,11 @@
         "effective_from": "2026-01-01",
         "effective_to": null,
         "superseded_by": null,
-        "revision_id": "e6f4c7fc7405bead",
+        "revision_id": "2026-10-13-required-sources",
         "document_type": "bank-incident-procedure",
         "trust": "bank-policy",
         "owner": "Программы лояльности",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-13",
         "basis": "Собственные условия продукта, кампании или операционный порядок банка",
         "regulatory_source_ids": []
       }
@@ -1346,40 +1346,8 @@
         "regulatory_source_ids": []
       }
     },
-    "/knowledge/kb_169.md": {
-      "sha256": "5b8cc41a8bc89a6384fd8a8cddbb10e4dc9d90b6feec1056499ab965d09eae19",
-      "metadata": {
-        "id": "kb_169",
-        "section": "Оспаривание",
-        "title": "Проверка рекуррентного списания и отмены подписки",
-        "keywords": [
-          "подписка",
-          "списание",
-          "отмена",
-          "отменена",
-          "после оплаченного периода",
-          "оспаривание",
-          "spor",
-          "subscription",
-          "неправомерно",
-          "активная"
-        ],
-        "effective_from": "2025-01-01",
-        "effective_to": null,
-        "superseded_by": null,
-        "revision_id": "27cd05665cd3bfd6",
-        "document_type": "bank-operating-procedure",
-        "trust": "bank-policy",
-        "owner": "Карточные претензии",
-        "revision_date": "2026-10-08",
-        "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
-        "regulatory_source_ids": [
-          "S18"
-        ]
-      }
-    },
     "/knowledge/kb_170.md": {
-      "sha256": "36d494e2cb853c95cacbacc8e22367c0a7d0ba1fedfc9836949e7b054eaea8b0",
+      "sha256": "d9b058f7e8000efd22fe3f9a53ccbd1102ecd20c4dc7f79d2f5101f4a4553575",
       "metadata": {
         "id": "kb_170",
         "section": "Вклады",
@@ -1398,7 +1366,8 @@
         "effective_from": "2025-01-01",
         "effective_to": null,
         "superseded_by": null,
-        "revision_id": "3238d8cf06639a29",
+        "revision_id": "2026-10-12-act365",
+        "revision_date": "2026-10-12",
         "document_type": "bank-knowledge",
         "trust": "bank-policy"
       }
@@ -1478,7 +1447,7 @@
       }
     },
     "/knowledge/kb_200.md": {
-      "sha256": "66109db75804958e9920012d475e2c18d6a16baef8fdddf639fac5a5a974aaec",
+      "sha256": "d8ef5f04b321c9c6e5640a24d19b878e0adefd5112c8a2bfcf11a2f4d3c86a68",
       "metadata": {
         "id": "kb_200",
         "section": "Карты и лимиты",
@@ -1500,11 +1469,11 @@
         "effective_from": "2025-01-01",
         "effective_to": null,
         "superseded_by": null,
-        "revision_id": "397750706e011a5d",
+        "revision_id": "2026-10-13-scope-refund-hardening",
         "document_type": "bank-operating-procedure",
         "trust": "bank-policy",
         "owner": "Карточные продукты и платежи",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-13",
         "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
         "regulatory_source_ids": [
           "S15",
@@ -1513,7 +1482,7 @@
       }
     },
     "/knowledge/kb_300.md": {
-      "sha256": "b25b1c8e187a02dda342edec02650f2ff7036943546d6ef5bc04a50af8670594",
+      "sha256": "f153a2f13bbd15a733048e4d7cb745065d7ea579c6889955b846ffd9ea73e23b",
       "metadata": {
         "id": "kb_300",
         "section": "Акции и кешбэк",
@@ -1528,11 +1497,11 @@
         "effective_from": "2026-06-01",
         "effective_to": "2026-10-31",
         "superseded_by": null,
-        "revision_id": "1c30590261bb8467",
+        "revision_id": "2026-10-13-required-sources",
         "document_type": "bank-campaign-terms",
         "trust": "bank-policy",
         "owner": "Программы лояльности",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-13",
         "basis": "Собственные условия продукта, кампании или операционный порядок банка",
         "regulatory_source_ids": []
       }
@@ -2083,11 +2052,439 @@
       }
     },
     "/knowledge/kb_final_41.md": {
-      "sha256": "1e05b65ebb37aec99a20b7ea1f3282590c0358f1a41736da3d02434dadd37543",
+      "sha256": "e1e708e40d1c10486672916018d8ca791024796cb5e81c281b896de82969baab",
       "metadata": {
         "id": "kb_final_41",
         "title": "N40: полный порядок проверки и сопровождения кешбэка",
-        "revision_id": "a0b3a883aacdbd55",
+        "revision_id": "2026-10-13-required-sources",
+        "document_type": "bank-procedure-overview",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-18",
+        "section": "Акции и кешбэк",
+        "keywords": [
+          "кешбэк",
+          "N40",
+          "инцидент",
+          "кафе",
+          "август",
+          "выплата"
+        ],
+        "effective_to": null,
+        "superseded_by": null,
+        "owner": "Программы лояльности",
+        "revision_date": "2026-10-13",
+        "basis": "Собственные условия продукта, кампании или операционный порядок банка",
+        "regulatory_source_ids": [],
+        "related_paths": [
+          "/knowledge/kb_320.md",
+          "/knowledge/kb_321.md",
+          "/knowledge/kb_322.md",
+          "/knowledge/kb_323.md",
+          "/knowledge/kb_324.md",
+          "/knowledge/kb_325.md",
+          "/knowledge/kb_326.md",
+          "/knowledge/kb_327.md",
+          "/knowledge/kb_328.md",
+          "/knowledge/kb_329.md",
+          "/knowledge/kb_330.md",
+          "/knowledge/kb_331.md",
+          "/knowledge/kb_332.md",
+          "/knowledge/kb_333.md"
+        ],
+        "related_bundle_paths": [
+          "/knowledge/kb_final_41_part_1.md"
+        ]
+      }
+    },
+    "/knowledge/kb_final_44.md": {
+      "sha256": "ec9b03ea00d8e6235ce0a518d26d01c434fc35d288b9aabe76c82930eafe2dff",
+      "metadata": {
+        "id": "kb_final_44",
+        "section": "Акции и кешбэк",
+        "title": "LETO26: полные условия участия, прогресса и выплаты",
+        "keywords": [
+          "кешбэк",
+          "кафе",
+          "LETO26",
+          "прогресс",
+          "август"
+        ],
+        "effective_from": "2026-06-01",
+        "effective_to": "2026-10-31",
+        "superseded_by": null,
+        "document_type": "bank-consolidated-procedure",
+        "trust": "bank-policy",
+        "source_ids": [
+          "kb_300",
+          "kb_301",
+          "kb_302",
+          "kb_303",
+          "kb_304",
+          "kb_305",
+          "kb_306",
+          "kb_307",
+          "kb_308",
+          "kb_309",
+          "kb_310",
+          "kb_311",
+          "kb_312"
+        ],
+        "owner": "Программы лояльности",
+        "revision_id": "2026-10-13-required-sources",
+        "revision_date": "2026-10-13",
+        "basis": "Собственные условия продукта, кампании или операционный порядок банка",
+        "regulatory_source_ids": [],
+        "source_paths": [
+          "/knowledge/kb_300.md",
+          "/knowledge/kb_301.md",
+          "/knowledge/kb_302.md",
+          "/knowledge/kb_303.md",
+          "/knowledge/kb_304.md",
+          "/knowledge/kb_305.md",
+          "/knowledge/kb_306.md",
+          "/knowledge/kb_307.md",
+          "/knowledge/kb_308.md",
+          "/knowledge/kb_309.md",
+          "/knowledge/kb_310.md",
+          "/knowledge/kb_311.md",
+          "/knowledge/kb_312.md"
+        ],
+        "source_revisions": {
+          "kb_300": "2026-10-13-required-sources",
+          "kb_301": "0cae1b7c5a9397fc",
+          "kb_302": "a6b2f1436f9b6cc9",
+          "kb_303": "dcc002c9a958d4d4",
+          "kb_304": "1598ff66dc289e3e",
+          "kb_305": "673aee5c5501ab96",
+          "kb_306": "64db8df049faed66",
+          "kb_307": "d6653bbcc55e0632",
+          "kb_308": "259c47208794280c",
+          "kb_309": "d42e03228748fe6b",
+          "kb_310": "fe0bafa6865479f9",
+          "kb_311": "3adb84037107dcb2",
+          "kb_312": "d812bc292b19cf8d"
+        }
+      }
+    },
+    "/knowledge/kb_final_52.md": {
+      "sha256": "bda6d5ed6d0cde88870e4976d819309c9be3ae5baa3af04e03633c9345f3e34b",
+      "metadata": {
+        "title": "Тарифы обслуживания: переход, ставки и потолки кешбэка",
+        "owner": "Тарифы и пакеты",
+        "revision_id": "fd2da219396f57ce",
+        "document_type": "bank-consolidated-procedure",
+        "revision_date": "2026-10-08",
+        "basis": "Собственные условия продукта, кампании или операционный порядок банка",
+        "regulatory_source_ids": [],
+        "source_ids": [
+          "kb_161",
+          "kb_162",
+          "kb_163",
+          "kb_164",
+          "kb_165",
+          "kb_166"
+        ],
+        "source_paths": [
+          "/knowledge/kb_161.md",
+          "/knowledge/kb_162.md",
+          "/knowledge/kb_163.md",
+          "/knowledge/kb_164.md",
+          "/knowledge/kb_165.md",
+          "/knowledge/kb_166.md"
+        ],
+        "source_revisions": {
+          "kb_161": "88cac0505be440cf",
+          "kb_162": "4acff6c8b0957a82",
+          "kb_163": "ac5e29239daed647",
+          "kb_164": "406d35b749bf2175",
+          "kb_165": "c6267b131948f5ef",
+          "kb_166": "fbfc6de4c2edacb6"
+        },
+        "id": "kb_final_52",
+        "section": "Тарифы",
+        "effective_from": "2025-01-01",
+        "effective_to": null,
+        "superseded_by": null,
+        "trust": "bank-policy"
+      }
+    },
+    "/knowledge/kb_final_53.md": {
+      "sha256": "a258596113ccc3d8c0ba7932b9e1aa78a3d4ec3c9a450c063937164ee36a73d4",
+      "metadata": {
+        "id": "kb_final_53",
+        "title": "Вклад и кредит: сравнение вариантов и досрочное исполнение",
+        "revision_id": "2026-10-12-bounded-overview",
+        "document_type": "bank-procedure-overview",
+        "trust": "bank-policy",
+        "effective_from": "2025-01-01",
+        "owner": "Кредитное и вкладное сопровождение",
+        "revision_date": "2026-10-12",
+        "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
+        "regulatory_source_ids": [
+          "S03",
+          "S09",
+          "S10",
+          "S12"
+        ],
+        "section": "Вклады и кредиты",
+        "effective_to": null,
+        "superseded_by": null,
+        "related_paths": [
+          "/knowledge/kb_167.md",
+          "/knowledge/kb_168.md",
+          "/knowledge/kb_340.md",
+          "/knowledge/kb_341.md",
+          "/knowledge/kb_342.md",
+          "/knowledge/kb_343.md",
+          "/knowledge/kb_344.md",
+          "/knowledge/kb_345.md",
+          "/knowledge/kb_346.md",
+          "/knowledge/kb_347.md",
+          "/knowledge/kb_348.md",
+          "/knowledge/kb_349.md"
+        ],
+        "related_bundle_paths": [
+          "/knowledge/kb_final_53_part_1.md",
+          "/knowledge/kb_final_53_part_2.md",
+          "/knowledge/kb_final_53_part_3.md"
+        ]
+      }
+    },
+    "/policies/general.md": {
+      "sha256": "e1953aed5220d19498d08206c4b391464b1b3819ce0220d0e9b0a16178168295",
+      "metadata": {
+        "id": "bank-policy",
+        "revision_id": "2026-10-13-business-v2.1",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Регламент обработки обращений розничных клиентов",
+        "scope": "general",
+        "owner": "управление клиентского сервиса",
+        "revision_date": "2026-10-13",
+        "version": "2.1",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/identity.md": {
+      "sha256": "f28ae9bd39faa97b1d6e441f50d3b1e4935ed8f8fcee0a68fa556847271d09ce",
+      "metadata": {
+        "id": "bank-policy-identity",
+        "revision_id": "2026-10-08-business-v2",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Идентификация клиента и подтверждение распоряжений",
+        "scope": "identity",
+        "owner": "управление безопасности дистанционных каналов",
+        "revision_date": "2026-10-08",
+        "version": "2.0",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/cards.md": {
+      "sha256": "aacc218f25451565338c73f9cbef6255bac8cb7a6737f1b651c67f1d99d28142",
+      "metadata": {
+        "id": "bank-policy-cards",
+        "revision_id": "2026-10-08-business-v2",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Обслуживание карт, лимитов и доставки",
+        "scope": "cards",
+        "owner": "управление карточных продуктов",
+        "revision_date": "2026-10-08",
+        "version": "2.0",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/disputes.md": {
+      "sha256": "c5e8f72187653aa3d84cb7a7f6978c9fe870ee0620c9003cf96df52f0a72e8fe",
+      "metadata": {
+        "id": "bank-policy-disputes",
+        "revision_id": "2026-10-12-single-subscription-regulation",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Приём претензий и сопровождение спорных операций",
+        "scope": "disputes",
+        "owner": "претензионный центр карточных операций",
+        "revision_date": "2026-10-12",
+        "version": "2.0",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/transfers_fraud.md": {
+      "sha256": "ba878c332de2fdace7af6cceaa6c90f6cf942e04ee77264e863b12fd222e429d",
+      "metadata": {
+        "id": "bank-policy-transfers_fraud",
+        "revision_id": "2026-10-13-temporal-scope-hardening",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Розыск переводов и обращения о мошенничестве",
+        "scope": "transfers_fraud",
+        "owner": "операционный центр платежей и служба противодействия мошенничеству",
+        "revision_date": "2026-10-13",
+        "version": "2.1",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/subscriptions.md": {
+      "sha256": "4e4182c85fb2f793d414547369ed3e92a26410a39223d12d7dc1f491f005c53c",
+      "metadata": {
+        "id": "bank-policy-subscriptions",
+        "revision_id": "2026-10-13-profile-scoped-cancellation",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Рекуррентные платежи, подписки и банковские автоплатежи",
+        "scope": "subscriptions",
+        "owner": "управление платёжных сервисов и карточные претензии",
+        "revision_date": "2026-10-13",
+        "version": "3.1",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/deposits.md": {
+      "sha256": "9ebd93980da1da6503766cd0c7fd9143681a3225e2632eae745ea928340b69a7",
+      "metadata": {
+        "id": "bank-policy-deposits",
+        "revision_id": "2026-10-08-business-v2",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Открытие, расчёт дохода и возврат вкладов",
+        "scope": "deposits",
+        "owner": "управление сберегательных продуктов",
+        "revision_date": "2026-10-08",
+        "version": "2.0",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/loans.md": {
+      "sha256": "ddd20019661e016c704f4dad01ecedfaab9a7c851d4ba1a7c382c821405a1bcb",
+      "metadata": {
+        "id": "bank-policy-loans",
+        "revision_id": "2026-10-08-business-v2",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Погашение кредита, льготные меры и изменение обязательств",
+        "scope": "loans",
+        "owner": "управление сопровождения розничных кредитов",
+        "revision_date": "2026-10-08",
+        "version": "2.0",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/fees_rewards.md": {
+      "sha256": "c3ce5b7a0a470ab4caf8ee8f457c7c76359a664ccdc07bb252c23068ba8f8697",
+      "metadata": {
+        "id": "bank-policy-fees_rewards",
+        "revision_id": "2026-10-13-temporal-scope-hardening",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Тарифные начисления, корректировки и вознаграждения",
+        "scope": "fees_rewards",
+        "owner": "управление тарифов и программ лояльности",
+        "revision_date": "2026-10-13",
+        "version": "2.1",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/accounts.md": {
+      "sha256": "db9ece131779e40bd879270e1a030caf16ba39ca5da934c3b1b5337e1863ee22",
+      "metadata": {
+        "id": "bank-policy-accounts",
+        "revision_id": "2026-10-08-business-v2",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Счета, прекращение договора и выдача документов",
+        "scope": "accounts",
+        "owner": "управление операционного обслуживания",
+        "revision_date": "2026-10-08",
+        "version": "2.0",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/policies/security_escalation.md": {
+      "sha256": "6a9f937c1fc70e4355b960fda907fb465a1ccf56553012bdc55e306e913b409d",
+      "metadata": {
+        "id": "bank-policy-security_escalation",
+        "revision_id": "2026-10-13-structured-escalation",
+        "document_type": "policy",
+        "trust": "bank-policy",
+        "effective_from": "2026-08-28",
+        "title": "Ограничения безопасности и передача профильному специалисту",
+        "scope": "security_escalation",
+        "owner": "управление безопасности дистанционного обслуживания",
+        "revision_date": "2026-10-13",
+        "version": "2.1",
+        "basis": "mandatory-rf-norms-and-own-sop"
+      }
+    },
+    "/knowledge/kb_standard_interbank.md": {
+      "sha256": "a0bdb88a8d384aec648433d71d9dbf9574824e41eb10385757b02251dc2b64fc",
+      "metadata": {
+        "id": "kb_standard_interbank",
+        "section": "Тарифы",
+        "title": "Стандарт: межбанковский перевод другому получателю по реквизитам",
+        "effective_from": "2026-08-01",
+        "effective_to": null,
+        "document_type": "own-product-terms",
+        "trust": "bank-policy",
+        "owner": "Управление тарифов Banking.ru",
+        "revision_id": "2026-10-09-bank6",
+        "basis": "Собственные условия тарифа; ст. 29 395-1 для переводов самому себе"
+      }
+    },
+    "/knowledge/kb_pension_deposit.md": {
+      "sha256": "6776b4ce8157f14f1c506a2fdf8de6b541cad2022959b12287e7f61c0a6e7fd5",
+      "metadata": {
+        "id": "kb_pension_deposit",
+        "title": "Пенсионный: договорные условия расчёта и выплаты",
+        "document_type": "own-product-terms",
+        "trust": "bank-policy",
+        "effective_from": "2026-03-01",
+        "revision_id": "2026-10-09-bank8"
+      }
+    },
+    "/knowledge/processing_calendar.md": {
+      "sha256": "7c2b673b744a0b4a7a01d72ed0b65229001b42778b50872218ef09f1d12adb59",
+      "metadata": {
+        "id": "bank-processing-calendar",
+        "title": "Дата сценария и обработка переводов",
+        "document_type": "bank-operating-procedure",
+        "trust": "bank-policy",
+        "revision_id": "2026-10-10-processing",
+        "effective_from": "2026-08-28",
+        "basis": "Учебный календарь и полученные поля процессинга; не универсальная норма закона"
+      }
+    },
+    "/knowledge/kb_tariff_transition.md": {
+      "id": "kb_tariff_transition",
+      "path": "/knowledge/kb_tariff_transition.md",
+      "sha256": "e7bf9aac2d04148908cca1d91013537818908efee060a9bfd84b5cfa13178850",
+      "metadata": {
+        "id": "kb_tariff_transition",
+        "title": "Плановая смена тарифа расчётного обслуживания",
+        "revision_id": "servicing-tariff-v1",
+        "revision_date": "2026-10-11",
+        "effective_from": "2026-08-28",
+        "document_type": "bank-operating-procedure",
+        "trust": "bank-policy",
+        "owner": "Тарифы и пакеты"
+      }
+    },
+    "/knowledge/kb_final_41_part_1.md": {
+      "sha256": "1194cfa999504c248cd9002cf0c5eb901a8b36a97a34918e9eede82f14699178",
+      "metadata": {
+        "id": "kb_final_41_part_1",
+        "title": "N40: полный порядок проверки и сопровождения кешбэка — полные источники, часть 1",
+        "revision_id": "2026-10-13-required-sources",
         "document_type": "bank-consolidated-procedure",
         "trust": "bank-policy",
         "effective_from": "2026-08-18",
@@ -2135,11 +2532,11 @@
           "kb_333"
         ],
         "owner": "Программы лояльности",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-13",
         "basis": "Собственные условия продукта, кампании или операционный порядок банка",
         "regulatory_source_ids": [],
         "source_revisions": {
-          "kb_320": "e6f4c7fc7405bead",
+          "kb_320": "2026-10-13-required-sources",
           "kb_321": "dcb433e58ca2e172",
           "kb_322": "08005613a1633d6b",
           "kb_323": "a885839d9a9c3aad",
@@ -2156,124 +2553,12 @@
         }
       }
     },
-    "/knowledge/kb_final_44.md": {
-      "sha256": "45b8833a19e96ac43ad7cb1a72f3c1355ec751761fba5f2f9c053946019158a8",
+    "/knowledge/kb_final_53_part_1.md": {
+      "sha256": "e305f97c0bf6f1a6d2dfa966a3b783165d388ce5978175dbe8a184afaecbd2ae",
       "metadata": {
-        "id": "kb_final_44",
-        "title": "LETO26: полные условия участия, прогресса и выплаты",
-        "revision_id": "3a6b6268a30e7fe2",
-        "document_type": "bank-consolidated-procedure",
-        "trust": "bank-policy",
-        "effective_from": "2026-06-01",
-        "source_paths": [
-          "/knowledge/kb_300.md",
-          "/knowledge/kb_301.md",
-          "/knowledge/kb_302.md",
-          "/knowledge/kb_303.md",
-          "/knowledge/kb_304.md",
-          "/knowledge/kb_305.md",
-          "/knowledge/kb_306.md",
-          "/knowledge/kb_307.md",
-          "/knowledge/kb_308.md",
-          "/knowledge/kb_309.md",
-          "/knowledge/kb_310.md",
-          "/knowledge/kb_311.md",
-          "/knowledge/kb_312.md"
-        ],
-        "section": "Акции и кешбэк",
-        "keywords": [
-          "кешбэк",
-          "кафе",
-          "LETO26",
-          "прогресс",
-          "август"
-        ],
-        "effective_to": "2026-10-31",
-        "superseded_by": null,
-        "source_ids": [
-          "kb_300",
-          "kb_301",
-          "kb_302",
-          "kb_303",
-          "kb_304",
-          "kb_305",
-          "kb_306",
-          "kb_307",
-          "kb_308",
-          "kb_309",
-          "kb_310",
-          "kb_311",
-          "kb_312"
-        ],
-        "owner": "Программы лояльности",
-        "revision_date": "2026-10-08",
-        "basis": "Собственные условия продукта, кампании или операционный порядок банка",
-        "regulatory_source_ids": [],
-        "source_revisions": {
-          "kb_300": "1c30590261bb8467",
-          "kb_301": "0cae1b7c5a9397fc",
-          "kb_302": "a6b2f1436f9b6cc9",
-          "kb_303": "dcc002c9a958d4d4",
-          "kb_304": "1598ff66dc289e3e",
-          "kb_305": "673aee5c5501ab96",
-          "kb_306": "64db8df049faed66",
-          "kb_307": "d6653bbcc55e0632",
-          "kb_308": "259c47208794280c",
-          "kb_309": "d42e03228748fe6b",
-          "kb_310": "fe0bafa6865479f9",
-          "kb_311": "3adb84037107dcb2",
-          "kb_312": "d812bc292b19cf8d"
-        }
-      }
-    },
-    "/knowledge/kb_final_52.md": {
-      "sha256": "bda6d5ed6d0cde88870e4976d819309c9be3ae5baa3af04e03633c9345f3e34b",
-      "metadata": {
-        "id": "kb_final_52",
-        "title": "Тарифы обслуживания: переход, ставки и потолки кешбэка",
-        "revision_id": "fd2da219396f57ce",
-        "document_type": "bank-consolidated-procedure",
-        "trust": "bank-policy",
-        "effective_from": "2025-01-01",
-        "source_paths": [
-          "/knowledge/kb_161.md",
-          "/knowledge/kb_162.md",
-          "/knowledge/kb_163.md",
-          "/knowledge/kb_164.md",
-          "/knowledge/kb_165.md",
-          "/knowledge/kb_166.md"
-        ],
-        "owner": "Тарифы и пакеты",
-        "revision_date": "2026-10-08",
-        "basis": "Собственные условия продукта, кампании или операционный порядок банка",
-        "regulatory_source_ids": [],
-        "source_ids": [
-          "kb_161",
-          "kb_162",
-          "kb_163",
-          "kb_164",
-          "kb_165",
-          "kb_166"
-        ],
-        "source_revisions": {
-          "kb_161": "88cac0505be440cf",
-          "kb_162": "4acff6c8b0957a82",
-          "kb_163": "ac5e29239daed647",
-          "kb_164": "406d35b749bf2175",
-          "kb_165": "c6267b131948f5ef",
-          "kb_166": "fbfc6de4c2edacb6"
-        },
-        "section": "Тарифы",
-        "effective_to": null,
-        "superseded_by": null
-      }
-    },
-    "/knowledge/kb_final_53.md": {
-      "sha256": "2a404e075df932f4b48b93c311a0e37ea51093191f4e909fdcab9cd519a921e8",
-      "metadata": {
-        "id": "kb_final_53",
-        "title": "Вклад и кредит: сравнение вариантов и досрочное исполнение",
-        "revision_id": "866c2f37cd21dadd",
+        "id": "kb_final_53_part_1",
+        "title": "Вклад и кредит: сравнение вариантов и досрочное исполнение — полные источники, часть 1",
+        "revision_id": "2026-10-12-bounded-sources",
         "document_type": "bank-consolidated-procedure",
         "trust": "bank-policy",
         "effective_from": "2025-01-01",
@@ -2281,18 +2566,10 @@
           "/knowledge/kb_167.md",
           "/knowledge/kb_168.md",
           "/knowledge/kb_340.md",
-          "/knowledge/kb_341.md",
-          "/knowledge/kb_342.md",
-          "/knowledge/kb_343.md",
-          "/knowledge/kb_344.md",
-          "/knowledge/kb_345.md",
-          "/knowledge/kb_346.md",
-          "/knowledge/kb_347.md",
-          "/knowledge/kb_348.md",
-          "/knowledge/kb_349.md"
+          "/knowledge/kb_341.md"
         ],
         "owner": "Кредитное и вкладное сопровождение",
-        "revision_date": "2026-10-08",
+        "revision_date": "2026-10-12",
         "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
         "regulatory_source_ids": [
           "S03",
@@ -2304,27 +2581,93 @@
           "kb_167",
           "kb_168",
           "kb_340",
-          "kb_341",
-          "kb_342",
-          "kb_343",
-          "kb_344",
-          "kb_345",
-          "kb_346",
-          "kb_347",
-          "kb_348",
-          "kb_349"
+          "kb_341"
         ],
         "source_revisions": {
           "kb_167": "1f352c9a0b38250c",
           "kb_168": "024ba15e77550476",
           "kb_340": "a1fff4b56a24a546",
-          "kb_341": "cdc77bc4b788b9b5",
+          "kb_341": "cdc77bc4b788b9b5"
+        },
+        "section": "Вклады и кредиты",
+        "effective_to": null,
+        "superseded_by": null
+      }
+    },
+    "/knowledge/kb_final_53_part_2.md": {
+      "sha256": "b3b5ff8517159231646de882ab6b1f346a1eb3c0d3eaadaafb0941e9f924df86",
+      "metadata": {
+        "id": "kb_final_53_part_2",
+        "title": "Вклад и кредит: сравнение вариантов и досрочное исполнение — полные источники, часть 2",
+        "revision_id": "2026-10-12-bounded-sources",
+        "document_type": "bank-consolidated-procedure",
+        "trust": "bank-policy",
+        "effective_from": "2025-01-01",
+        "source_paths": [
+          "/knowledge/kb_342.md",
+          "/knowledge/kb_343.md",
+          "/knowledge/kb_344.md",
+          "/knowledge/kb_345.md",
+          "/knowledge/kb_346.md",
+          "/knowledge/kb_347.md"
+        ],
+        "owner": "Кредитное и вкладное сопровождение",
+        "revision_date": "2026-10-12",
+        "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
+        "regulatory_source_ids": [
+          "S03",
+          "S09",
+          "S10",
+          "S12"
+        ],
+        "source_ids": [
+          "kb_342",
+          "kb_343",
+          "kb_344",
+          "kb_345",
+          "kb_346",
+          "kb_347"
+        ],
+        "source_revisions": {
           "kb_342": "6a57baa7bf7633cc",
           "kb_343": "070032556e54c3a2",
           "kb_344": "e7778fea75db73c5",
           "kb_345": "737dea7debd5ee10",
           "kb_346": "60102ca0ca96bb82",
-          "kb_347": "77e9123e1bd14009",
+          "kb_347": "77e9123e1bd14009"
+        },
+        "section": "Вклады и кредиты",
+        "effective_to": null,
+        "superseded_by": null
+      }
+    },
+    "/knowledge/kb_final_53_part_3.md": {
+      "sha256": "23a4560e8963134bb05845c8c73ca35fa41d0f567a27019024b6acdbca0a310d",
+      "metadata": {
+        "id": "kb_final_53_part_3",
+        "title": "Вклад и кредит: сравнение вариантов и досрочное исполнение — полные источники, часть 3",
+        "revision_id": "2026-10-12-bounded-sources",
+        "document_type": "bank-consolidated-procedure",
+        "trust": "bank-policy",
+        "effective_from": "2025-01-01",
+        "source_paths": [
+          "/knowledge/kb_348.md",
+          "/knowledge/kb_349.md"
+        ],
+        "owner": "Кредитное и вкладное сопровождение",
+        "revision_date": "2026-10-12",
+        "basis": "Обязательные нормы РФ и собственный операционный порядок банка",
+        "regulatory_source_ids": [
+          "S03",
+          "S09",
+          "S10",
+          "S12"
+        ],
+        "source_ids": [
+          "kb_348",
+          "kb_349"
+        ],
+        "source_revisions": {
           "kb_348": "aa7dfa8ddf5838c8",
           "kb_349": "6f6478231a844e83"
         },
@@ -2333,247 +2676,26 @@
         "superseded_by": null
       }
     },
-    "/policies/general.md": {
-      "sha256": "807509778e9c72b6930fdfd3ba58507b8bca2312ac0c51004a042f6bab2d9859",
+    "/policies/routing.md": {
+      "sha256": "5c454df844b1c54a6f406093aeac029511b67895e9557e20a8ec14c65cb616ee",
       "metadata": {
-        "id": "bank-policy",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
+        "id": "bank-routing",
+        "title": "Маршрутизация и согласование следующего сообщения",
+        "document_type": "bank-policy",
         "trust": "bank-policy",
+        "revision_id": "2026-10-12-routing-v1",
         "effective_from": "2026-08-28",
-        "title": "Регламент обработки обращений розничных клиентов",
-        "scope": "general",
-        "owner": "управление клиентского сервиса",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/identity.md": {
-      "sha256": "f28ae9bd39faa97b1d6e441f50d3b1e4935ed8f8fcee0a68fa556847271d09ce",
-      "metadata": {
-        "id": "bank-policy-identity",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Идентификация клиента и подтверждение распоряжений",
-        "scope": "identity",
-        "owner": "управление безопасности дистанционных каналов",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/cards.md": {
-      "sha256": "aacc218f25451565338c73f9cbef6255bac8cb7a6737f1b651c67f1d99d28142",
-      "metadata": {
-        "id": "bank-policy-cards",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Обслуживание карт, лимитов и доставки",
-        "scope": "cards",
-        "owner": "управление карточных продуктов",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/disputes.md": {
-      "sha256": "0e3aec4eb8a7ab74c0caad215650208e91b2cd39ae97923a4623c7566e87a245",
-      "metadata": {
-        "id": "bank-policy-disputes",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Приём претензий и сопровождение спорных операций",
-        "scope": "disputes",
-        "owner": "претензионный центр карточных операций",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/transfers_fraud.md": {
-      "sha256": "4fd76e84d88c1e17156d6f1b0694c1b52382c0dedbb615771d8b802c494fca1f",
-      "metadata": {
-        "id": "bank-policy-transfers_fraud",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Розыск переводов и обращения о мошенничестве",
-        "scope": "transfers_fraud",
-        "owner": "операционный центр платежей и служба противодействия мошенничеству",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/subscriptions.md": {
-      "sha256": "90caf78d0126a2e34ee6d2964b639d6e22e2d89d5c569d85a931fab5a3bf8593",
-      "metadata": {
-        "id": "bank-policy-subscriptions",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Рекуррентные платежи, подписки и банковские автоплатежи",
-        "scope": "subscriptions",
-        "owner": "управление платёжных сервисов",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/deposits.md": {
-      "sha256": "9ebd93980da1da6503766cd0c7fd9143681a3225e2632eae745ea928340b69a7",
-      "metadata": {
-        "id": "bank-policy-deposits",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Открытие, расчёт дохода и возврат вкладов",
-        "scope": "deposits",
-        "owner": "управление сберегательных продуктов",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/loans.md": {
-      "sha256": "ddd20019661e016c704f4dad01ecedfaab9a7c851d4ba1a7c382c821405a1bcb",
-      "metadata": {
-        "id": "bank-policy-loans",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Погашение кредита, льготные меры и изменение обязательств",
-        "scope": "loans",
-        "owner": "управление сопровождения розничных кредитов",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/fees_rewards.md": {
-      "sha256": "17f2955eb47671c00124841ebb33a774ea786e21a1e92773558975b22e19c31f",
-      "metadata": {
-        "id": "bank-policy-fees_rewards",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Тарифные начисления, корректировки и вознаграждения",
-        "scope": "fees_rewards",
-        "owner": "управление тарифов и программ лояльности",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/accounts.md": {
-      "sha256": "db9ece131779e40bd879270e1a030caf16ba39ca5da934c3b1b5337e1863ee22",
-      "metadata": {
-        "id": "bank-policy-accounts",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Счета, прекращение договора и выдача документов",
-        "scope": "accounts",
-        "owner": "управление операционного обслуживания",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/policies/security_escalation.md": {
-      "sha256": "cf11881ef45dbc39a3e5746fb04d4b0d925913bd3754b8a226b39ce2f5580e57",
-      "metadata": {
-        "id": "bank-policy-security_escalation",
-        "revision_id": "2026-10-08-business-v2",
-        "document_type": "policy",
-        "trust": "bank-policy",
-        "effective_from": "2026-08-28",
-        "title": "Ограничения безопасности и передача профильному специалисту",
-        "scope": "security_escalation",
-        "owner": "управление безопасности дистанционного обслуживания",
-        "revision_date": "2026-10-08",
-        "version": "2.0",
-        "basis": "mandatory-rf-norms-and-own-sop"
-      }
-    },
-    "/knowledge/kb_standard_interbank.md": {
-      "sha256": "a0bdb88a8d384aec648433d71d9dbf9574824e41eb10385757b02251dc2b64fc",
-      "metadata": {
-        "id": "kb_standard_interbank",
-        "section": "Тарифы",
-        "title": "Стандарт: межбанковский перевод другому получателю по реквизитам",
-        "keywords": [
-          "Стандарт",
-          "межбанковский",
-          "комиссия",
-          "реквизиты",
-          "1%"
-        ],
-        "effective_from": "2026-08-01",
         "effective_to": null,
-        "revision_id": "2026-10-09-bank6",
-        "document_type": "own-product-terms",
-        "trust": "bank-policy",
-        "owner": "Управление тарифов Banking.ru",
-        "revision_date": "2026-10-09",
-        "basis": "Собственные условия тарифа; ст. 29 395-1 для переводов самому себе",
-        "regulatory_source_ids": [
-          "cbr-482-fz"
+        "keywords": [
+          "маршрутизация",
+          "подразделение",
+          "ручная сверка",
+          "штраф",
+          "следующее сообщение"
         ]
-      }
-    },
-    "/knowledge/kb_pension_deposit.md": {
-      "sha256": "6776b4ce8157f14f1c506a2fdf8de6b541cad2022959b12287e7f61c0a6e7fd5",
-      "metadata": {
-        "id": "kb_pension_deposit",
-        "title": "Пенсионный: договорные условия расчёта и выплаты",
-        "document_type": "own-product-terms",
-        "trust": "bank-policy",
-        "effective_from": "2026-03-01",
-        "revision_id": "2026-10-09-bank8"
-      }
-    },
-    "/knowledge/processing_calendar.md": {
-      "sha256": "7c2b673b744a0b4a7a01d72ed0b65229001b42778b50872218ef09f1d12adb59",
-      "metadata": {
-        "id": "bank-processing-calendar",
-        "title": "Дата сценария и обработка переводов",
-        "document_type": "bank-operating-procedure",
-        "trust": "bank-policy",
-        "revision_id": "2026-10-10-processing",
-        "effective_from": "2026-08-28",
-        "basis": "Учебный календарь и полученные поля процессинга; не универсальная норма закона"
-      }
-    },
-    "/knowledge/kb_tariff_transition.md": {
-      "id": "kb_tariff_transition",
-      "path": "/knowledge/kb_tariff_transition.md",
-      "sha256": "e7bf9aac2d04148908cca1d91013537818908efee060a9bfd84b5cfa13178850",
-      "metadata": {
-        "id": "kb_tariff_transition",
-        "title": "Плановая смена тарифа расчётного обслуживания",
-        "revision_id": "servicing-tariff-v1",
-        "revision_date": "2026-10-11",
-        "effective_from": "2026-08-28",
-        "document_type": "bank-operating-procedure",
-        "trust": "bank-policy",
-        "owner": "Тарифы и пакеты"
       }
     }
   },
-  "legacy_db_sha256": "3c309e6deeb6469f6cc89a078f0d91ea0dfaf7a733c8fcd23c9be467fc234708",
-  "intake_answers_sha256": "94831c350ec0403bcd8ee0ceb08d1e4f10e8d24bb8c515b164f5b29c3a73cc2f"
+  "legacy_db_sha256": "10ec42cd7f00d2e17956a896db53513fc70acf5594d7c47de6d0526f358a9ede",
+  "intake_answers_sha256": "4a5f5e733880a10c34c7a04c0d36dd281571d2e995f6451b04a54e082cc9a860"
 }

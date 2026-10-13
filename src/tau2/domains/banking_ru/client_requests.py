@@ -50,6 +50,14 @@ class InternetOperationsConfirmationRequest(BaseModel):
     enabled: bool
 
 
+class SubscriptionSelectionRequest(BaseModel):
+    """Ask which service profile the client's cancellation instruction covers."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["subscription_selection"]
+    merchant_id: str = Field(min_length=1)
+
+
 class OperationsRequest(BaseModel):
     """Ask the active scenario's client which incident operations they recognise."""
 
@@ -104,6 +112,7 @@ ClientRequest = Annotated[
     | RestructuringDocumentsRequest
     | InternetOperationsConfirmationRequest
     | OperationsRequest
+    | SubscriptionSelectionRequest
     | DeviceRecognitionRequest
     | UtilityPaymentAccountsRequest
     | OperationConfirmationRequest
@@ -147,7 +156,7 @@ class StructuredIdentityBankingTools(
 
         Для подписанного заявления выберите account_closure_signature с
         channel=bank_app и передайте account_id, payout_account_id отдельными
-        аргументами после чтения обоих счетов, карт, операций и регламентов.
+        аргументами.
         Клиент видит точный документ и подписывает его ПЭП в приложении по
         соглашению bank-app-pep-v1; агент не получает OTP или ключ подписи.
         Получите status=signed, document, document_sha256 и confirmation_id до
@@ -179,8 +188,7 @@ class StructuredIdentityBankingTools(
         Для подтверждения интернет-настройки используйте internet_operations_confirmation,
         card_last4 и enabled; question не передавайте, ответ определяется явно заданным
         контекстом клиента. Для смены тарифа используйте tariff_change_confirmation
-        с new_tariff_id после получения текущего тарифа, каталога, счетов и
-        /knowledge/kb_tariff_transition.md. Инструмент формирует вопрос с фактической
+        с new_tariff_id. Инструмент формирует вопрос с фактической
         ценой, датой начала, сохранением долга и запретом пересчёта старых покупок.
         Получите confirmation_id до change_tariff и передайте его в этот вызов.
         Для распознавания своих устройств выберите device_recognition без question
@@ -570,6 +578,50 @@ class StructuredIdentityBankingTools(
                     "data": answers[0].model_dump(),
                 }
             )
+        if isinstance(request, SubscriptionSelectionRequest):
+            self._require_verified(customer_id)
+            if question or any(
+                value is not None
+                for value in (transaction_id, loan_id, account_id, payout_account_id)
+            ):
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: subscription_selection без question и других селекторов"
+                )
+            sources = []
+            for answer in self.db.client_answers.get(customer_id, []):
+                value = answer.subscription_selection
+                if value is None:
+                    continue
+                data = (
+                    value.model_dump(mode="json")
+                    if hasattr(value, "model_dump")
+                    else dict(value)
+                )
+                if data["merchant_id"] == request.merchant_id:
+                    sources.append(data)
+            if not sources:
+                return FileResponse(
+                    {
+                        "customer_id": customer_id,
+                        "request_type": request.type,
+                        "status": "unsupported_context",
+                        "data": None,
+                    }
+                )
+            if len(sources) != 1:
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: неоднозначный фиксированный ответ"
+                )
+            return FileResponse(
+                {
+                    "answer_id": "subscription-selection-answer-1",
+                    "customer_id": customer_id,
+                    "request_type": request.type,
+                    "status": "answered",
+                    "question": "Для какого профиля сервиса прекратить будущие платежи?",
+                    "data": sources[0],
+                }
+            )
         if isinstance(request, InternetOperationsConfirmationRequest):
             self._require_verified(customer_id)
             if question:
@@ -777,9 +829,8 @@ class StructuredIdentityBankingTools(
     ):
         """Принять заявление; bank_app требует полученную квитанцию ПЭП.
 
-        Перед подписью получите регламенты accounts, kb_128, оба своих счёта,
-        связанные карты и операции. Запросите ask_client(account_closure_signature,
-        channel=bank_app) с обоими счетами и получите status=signed и confirmation_id.
+        Для bank_app требуется status=signed и confirmation_id из результата
+        ask_client(account_closure_signature, channel=bank_app) с обоими счетами.
         Передайте этот ID и submission_channel=bank_app; документ должен совпадать.
         Без канала регистрируется лишь предварительное support_intake обращение,
         которое НЕ подтверждает приём подписанного заявления через приложение.
@@ -846,8 +897,7 @@ class StructuredIdentityBankingTools(
     ) -> Customer:
         """Register the client's confirmed servicing tariff for the next period.
 
-        Read own tariff/accounts, the catalogue and kb_tariff_transition first.
-        Obtain ask_client(tariff_change_confirmation) and receive confirmation_id.
+        Requires a received confirmation_id from ask_client(tariff_change_confirmation).
         Old debt is preserved and does not block this non-credit tariff change.
 
         Args:
