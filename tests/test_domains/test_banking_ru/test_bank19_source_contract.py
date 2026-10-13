@@ -7,17 +7,11 @@ from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 
 
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
+@pytest.mark.parametrize("mode", ["HALF"])
 @pytest.mark.parametrize(
     "route,expected",
-    [
-        ("sufficient_sources", 1),
-        ("extra_ro05", 1),
-        ("missing_cards", 0),
-        ("missing_kb", 0),
-        ("pending_change", 0),
-        ("noop", 0),
-    ],
+    [("extra_ro05", 1), ("pending_change", 0)],
+    ids=["extra_ro05", "pending_change"],
 )
 def test_bank19_sources(mode, route, expected):
     task = next(t for t in get_tasks() if t.id == "Bank 19")

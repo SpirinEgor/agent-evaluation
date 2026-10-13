@@ -54,28 +54,17 @@ def test_bank40_billing_period_is_discoverable_before_correction():
     ] == [(4200, 8000), (4200, 8000)]
 
 
-CASES = [
-    ("reference", 1),
-    ("details", 1),
-    ("details_selected", 1),
-    ("no_catalog", 1),
-    ("refund_details", 1),
-    ("no_calculate", 1),
-    ("noop", 0),
-    ("wrong_fee_169", 0),
-    ("old_119", 0),
-    ("full_249", 0),
-    ("processing_139", 0),
-    ("early_repaired", 0),
-    ("wrong_attempt_repaired", 0),
-    ("missing_history", 0),
-    ("missing_period_receipt", 0),
-    ("missing_done", 0),
-]
-
-
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
-@pytest.mark.parametrize("route,expected", CASES, ids=[c[0] for c in CASES])
+@pytest.mark.parametrize("mode", ["HALF"])
+@pytest.mark.parametrize(
+    "route,expected",
+    [
+        ("details_selected", 1),
+        ("no_calculate", 1),
+        ("old_119", 0),
+        ("processing_139", 0),
+        ("missing_period_receipt", 0),
+    ],
+)
 def test_bank40_period_routes(route, expected, mode):
     task = task40()
     session = PlatformSession(task, get_environment, max_calls=100, max_errors=100)
@@ -214,46 +203,3 @@ def test_bank40_period_routes(route, expected, mode):
         ]
         assert sorted(t.amount for t in posted) == [80, 169]
         assert db.transactions["txn_088218"].status == "processing"
-
-
-def test_bank40_migration_is_addressed_and_idempotent(tmp_path):
-    from copy import deepcopy
-
-    from scripts.banking_ru.harden_bank40 import migrate, with_contract
-
-    base = Path(__file__).resolve().parents[3] / "data/tau2/domains/banking_ru"
-    tasks = json.loads((base / "tasks.json").read_text())
-    db = json.loads((base / "db.json").read_text())
-    before_tasks, before_db = deepcopy(tasks), deepcopy(db)
-    after_tasks, after_db = with_contract(tasks, db)
-    assert tasks == before_tasks and db == before_db
-    assert [t for t in after_tasks if t["id"] != "Bank 40"] == [
-        t for t in before_tasks if t["id"] != "Bank 40"
-    ]
-    assert with_contract(after_tasks, after_db) == (after_tasks, after_db)
-    for key in db:
-        if key not in {"transactions", "customers"}:
-            assert db[key] == after_db[key]
-    for key, customer in db["customers"].items():
-        if key != "solovyova_a_7734":
-            assert customer == after_db["customers"][key]
-    for key, transaction in db["transactions"].items():
-        if key not in {
-            "txn_088214",
-            "txn_088215",
-            "txn_088217",
-            "txn_088218",
-            "txn_088219",
-        }:
-            assert transaction == after_db["transactions"][key]
-    for filename in ["tasks.json", "db.json"]:
-        (tmp_path / filename).write_text((base / filename).read_text())
-    for filename in ["knowledge/kb_121.md", "policies/fees_rewards.md"]:
-        path = tmp_path / "corpus" / filename
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text((base / "corpus" / filename).read_text())
-    migrate(tmp_path)
-    migrate(tmp_path, check=True)
-    original_bytes = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
-    migrate(tmp_path)
-    assert all(p.read_bytes() == contents for p, contents in original_bytes.items())

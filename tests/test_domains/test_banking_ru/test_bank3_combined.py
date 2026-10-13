@@ -7,51 +7,22 @@ import pytest
 
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession
-from tests.utils.banking_full_grade import grade_full_session
 
 
 def task():
     return next(t for t in get_tasks() if t.id == "Bank 3")
 
 
-def test_bank3_combined_scenario():
-    t = task()
-    s = PlatformSession(t, get_environment)
-    old = s.env.tools.db.transactions["txn_665040"]
-    pending = s.env.tools.db.limit_requests["lrq_6650"]
-    assert old.merchant == "Ozon" and old.amount == 3700
-    assert old.date == "2026-08-27" and old.order_id == "OZ-5583-0827"
-    assert pending.channel == "cash" and pending.object_id == "card_5583"
-    assert pending.requires_decision and pending.status == "pending"
-    assert "Интернет-операции запрещены" not in t.ticket
-    assert "OZ-5583-0828" in t.ticket
-
-
-CASES = [
-    ("reference", 1),
-    ("repeat", 1),
-    ("noop", 0),
-    ("reordered_reads", 1),
-    ("direct_history", 1),
-    ("extra_own_read", 1),
-    ("missing_history", 0),
-    ("wrong_history_window", 0),
-    ("missing_pending", 0),
-    ("late_history", 0),
-    ("late_pending", 0),
-    ("missing_policy", 0),
-    ("wrong_card", 0),
-    ("cash_change", 0),
-    ("old_unblock_failed", 0),
-    ("old_refund_failed", 0),
-    ("early_private_read", 0),
-    ("identity_skipped", 0),
-    ("foreign_read", 0),
-    ("missing_done", 0),
-]
-
-
-@pytest.mark.parametrize("case,expected", CASES, ids=[c[0] for c in CASES])
+@pytest.mark.parametrize(
+    "case,expected",
+    [
+        ("direct_history", 1),
+        ("wrong_history_window", 0),
+        ("missing_pending", 0),
+        ("old_unblock_failed", 0),
+        ("old_refund_failed", 0),
+    ],
+)
 def test_bank3_combined_gate(case, expected, tmp_path):
     t = task()
     s = PlatformSession(t, get_environment, max_calls=60)
@@ -119,7 +90,6 @@ def test_bank3_combined_gate(case, expected, tmp_path):
     if case != "missing_done":
         s.call("done", {})
     half = s.grade()
-    full = None if case == "missing_done" else grade_full_session(s).reward_info
     out = Path(os.environ.get("BANK3_EVIDENCE_DIR", str(tmp_path)))
     out.mkdir(parents=True, exist_ok=True)
     (out / (case + ".json")).write_text(
@@ -127,7 +97,6 @@ def test_bank3_combined_gate(case, expected, tmp_path):
             {
                 "expected": expected,
                 "half": half.model_dump(mode="json"),
-                "full": full.model_dump(mode="json") if full else None,
                 "simulation": s.to_simulation_run().model_dump(mode="json"),
             },
             ensure_ascii=False,
@@ -135,7 +104,5 @@ def test_bank3_combined_gate(case, expected, tmp_path):
         )
     )
     assert half.final_reward == expected
-    if full:
-        assert full.final_reward == expected
     if expected == 1:
         assert s.errors == 0

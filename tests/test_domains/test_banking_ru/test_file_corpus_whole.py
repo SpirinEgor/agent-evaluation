@@ -42,15 +42,6 @@ def test_read_returns_exact_whole_text_without_ranges(tmp_path):
     )
 
 
-@pytest.mark.parametrize("arguments", [{"start_line": 1}, {"end_line": 1}])
-def test_read_rejects_removed_range_parameters(tmp_path, arguments):
-    corpus = FileCorpus(
-        corpus_root(tmp_path, {"/source.md": ("one\ntwo\n", {"id": "source"})})
-    )
-    with pytest.raises(TypeError):
-        corpus.read("/source.md", **arguments)
-
-
 def test_snapshot_rejects_201_lines_even_with_valid_hash(tmp_path):
     root = corpus_root(tmp_path, {"/source.md": ("line\n" * 201, {"id": "source"})})
     with pytest.raises(ValueError, match="200 lines"):

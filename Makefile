@@ -100,3 +100,31 @@ test-banking-package:
 
 test-banking-tools:
 	uv run pytest tests/test_domains/test_banking_ru/test_tool_contract_catalog.py -q
+
+# Maintained compact banking suite; all offline, no model runs.
+BANKING_WORKERS ?= 4
+.PHONY: test-banking test-banking-evaluator test-banking-infra test-banking-regressions test-banking-task check-banking-contracts
+
+## Run the complete compact banking suite once
+test-banking:
+	uv run python scripts/banking_ru/run_basic_tests.py -n $(BANKING_WORKERS) $(PYTEST_ARGS)
+
+## Run synthetic evaluator/trace contracts
+test-banking-evaluator:
+	uv run python scripts/banking_ru/run_basic_tests.py --group evaluator $(PYTEST_ARGS)
+
+## Run MCP, isolation, corpus and release checks
+test-banking-infra:
+	uv run python scripts/banking_ru/run_basic_tests.py --group infra $(PYTEST_ARGS)
+
+## Run minimal domain regressions and allowed alternatives
+test-banking-regressions:
+	uv run python scripts/banking_ru/run_basic_tests.py --group regressions $(PYTEST_ARGS)
+
+## Run exactly reference + noop for one task: TASK=11
+test-banking-task:
+	uv run python scripts/banking_ru/run_basic_tests.py --task $(TASK) $(PYTEST_ARGS)
+
+## Check mandatory shared contract generators without mutating data
+check-banking-contracts:
+	uv run python scripts/banking_ru/check_basic_contracts.py

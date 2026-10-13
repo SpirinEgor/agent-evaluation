@@ -10,6 +10,7 @@ TYPES = {
     "Bank 1": "access_protection",
     "Bank 5": "protected_address_confirmation",
     "Bank 7": "service_claim_review",
+    "Bank 11": "refund_linkage_review",
     "Bank 12": "card_claim_referral",
     "Bank 15": "access_protection",
     "Bank 22": "card_replacement_consultation",
@@ -23,6 +24,7 @@ TYPES = {
 LINKS = {
     "Bank 5": {"card_id": "card_1145"},
     "Bank 7": {"transaction_id": "txn_990180"},
+    "Bank 11": {"transaction_id": "txn_771204"},
     "Bank 12": {"case_id": "case_1000", "transaction_id": "txn_540117"},
     "Bank 22": {"card_id": "card_7712"},
     "Bank 25": {"transaction_id": "txn_066091"},
@@ -47,7 +49,7 @@ def migrate_action(action, task_id):
     args.update(LINKS.get(task_id, {}))
     action["compare_args"] = (
         []
-        if task_id in {"Bank 15", "Bank 47", "Bank 48"}
+        if task_id in {"Bank 11", "Bank 15", "Bank 47", "Bank 48"}
         else ["customer_id", "request"]
         if task_id == "Bank 12"
         else [k for k in args if k != "responsible_unit" and k != "case_id"]

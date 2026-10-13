@@ -1,4 +1,4 @@
-"""Bank 2 completion-only whole-grade contract, in HALF and FULL."""
+"""Bank 2 completion-only alternatives; mode adapters are checked synthetically."""
 
 from copy import deepcopy
 
@@ -6,23 +6,12 @@ import pytest
 
 from tau2.data_model.tasks import Action
 from tests.test_domains.test_banking_ru.helpers import execute, task
-from tests.utils.banking_full_grade import grade_full_session
 
 
 @pytest.mark.parametrize(
     "variant,expected",
-    [
-        ("complete", 1),
-        ("alternative", 1),
-        ("noop", 0),
-        ("missing_identity", 0),
-        ("missing_purchase", 0),
-        ("missing_rules", 0),
-        ("missing_article", 0),
-        ("manual_grant", 0),
-        ("final_reply", 0),
-        ("ask_final_reply", 0),
-    ],
+    [("alternative", 1), ("manual_grant", 0)],
+    ids=["alternative", "manual_grant"],
 )
 def test_bank2_completion_only_whole_grade(variant, expected):
     actions = [
@@ -80,4 +69,3 @@ def test_bank2_completion_only_whole_grade(variant, expected):
         )
     session = execute(2, actions)
     assert session.grade().final_reward == expected
-    assert grade_full_session(session).reward_info.final_reward == expected

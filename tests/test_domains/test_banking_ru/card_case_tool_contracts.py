@@ -2,12 +2,12 @@
 
 These tests catch missing authorization, missing writes, incorrect resource
 selection and state transitions. Policy-only traps deliberately remain callable.
-Credentials read from fixtures establish backend setup, not agent-visible proof.
+Identity uses actual client receipts; synthetic ledger setup is not a full agent trajectory.
 """
 
 import pytest
 
-from tau2.domains.banking_ru.data_model import Case
+from tau2.domains.banking_ru.data_model import Case, ClientAnswer, Loan
 from tau2.domains.banking_ru.environment import get_environment
 from tau2.environment.environment import Environment
 from tests.test_domains.test_banking_ru.tool_contract_support import (
@@ -104,6 +104,8 @@ def scenario_open_dispute(env: Environment):
 
 
 def scenario_cancel_dispute(env: Environment):
+    # Only a dispute not yet submitted to processing can be withdrawn directly.
+    env.tools.db.disputes["dsp_3391"].processing_stage = "pre_submission"
     identify(env, "belova_n_2201")
     result = succeed(
         env,
@@ -193,9 +195,22 @@ def scenario_notify_card_loss_case(env: Environment):
 
 
 def _restructuring_case(env):
+    env.tools.db.loans["ln_contract"] = Loan(
+        id="ln_contract",
+        customer_id="belova_n_2201",
+        contract_date="2026-01-01",
+        principal=10000,
+        accrued_interest=0,
+        rate=0.1,
+        monthly_payment=500,
+    )
     identify(env, "belova_n_2201")
     return succeed(
-        env, "create_case", customer_id="belova_n_2201", category="restructuring"
+        env,
+        "create_case",
+        customer_id="belova_n_2201",
+        category="restructuring",
+        loan_id="ln_contract",
     )
 
 
@@ -250,8 +265,34 @@ def scenario_unblock_device(env: Environment):
 
 
 def scenario_unblock_operation(env: Environment):
-    authorize_otp(env, "nikitin_s_6631")
-    result = succeed(env, "unblock_operation", transaction_id="txn_330871")
+    identify(env, "nikitin_s_6631")
+    env.tools.db.client_answers["nikitin_s_6631"].append(
+        ClientAnswer(
+            keywords=[],
+            answer="Confirmed in app",
+            operation_confirmation={
+                "transaction_id": "txn_330871",
+                "account_id": "acc_5509",
+                "amount": 120000,
+                "merchant": "Перевод по СБП, Никитина М. С., банк «Восток»",
+                "date": "2026-08-28",
+                "confirmed": True,
+            },
+        )
+    )
+    receipt = succeed(
+        env,
+        "ask_client",
+        customer_id="nikitin_s_6631",
+        request={"type": "operation_confirmation", "amount": 120000},
+        transaction_id="txn_330871",
+    )
+    result = succeed(
+        env,
+        "unblock_operation",
+        transaction_id="txn_330871",
+        confirmation_id=receipt["confirmation_id"],
+    )
     transaction = env.tools.db.transactions["txn_330871"]
     assert result["id"] == "txn_330871"
     assert result["status"] == transaction.status == "posted"
@@ -362,7 +403,10 @@ WRITE_ARGUMENTS = {
     "cancel_subscription": {"subscription_id": "sub_3302"},
     "cancel_autopayment": {"autopayment_id": "ap_5540"},
     "unblock_device": {"device_id": "dev_8821"},
-    "unblock_operation": {"transaction_id": "txn_330871"},
+    "unblock_operation": {
+        "transaction_id": "txn_330871",
+        "confirmation_id": "not-received",
+    },
     "reveal_card_details": {"card_id": "card_4417"},
     "request_credit_holidays": {"loan_id": "ln_6630"},
     "share_document": {"document_id": "doc_1156_1"},

@@ -10,8 +10,10 @@ import pytest
 from tau2.domains.banking_ru.data_model import (
     Account,
     CashbackRules,
+    ClientAnswer,
     Deposit,
     Loan,
+    LoanRepaymentQuote,
     Penalty,
     Transaction,
 )
@@ -129,7 +131,9 @@ def wire_values(expected):
     return expected
 
 
-def assert_credit(env, *, amount, kind, merchant, account_id="acc_1000"):
+def assert_credit(
+    env, *, amount, kind, merchant, account_id="acc_1000", original_transaction_id=None
+):
     """Catch missing/duplicate ledger entry or credit booked to the wrong owner."""
     assert set(env.tools.db.transactions) == {"txn_100001", "txn_100002", "txn_100003"}
     transaction = env.tools.db.transactions["txn_100003"]
@@ -143,6 +147,7 @@ def assert_credit(env, *, amount, kind, merchant, account_id="acc_1000"):
             merchant=merchant,
             kind=kind,
             channel="online",
+            original_transaction_id=original_transaction_id,
         ).model_dump(),
     }
 
@@ -210,11 +215,73 @@ def close_deposit_success(env):
     )
 
 
-def early_repayment_success(env):
+def prepare_repayment(env):
+    """Seed an authoritative clean quote and a fixed protected-app decision."""
     seed_ledger(env)
-    authorize_otp(env, CUSTOMER)
+    loan = env.tools.db.loans["ln_1000"]
+    loan.contract_date = "2026-02-01"
+    loan.days_overdue = 0
+    loan.penalties = []
+    loan.repayment_quotes = [
+        LoanRepaymentQuote(
+            quote_id="quote-1000",
+            account_id="acc_1000",
+            date="2026-08-31",
+            notice_registered_at="2026-08-01",
+            minimum_notice_days=1,
+            amount=1000,
+            mode="reduce_payment",
+            initial_principal=10000,
+            initial_interest=200,
+            principal_payment=800,
+            interest_payment=200,
+            new_monthly_payment=460,
+            new_next_payment_date="2026-09-10",
+        )
+    ]
+    env.tools.db.client_answers[CUSTOMER].append(
+        ClientAnswer(
+            keywords=[],
+            answer="Confirmed in app",
+            loan_repayment_confirmation={
+                "loan_id": "ln_1000",
+                "account_id": "acc_1000",
+                "quote_id": "quote-1000",
+                "amount": 1000,
+                "mode": "reduce_payment",
+                "date": "2026-08-31",
+                "confirmed": True,
+            },
+        )
+    )
+    identify(env, CUSTOMER)
+    return {
+        "loan_id": "ln_1000",
+        "account_id": "acc_1000",
+        "quote_id": "quote-1000",
+        "amount": 1000.0,
+        "mode": "reduce_payment",
+        "date": "2026-08-31",
+    }
+
+
+def early_repayment_success(env):
+    arguments = prepare_repayment(env)
+    succeed(env, "get_loans", customer_id=CUSTOMER)
+    succeed(env, "get_accounts", customer_id=CUSTOMER)
+    receipt = succeed(
+        env,
+        "ask_client",
+        customer_id=CUSTOMER,
+        loan_id="ln_1000",
+        account_id="acc_1000",
+        request={
+            "type": "loan_repayment_confirmation",
+            **{key: arguments[key] for key in ("amount", "mode", "date", "quote_id")},
+        },
+    )
     result = succeed(
-        env, "early_repayment", loan_id="ln_1000", amount=1000, mode="reduce_payment"
+        env, "early_repayment", **arguments, confirmation_id=receipt["confirmation_id"]
     )
     loan = env.tools.db.loans["ln_1000"]
     assert result == wire_values(
@@ -223,21 +290,12 @@ def early_repayment_success(env):
             "charged": 1000.0,
             "mode": "reduce_payment",
             "account_balance": 199000.0,
+            "allocation": {"interest": 200.0, "principal": 800.0},
+            "schedule": {"monthly_payment": 460.0, "next_payment_date": "2026-09-10"},
         }
     )
-    # 50 penalty, 200 interest, 750 principal; waived/paid charges stay skipped.
-    assert loan.id == "ln_1000"
-    assert loan.customer_id == CUSTOMER
-    assert loan.next_payment_date == "2026-09-10"
-    assert loan.principal == 9250
-    assert loan.accrued_interest == 0
-    assert loan.monthly_payment == 462.5
-    assert loan.status == "active"
-    assert [(p.waived, p.paid) for p in loan.penalties] == [
-        (False, True),
-        (True, False),
-        (False, True),
-    ]
+    assert loan.principal == 9200 and loan.accrued_interest == 0
+    assert loan.monthly_payment == 460 and loan.status == "active"
     assert env.tools.db.accounts["acc_1000"].balance == 199000
     assert_credit(
         env,
@@ -284,16 +342,19 @@ def refund_fee_success(env):
             "refunded": 12.34,
             "request": {"type": "fee_correction"},
             "account_balance": 200012.34,
+            "original_transaction_id": "txn_100002",
+            "refund_transaction_id": "txn_100003",
         }
     )
     assert env.tools.db.accounts["acc_1000"].balance == 200012.34
-    assert env.tools.db.transactions["txn_100002"].fee_refunded is True
+    assert env.tools.db.transactions["txn_100002"].fee_refunded is False
     assert env.tools.db.transactions["txn_100001"].fee_refunded is False
     assert_credit(
         env,
         amount=12.34,
         kind="fee_refund",
         merchant="Возврат комиссии по операции txn_100002",
+        original_transaction_id="txn_100002",
     )
 
 
@@ -352,6 +413,7 @@ def open_account_success(env):
         "balance": 0,
         "status": "active",
         "debt": 0,
+        "closure_restrictions": [],
     }
     assert env.tools.db.accounts["acc_1003"].model_dump() == result
     assert set(env.tools.db.accounts) == {
@@ -381,6 +443,7 @@ def close_account_success(env):
         "balance": 0,
         "status": "closed",
         "debt": 0,
+        "closure_restrictions": [],
     }
     assert env.tools.db.accounts["acc_1001"].model_dump() == result
     assert (
@@ -437,8 +500,33 @@ def order_statement_success(env):
 def change_tariff_success(env):
     seed_ledger(env)
     identify(env, CUSTOMER)
+    env.tools.db.client_answers[CUSTOMER].append(
+        ClientAnswer(
+            keywords=[],
+            answer="Confirm servicing",
+            tariff_change_confirmation={
+                "new_tariff_id": "tariff_comfort",
+                "monthly_fee": 299,
+                "effective_from": "2026-09-01",
+                "confirmed": True,
+            },
+        )
+    )
+    consent = succeed(
+        env,
+        "ask_client",
+        customer_id=CUSTOMER,
+        request={
+            "type": "tariff_change_confirmation",
+            "new_tariff_id": "tariff_comfort",
+        },
+    )
     result = succeed(
-        env, "change_tariff", customer_id=CUSTOMER, new_tariff_id="tariff_comfort"
+        env,
+        "change_tariff",
+        customer_id=CUSTOMER,
+        new_tariff_id="tariff_comfort",
+        confirmation_id=consent["confirmation_id"],
     )
     customer = env.tools.db.customers[CUSTOMER]
     assert result == customer.model_dump()
@@ -512,7 +600,15 @@ def close_deposit_error(env):
 
 
 def early_repayment_error(env):
-    rejected_write(env, "early_repayment", "ERR_INSUFFICIENT_FUNDS", amount=200001)
+    arguments = prepare_repayment(env)
+    env.tools.db.accounts["acc_1000"].balance = 999
+    reject(
+        env,
+        "early_repayment",
+        "ERR_INSUFFICIENT_FUNDS",
+        **arguments,
+        confirmation_id="not-received",
+    )
 
 
 def waive_penalty_error(env):
@@ -563,7 +659,13 @@ def order_statement_error(env):
 
 
 def change_tariff_error(env):
-    rejected_write(env, "change_tariff", "ERR_NOT_FOUND", new_tariff_id="missing")
+    rejected_write(
+        env,
+        "change_tariff",
+        "ERR_CONSENT_MISMATCH",
+        new_tariff_id="missing",
+        confirmation_id="not-received",
+    )
 
 
 ERROR_SCENARIOS = {
@@ -580,3 +682,76 @@ ERROR_SCENARIOS = {
     "order_statement": order_statement_error,
     "change_tariff": change_tariff_error,
 }
+
+
+def check_closure_success(env):
+    seed_ledger(env)
+    identify(env, CUSTOMER)
+    before = snapshot(env)
+    result = succeed(
+        env,
+        "check_account_closure",
+        account_id="acc_1000",
+        payout_account_id="acc_1001",
+    )
+    assert result["account_id"] == "acc_1000"
+    assert result["payout_account_id"] == "acc_1001"
+    assert result["balance"] == 200000
+    assert result["ready_for_execution"] is True
+    assert snapshot(env) == before
+
+
+def request_closure_success(env):
+    seed_ledger(env)
+    identify(env, CUSTOMER)
+    before = {key: row.balance for key, row in env.tools.db.accounts.items()}
+    result = succeed(
+        env,
+        "request_account_closure",
+        account_id="acc_1000",
+        payout_account_id="acc_1001",
+    )
+    case = env.tools.db.cases[result["id"]]
+    assert case.category == "account_closure" and case.status == "open"
+    assert case.account_id == "acc_1000" and case.payout_account_id == "acc_1001"
+    assert case.payout_full_balance and case.amount == 200000
+    assert before == {key: row.balance for key, row in env.tools.db.accounts.items()}
+    assert env.tools.db.accounts["acc_1000"].status == "active"
+
+
+def check_closure_error(env):
+    seed_ledger(env)
+    identify(env, CUSTOMER)
+    reject(
+        env,
+        "check_account_closure",
+        "ERR_FOREIGN_ACCOUNT",
+        account_id="acc_1000",
+        payout_account_id="acc_1002",
+    )
+
+
+def request_closure_error(env):
+    seed_ledger(env)
+    identify(env, CUSTOMER)
+    reject(
+        env,
+        "request_account_closure",
+        "ERR_FOREIGN_ACCOUNT",
+        account_id="acc_1000",
+        payout_account_id="acc_1002",
+    )
+
+
+SUCCESS_SCENARIOS.update(
+    {
+        "check_account_closure": check_closure_success,
+        "request_account_closure": request_closure_success,
+    }
+)
+ERROR_SCENARIOS.update(
+    {
+        "check_account_closure": check_closure_error,
+        "request_account_closure": request_closure_error,
+    }
+)

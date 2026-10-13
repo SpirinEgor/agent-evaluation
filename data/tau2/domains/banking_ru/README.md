@@ -58,8 +58,8 @@ make test-banking-tools   # реальные успешные и ошибочн�
 ```
 
 Базовый гейт подтверждает эти примеры, а не все возможные пути, формулировки
-или кодировки секретов. Более подробные адресные проверки сохраняются отдельно
-от базового набора. Тестовые данные и ответы сбрасываются для каждой сессии.
+или кодировки секретов. Предметные регрессии входят в компактный общий набор; группы позволяют
+запускать их адресно. Тестовые данные и ответы сбрасываются для каждой сессии.
 
 Контрактные генераторы находятся в `scripts/banking_ru/build_*_contract.py`.
 Используйте `--check`, чтобы проверить актуальность поставленных данных.
@@ -107,3 +107,63 @@ ID и формирует служебное описание; произволь
 ### Структурированные основания операций (2026-10-13)
 
 Отзыв спора, возврат комиссии и полный возврат принимают request.type вместо reason. Подразделение create_case выбирается из закрытых идентификаторов; историческое Кредитное сопровождение нормализуется в credit_support. Произвольное описание не участвует в сравнении reward. Адрес, название отделения, идентификаторы, даты, полученные от клиента секреты, поиск и выражения расчёта остаются предметными данными.
+
+## Компактный поддерживаемый банковский набор
+
+Из корня репозитория, без API-ключей и модельных запусков:
+
+```sh
+make test-banking                         # весь контур, четыре workers по умолчанию
+make test-banking BANKING_WORKERS=0       # тот же набор последовательно
+make test-banking-basic                   # ровно 122: эталон + noop для 61 задачи
+make test-banking-tools                   # 65 success + 64 error + полнота реестра
+make test-banking-evaluator               # короткие синтетические трассы/функции
+make test-banking-infra                   # MCP, сессии, изоляция, корпус, поставка
+make test-banking-regressions             # предметные дефекты и допустимые альтернативы
+make check-banking-contracts              # семь обязательных build_* --check
+```
+
+Общая команда охватывает все оставшиеся банковские файлы, весь `tests/test_platform`
+и общие evaluator/trace/result тесты из `scripts/banking_ru/run_basic_tests.py`.
+Матрицы удалены из поддерживаемых тестов; скрытых `slow` или deselection нет.
+Регрессия Bank 11 сохраняет ожидание 1.0 для разрешённой немонетарной
+сверки связи возврата. Контракт допускает один refund_linkage_review по покупке
+после полученных идентификации, операций и полных источников; денежные действия,
+неправильные цели и ранние попытки остаются запрещены. Адресный генератор:
+`build_bank11_referral_contract.py`; после его изменения проверяйте также escalation
+и семь обязательных общих build_* --check.
+
+Для одной задачи используется точный номер, а не подстрока `-k Bank1`:
+
+```sh
+make test-banking-task TASK=11
+# Выполняются только эти два node ID:
+uv run pytest -q \
+  'tests/test_domains/test_banking_ru/test_whole_full_catalog_cases.py::test_each_task_original_whole_full_baseline[reference-Bank 11]' \
+  'tests/test_domains/test_banking_ru/test_whole_full_catalog_cases.py::test_each_task_original_whole_full_baseline[noop-Bank 11]'
+# И отдельно конкретная изменяемая гарантия:
+uv run pytest -q \
+  tests/test_domains/test_banking_ru/test_bank11_allowed_referral.py::test_bank11_refund_linkage_review_is_an_allowed_nonmonetary_alternative
+```
+
+`make test-banking-task` проверяет только reference/noop. Добавляйте точные node ID
+затронутых предметных регрессий. Список можно получить без исполнения:
+`make test-banking PYTEST_ARGS=--collect-only`. Это не доказательство прохождения.
+Для нового/изменённого инструмента запускайте success/error node IDs его имени
+и `test_every_registered_tool_has_success_and_error_contracts`.
+
+Сокращение pytest не отменяет согласованность контрактов. Общая команда проверяет
+confidentiality, access, identity, discovery, pending_limit_messages,
+numeric_limit_messages и card_outcome_messages. При изменении предметного источника,
+регламента или генератора дополнительно запускайте соответствующий
+`uv run python scripts/banking_ru/build_<name>_contract.py --check` (например,
+subscription_regulation, sources18_repair, escalation или operation_request).
+`--apply` к поставленным данным при обычном запуске тестов не применяется.
+
+Один полный запуск этого набора допустим только в разрешённом объёме работы;
+исправление одной задачи не требует общего банковского или модельного прогона.
+HALF/FULL сохранены для различий обработки трассы в синтетических проверках;
+предметные repair cases больше не вычисляют оба режима внутри одной функции.
+122 базовых cases используют полный FULL/ALL grader с исходными DB/ENV/ACTION.
+Изоляция Codex проверяется локальным HTTP-stub и OS sandbox, без вызова модели;
+при отсутствии CLI такие тесты отмечаются skip, а граница остаётся неподтверждённой.

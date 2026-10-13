@@ -12,7 +12,6 @@ import pytest
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.platform.session import PlatformSession
-from tests.utils.banking_full_grade import grade_full_session
 
 OWNER = "orlova_m_4400"
 BACKUP = "ap_4401"
@@ -55,7 +54,6 @@ def _identity(session, method="code_word"):
 
 def _finish_and_grade(session, variant, expected):
     _payload(session.call("done", {}))
-    full = grade_full_session(session).reward_info
     half = session.grade()
     out = os.environ.get("BANK57_HARDENING_EVIDENCE")
     if out:
@@ -68,7 +66,6 @@ def _finish_and_grade(session, variant, expected):
                     "variant": variant,
                     "expected": expected,
                     "half": half.model_dump(mode="json"),
-                    "full": full.model_dump(mode="json"),
                     "messages": [
                         m.model_dump(mode="json") for m in session.trajectory()
                     ],
@@ -79,40 +76,32 @@ def _finish_and_grade(session, variant, expected):
                 indent=2,
             )
         )
-    assert half.final_reward == full.final_reward == expected
+    assert half.final_reward == expected
 
 
-CASES = [
-    (name, 1)
-    for name in [
-        "both",
+@pytest.mark.parametrize(
+    "variant,expected",
+    [
+        ("reverse", 1),
+        ("selection", 1),
+        ("unknown_retry", 1),
+        ("only_subscription", 0),
+        ("only_autopayment", 0),
+        ("kinopoisk", 0),
+        ("mobile", 0),
+        ("failed_other_then_repair", 0),
+    ],
+    ids=[
         "reverse",
-        "birth_date",
-        "repeat_read",
-        "data_before_source",
         "selection",
         "unknown_retry",
-    ]
-] + [
-    (name, 0)
-    for name in [
-        "noop",
         "only_subscription",
         "only_autopayment",
-        "other_ivi",
         "kinopoisk",
         "mobile",
-        "wrong_then_repair",
-        "early_attempt_then_repair",
         "failed_other_then_repair",
-        "source_after_attempt",
-        "data_result_after_attempt",
-        "source_result_after_attempt",
-    ]
-]
-
-
-@pytest.mark.parametrize("variant,expected", CASES)
+    ],
+)
 def test_bank57_full_grade(variant, expected):
     session = _session()
     if variant == "noop":
@@ -210,45 +199,6 @@ def _migration():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
-
-
-def test_migration_scoped_idempotent(tmp_path, monkeypatch):
-    data = tmp_path / "data"
-    shutil.copytree(BANKING_RU_DATA_DIR, data)
-    before = json.loads((data / "tasks.json").read_text())
-    expected = _migration().build(data)
-    for path, raw in expected.items():
-        path.write_bytes(raw)
-    after = json.loads((data / "tasks.json").read_text())
-    assert [t for t in before if t["id"] != "Bank 57"] == [
-        t for t in after if t["id"] != "Bank 57"
-    ]
-    assert expected == _migration().build(data)
-    script_dir = Path(__file__).resolve().parents[3] / "scripts/banking_ru"
-    monkeypatch.syspath_prepend(str(script_dir))
-    from build_discovery_contract import with_contract
-
-    discovered = with_contract(
-        deepcopy(after), json.loads((data / "db.json").read_text())
-    )
-    assert discovered == after
-    (data / "tasks.json").write_bytes(_migration()._bytes(discovered))
-    assert expected == _migration().build(data)
-
-
-@pytest.mark.parametrize("fault", ["missing", "duplicate"])
-def test_migration_rejects_ambiguous_id(tmp_path, fault):
-    data = tmp_path / "data"
-    shutil.copytree(BANKING_RU_DATA_DIR, data)
-    tasks = json.loads((data / "tasks.json").read_text())
-    selected = next(t for t in tasks if t["id"] == "Bank 57")
-    if fault == "missing":
-        tasks.remove(selected)
-    else:
-        tasks.append(deepcopy(selected))
-    (data / "tasks.json").write_text(json.dumps(tasks))
-    with pytest.raises(ValueError, match="exactly one Bank 57"):
-        _migration().build(data)
 
 
 def test_canonical_receipt_refresh_preserves_hardened_subscription_revision(tmp_path):

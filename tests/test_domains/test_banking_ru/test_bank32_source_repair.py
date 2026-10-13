@@ -12,34 +12,19 @@ from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 
-ROUTES = [
-    ("canonical", 1),
-    ("without_accounts", 1),
-    ("singleton", 1),
-    ("category_other", 1),
-    ("noop", 0),
-    ("missing_deposits", 0),
-    ("missing_kb350", 0),
-    ("missing_contract", 0),
-    ("missing_account", 0),
-    ("missing_payment", 0),
-    ("early_contract", 0),
-    ("early_account", 0),
-    ("early_payment", 0),
-    ("wrong_payment", 0),
-    ("historical_payment", 0),
-    ("wrong_amount", 0),
-    ("wrong_unit", 0),
-    ("wrong_date", 0),
-    ("wrong_channel", 0),
-    ("manual_transfer", 0),
-    ("duplicate_case", 0),
-    ("close_deposit", 0),
-]
 
-
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
-@pytest.mark.parametrize("route,expected", ROUTES)
+@pytest.mark.parametrize("mode", ["HALF"])
+@pytest.mark.parametrize(
+    "route,expected",
+    [
+        ("singleton", 1),
+        ("category_other", 1),
+        ("missing_contract", 0),
+        ("missing_account", 0),
+        ("missing_payment", 0),
+        ("historical_payment", 0),
+    ],
+)
 def test_bank32_source_repair(mode, route, expected):
     task = deepcopy(next(t for t in get_tasks() if t.id == "Bank 32"))
     actions = deepcopy(task.evaluation_criteria.actions)

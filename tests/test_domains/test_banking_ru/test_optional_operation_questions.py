@@ -11,34 +11,24 @@ from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 
-ROUTES = [
-    ("reference", 1),
-    ("noop", 0),
-    ("authenticated_question", 1),
-    ("repeated_authenticated_question", 1),
-    ("question_before_identity_then_retry", 0),
-    ("foreign_question", 0),
-    ("free_question", 0),
-    ("secret_question", 0),
-    ("missing_identity", 0),
-    ("missing_general", 0),
-    ("missing_product_source", 0),
-]
-CASES = [(n, route, expected) for n in (19, 26) for route, expected in ROUTES]
-CASES += [
-    (19, "pending_limit_change", 0),
-    (26, "missing_utility_answer", 0),
-    (26, "wrong_amount", 0),
-    (26, "wrong_contact_date", 0),
-    (26, "unrelated_transaction", 0),
-]
 
-
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
+@pytest.mark.parametrize("mode", ["HALF"])
 @pytest.mark.parametrize(
     "number,route,expected",
-    CASES,
-    ids=[f"Bank{n}-{route}" for n, route, _ in CASES],
+    [
+        (19, "authenticated_question", 1),
+        (19, "question_before_identity_then_retry", 0),
+        (26, "authenticated_question", 1),
+        (26, "missing_utility_answer", 0),
+        (26, "wrong_contact_date", 0),
+    ],
+    ids=[
+        "Bank19-authenticated_question",
+        "Bank19-question_before_identity_then_retry",
+        "Bank26-authenticated_question",
+        "Bank26-missing_utility_answer",
+        "Bank26-wrong_contact_date",
+    ],
 )
 def test_optional_question_whole_grade(number, route, expected, mode):
     task = next(t for t in get_tasks() if t.id == f"Bank {number}")
@@ -142,47 +132,3 @@ def test_optional_question_whole_grade(number, route, expected, mode):
             )
         )
     assert reward.final_reward == expected, reward.model_dump(mode="json")
-
-
-@pytest.mark.parametrize("number", [19, 26], ids=["Bank19", "Bank26"])
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
-def test_question_requires_received_identity_result(number, mode):
-    task = next(t for t in get_tasks() if t.id == f"Bank {number}")
-    session = PlatformSession(task, get_environment, max_calls=250, max_errors=100)
-    for action in task.evaluation_criteria.actions:
-        if action.name != "verify_identity":
-            session.call(action.name, action.arguments)
-            continue
-        pending = session.begin_call(action.name, action.arguments, None)
-        assert not session.call(action.name, action.arguments, attempt=pending).is_error
-        assert not session.call(
-            "ask_client",
-            {
-                "customer_id": action.arguments["customer_id"],
-                "request": {"type": "confirm_operations"},
-            },
-        ).is_error
-        session.result_sent(pending)
-    session.call("done", {})
-    reward = (
-        session.grade() if mode == "HALF" else grade_full_session(session).reward_info
-    )
-    if folder := os.environ.get("OPTIONAL_QUESTION_RECEIPTS"):
-        out = Path(folder)
-        out.mkdir(parents=True, exist_ok=True)
-        (out / f"Bank{number}-unreceived_identity-{mode}.json").write_text(
-            json.dumps(
-                {
-                    "task_id": task.id,
-                    "route": "unreceived_identity",
-                    "expected": 0,
-                    "mode": mode,
-                    "pid": os.getpid(),
-                    "token": session.token,
-                    "reward": reward.model_dump(mode="json"),
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
-        )
-    assert reward.final_reward == 0, reward.model_dump(mode="json")

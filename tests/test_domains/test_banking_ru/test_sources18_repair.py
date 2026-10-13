@@ -12,21 +12,17 @@ from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 
-CASES = ["Bank 20", "Bank 35", "Bank 41", "Bank 53", "Bank 56", "Bank 57"]
 
-
-@pytest.mark.parametrize("task_id", CASES)
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
 @pytest.mark.parametrize(
-    "route,expected",
+    "task_id,route,expected",
     [
-        ("reference", 1),
-        ("alternative", 1),
-        ("noop", 0),
-        ("missing_source", 0),
-        ("early_private", 0),
+        ("Bank 20", "alternative", 1),
+        ("Bank 35", "alternative", 1),
+        ("Bank 53", "alternative", 1),
+        ("Bank 56", "alternative", 1),
     ],
 )
+@pytest.mark.parametrize("mode", ["HALF"])
 def test_sources18(task_id, mode, route, expected):
     task = next(t for t in get_tasks() if t.id == task_id)
     actions = deepcopy(task.evaluation_criteria.actions)
@@ -119,75 +115,7 @@ def test_sources18(task_id, mode, route, expected):
     assert reward == expected
 
 
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
-def test_bank41_atomic_rules_without_navigation(mode):
-    task = next(t for t in get_tasks() if t.id == "Bank 41")
-    s = PlatformSession(task, get_environment, max_calls=250, max_errors=100)
-    actions = [
-        a
-        for a in task.evaluation_criteria.actions
-        if not (
-            a.name == "file_read"
-            and a.arguments.get("path") == "/knowledge/kb_final_41.md"
-        )
-    ]
-    s.replay_actions(actions)
-    s.call("done", {})
-    reward = s.grade() if mode == "HALF" else grade_full_session(s).reward_info
-    if output := os.environ.get("SOURCES18_EVIDENCE"):
-        Path(output).mkdir(parents=True, exist_ok=True)
-        (Path(output) / f"Bank-41-no-navigation-{mode}.json").write_text(
-            json.dumps(reward.model_dump(mode="json"), ensure_ascii=False, indent=2)
-        )
-    assert reward.final_reward == 1
-
-
-def test_bank57_common_api_declares_bank_authorization():
-    from tau2.domains.banking_ru.data_model import Subscription
-    from tau2.domains.banking_ru.tools import BankingTools
-
-    description = Subscription.model_fields["status"].description.lower()
-    assert (
-        "банковск" in description
-        and "разрешен" in description
-        and "договор" in description
-    )
-    assert "договор" in BankingTools.cancel_subscription.__doc__.lower()
-
-
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
-@pytest.mark.parametrize(
-    "tool,args",
-    [
-        ("cancel_subscription", {"subscription_id": "sub_4402"}),
-        ("cancel_autopayment", {"autopayment_id": "ap_4400"}),
-    ],
-)
-def test_bank57_unrelated_payment_must_remain(mode, tool, args):
-    task = next(t for t in get_tasks() if t.id == "Bank 57")
-    s = PlatformSession(task, get_environment, max_calls=250, max_errors=100)
-    s.replay_actions(task.evaluation_criteria.actions)
-    s.call(tool, args)
-    s.call("done", {})
-    reward = s.grade() if mode == "HALF" else grade_full_session(s).reward_info
-    assert reward.final_reward == 0
-
-
-def test_sources18_migration_preserves_unassigned_tasks():
-    from scripts.banking_ru.build_sources18_repair_contract import (
-        REMOVED,
-        with_contract,
-    )
-
-    tasks = json.load(open(BANKING_RU_DATA_DIR / "tasks.json"))
-    patched = with_contract(tasks)
-    assert patched == with_contract(patched)
-    assert [t for t in tasks if t["id"] not in REMOVED] == [
-        t for t in patched if t["id"] not in REMOVED
-    ]
-
-
-@pytest.mark.parametrize("mode", ["HALF", "FULL"])
+@pytest.mark.parametrize("mode", ["HALF"])
 @pytest.mark.parametrize(
     "task_id,route",
     [

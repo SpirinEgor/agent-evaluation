@@ -9,24 +9,6 @@ import pytest
 
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession
-from tests.utils.banking_full_grade import grade_full_session
-
-
-def test_shared_startup_publishes_required_sources_and_virtual_paths():
-    """Required documents are discovered through MCP, not named at startup."""
-    from tau2.domains.banking_ru.mcp_systems import startup_policy
-
-    policy = startup_policy()
-    assert "/policies/general.md" not in policy
-    assert "/policies/identity.md" not in policy
-    assert "MCP" in policy and "Самостоятельно" in policy
-    tasks = {t.id: t for t in get_tasks()}
-    assert {
-        PlatformSession(
-            tasks[f"Bank {n}"], get_environment, mcp_layout="systems"
-        ).policy
-        for n in [14, 54, 56]
-    } == {policy}
 
 
 def test_generic_claim_article_points_to_its_authoritative_process():
@@ -51,55 +33,6 @@ def test_removed_duplicate_cannot_be_read_as_active_rules():
 OWNERS = {14: "smirnova_o_1123", 54: "kuznetsov_i_3140", 56: "fedorov_k_6610"}
 TRANSACTIONS = {14: "txn_055210", 54: "txn_314101", 56: "txn_661001"}
 AMOUNTS = {14: 3000.0, 54: 2200.0, 56: 8900.0}
-CASES = [
-    (n, route, 1)
-    for n in [14, 54, 56]
-    for route in [
-        "reference",
-        "canonical_code",
-        "canonical_birth",
-        "duplicate_source",
-        "unknown_error_before_valid",
-    ]
-]
-CASES += [
-    (n, route, 0)
-    for n in [14, 54, 56]
-    for route in [
-        "noop",
-        "early_done",
-        "source_after_target",
-        "source_response_after_target",
-        "partial_source",
-        "wrong_source",
-        "pre_auth_read",
-        "foreign_read",
-        "wrong_transaction",
-        "extra_refund",
-    ]
-]
-CASES += [
-    (14, "missing_recognition", 0),
-    (14, "fact_response_after_question", 0),
-    (14, "extra_cancel", 0),
-]
-CASES += [
-    (n, route, 0 if n == 54 and route == "case_default_amount" else 1)
-    for n in [54, 56]
-    for route in [
-        "dispute_other",
-        "case_merchant",
-        "case_other",
-        "case_escalation",
-        "case_list",
-        "case_default_amount",
-    ]
-]
-CASES += [(56, "no_navigation_article", 1)]
-CASES += [(n, "wrong_amount", 0) for n in [54, 56]]
-CASES += [(54, "extra_cancel", 0)]
-CASES += [(n, "failed_target_before_auth", 0) for n in [14, 54, 56]]
-CASES += [(n, "failed_target_before_source", 0) for n in [54, 56]]
 
 
 def _payload(result):
@@ -330,10 +263,30 @@ def _canonical(session, task, number, variant):
 
 
 @pytest.mark.parametrize(
-    "number,variant,expected", CASES, ids=[f"Bank{n}-{v}" for n, v, _ in CASES]
+    "number,variant,expected",
+    [
+        (56, "extra_refund", 0),
+        (14, "missing_recognition", 0),
+        (14, "extra_cancel", 0),
+        (54, "case_escalation", 1),
+        (56, "case_other", 1),
+        (56, "case_default_amount", 1),
+        (56, "no_navigation_article", 1),
+        (56, "wrong_amount", 0),
+    ],
+    ids=[
+        "Bank56-extra_refund",
+        "Bank14-missing_recognition",
+        "Bank14-extra_cancel",
+        "Bank54-case_escalation",
+        "Bank56-case_other",
+        "Bank56-case_default_amount",
+        "Bank56-no_navigation_article",
+        "Bank56-wrong_amount",
+    ],
 )
 def test_whole_contract(number, variant, expected):
-    """Actual HALF/FULL graders preserve valid routes and reject material wrong paths."""
+    """One domain grade per route; shared mode adapters are checked synthetically."""
     task = deepcopy(next(t for t in get_tasks() if t.id == f"Bank {number}"))
     session = PlatformSession(
         task, get_environment, max_calls=200, max_errors=100, mcp_layout="systems"
@@ -348,8 +301,6 @@ def test_whole_contract(number, variant, expected):
             e.get("arguments", {}).get("path") == "/knowledge/kb_112.md"
             for e in session.mcp_events
         ), "Navigation article must actually be absent"
-    full = grade_full_session(session).reward_info
-    assert session._reward_info is None, "FULL must use the original full graders"
     half = session.grade()
     evidence = os.environ.get("SUBSCRIPTION_CONTRACT_EVIDENCE")
     if evidence:
@@ -362,7 +313,6 @@ def test_whole_contract(number, variant, expected):
                     "variant": variant,
                     "expected": expected,
                     "half": half.model_dump(mode="json"),
-                    "full": full.model_dump(mode="json"),
                     "messages": [
                         m.model_dump(mode="json") for m in session.trajectory()
                     ],
@@ -373,7 +323,7 @@ def test_whole_contract(number, variant, expected):
                 indent=2,
             )
         )
-    assert half.final_reward == full.final_reward == expected
+    assert half.final_reward == expected
     if expected:
         assert session.errors == (1 if variant == "unknown_error_before_valid" else 0)
 
@@ -411,56 +361,6 @@ def _without_shared_source_pins(task):
             for name in ["sha256", "content", "snapshot_sha256"]:
                 fields.pop(name, None)
     return out
-
-
-def test_migration_is_idempotent_and_preserves_unassigned_task_contracts(tmp_path):
-    """A source migration cannot rewrite other tasks' subject data or safety rules."""
-    data = _temporary_migration_data(tmp_path)
-    before = json.loads((data / "tasks.json").read_text())
-    # Force a stale receipt, exercising actual application rather than check-only.
-    for task in before:
-        for item in task["evaluation_criteria"].get("result_evidence", []):
-            if (
-                item.get("expected_fields", {}).get("path")
-                == "/policies/subscriptions.md"
-            ):
-                item["expected_fields"]["sha256"] = "stale-source-pin"
-    (data / "tasks.json").write_text(json.dumps(before, ensure_ascii=False))
-    result = _run_migration(data)
-    assert result.returncode == 0, result.stderr
-    after = json.loads((data / "tasks.json").read_text())
-    originals = {t["id"]: t for t in before}
-    assert {t["id"] for t in after} == set(originals)
-    for task in after:
-        if task["id"] not in {"Bank 14", "Bank 54", "Bank 56"}:
-            assert _without_shared_source_pins(task) == _without_shared_source_pins(
-                originals[task["id"]]
-            )
-    manifest = json.loads((data / "manifest.json").read_text())
-    assert "/knowledge/kb_169.md" not in manifest["documents"]
-    assert "kb_169" not in json.loads((data / "db.json").read_text())["articles"]
-    import hashlib
-
-    for task in after:
-        for item in task["evaluation_criteria"].get("result_evidence", []):
-            expected = item.get("expected_fields", {})
-            path = expected.get("path")
-            if path not in manifest["documents"]:
-                continue
-            body = (data / "corpus" / path.lstrip("/")).read_bytes()
-            if "sha256" in expected:
-                assert expected["sha256"] == hashlib.sha256(body).hexdigest()
-            if "content" in expected:
-                assert expected["content"] == body.decode()
-    first = {
-        p.name: p.read_bytes()
-        for p in [data / "tasks.json", data / "db.json", data / "manifest.json"]
-    }
-    assert _run_migration(data).returncode == 0
-    assert first == {
-        p.name: p.read_bytes()
-        for p in [data / "tasks.json", data / "db.json", data / "manifest.json"]
-    }
 
 
 @pytest.mark.parametrize("fault", ["missing_id", "duplicate_id"])

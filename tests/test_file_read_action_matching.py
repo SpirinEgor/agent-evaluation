@@ -7,14 +7,14 @@ from tau2.data_model.tasks import Action, EvaluationCriteria, Task, UserScenario
 from tau2.evaluator.evaluator_action import ActionEvaluator, FullDuplexActionEvaluator
 
 
-@pytest.mark.parametrize("compare_args", [None, [], ["path"], ["path", "start_line"]])
 @pytest.mark.parametrize(
-    "arguments,want",
+    "compare_args,arguments,want",
     [
-        ({"path": "policies/cards.md"}, True),
-        ({"path": "policies/cards.md", "start_line": 1, "end_line": 200}, True),
-        ({"path": "policies/other.md"}, False),
-        ({}, False),
+        (None, {"path": "policies/cards.md"}, True),
+        ([], {"path": "policies/cards.md"}, True),
+        (["path"], {"path": "policies/other.md"}, False),
+        (["path", "start_line"], {"path": "policies/cards.md", "start_line": 1}, True),
+        (None, {}, False),
     ],
 )
 def test_file_read_matches_required_canonical_path(compare_args, arguments, want):
@@ -60,20 +60,20 @@ def test_other_tools_keep_existing_argument_comparison():
     )
 
 
-@pytest.mark.parametrize("mode", ["half", "full"])
 @pytest.mark.parametrize(
-    "variant,want",
+    "mode,variant,want",
     [
-        ("received", 1.0),
-        ("optional_kwargs", 1.0),
-        ("different_path", 0.0),
-        ("missing_path", 0.0),
-        ("wrong_revision", 0.0),
-        ("wrong_body", 0.0),
-        ("no_result", 0.0),
-        ("error", 0.0),
-        ("late_result", 0.0),
-        ("parallel", 0.0),
+        ("half", "received", 1.0),
+        ("full", "received", 1.0),
+        ("half", "optional_kwargs", 1.0),
+        ("half", "wrong_revision", 0.0),
+        ("half", "wrong_body", 0.0),
+        ("half", "no_result", 0.0),
+        ("half", "error", 0.0),
+        ("half", "late_result", 0.0),
+        ("full", "late_result", 0.0),
+        ("half", "parallel", 0.0),
+        ("full", "parallel", 0.0),
     ],
 )
 def test_file_read_source_requires_current_received_body_before_write(
