@@ -12,7 +12,11 @@ CONTEXT = "Сегодня 28 августа 2026 года. "
 def with_contract(tasks):
     tasks = deepcopy(tasks)
     task = next(t for t in tasks if t["id"] == "Bank 2")
-    if not task["ticket"].startswith(CONTEXT):
+    if (
+        task.get("scenario_version") != "2026-10-14-bank2-multisource-v4"
+        and not task["ticket"].startswith(CONTEXT)
+        and "Сегодня 28 августа." not in task["ticket"]
+    ):
         task["ticket"] = CONTEXT + task["ticket"]
         for field in ("reason_for_call", "known_info"):
             task["user_scenario"]["instructions"][field] = (
@@ -57,7 +61,21 @@ def with_contract(tasks):
         )
     # This complete consultation has no missing fact/consent to clarify.
     # Only structured identity requests are necessary client interactions.
-    if not any(
+    if task.get("scenario_version") not in {
+        "2026-10-14-bank2-v2",
+        "2026-10-14-bank2-settlement-v3",
+        "2026-10-14-bank2-multisource-v4",
+        "2026-10-15-bank2-resolution-v5",
+        "2026-10-20-bank2-history-v6",
+        "2026-10-20-bank2-feasible-offers-v7",
+        "2026-10-21-bank2-posting-order-v8",
+        "2026-10-21-bank2-selection-v9",
+        "2026-10-21-bank2-large-selection-v10",
+        "2026-10-21-bank2-large-selection-v10r",
+        "2026-10-21-bank2-compatibility-v11",
+        "2026-10-21-bank2-coupled-menu-v12",
+        "2026-10-21-bank2-funded-menu-v13",
+    } and not any(
         a["action_id"] == "forbid_clarification_reply_Bank 2"
         for a in criteria["forbidden_actions"]
     ):

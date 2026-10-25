@@ -1,0 +1,277 @@
+"""Shared protocol tests: replay cannot credit twice or lose document/channel state."""
+
+import json
+
+import pytest
+
+from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.platform.session import PlatformSession
+
+
+def identified(task_id):
+    task = next(t for t in get_tasks() if t.id == task_id)
+    s = PlatformSession(task, get_environment, max_calls=150, max_errors=50)
+    for a in task.evaluation_criteria.actions:
+        s.call(a.name, a.arguments)
+        if a.name == "verify_identity":
+            break
+    if task_id == "Bank 2":
+        s.env.tools.db.cashback_adjustment_permissions["adjustment-A"] = {
+            "id": "adjustment-A",
+            "customer_id": "gromov_a_1187",
+            "transaction_id": "txn_552290",
+            "program": "standard_cashback",
+            "status": "approved",
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "max_amount": 20,
+            "remaining_amount": 20,
+            "used_amount": 0,
+            "used": False,
+        }
+    return s
+
+
+def decode(result):
+    assert not result.is_error, result.content[0].text
+    return json.loads(result.content[0].text)
+
+
+def test_adjustment_is_idempotent_without_spending_accrual_cap_twice():
+    s = identified("Bank 2")
+    db = s.env.tools.db
+    db.cashback_adjustment_permissions["test-authority"] = {
+        "id": "test-authority",
+        "customer_id": "gromov_a_1187",
+        "transaction_id": "txn_552290",
+        "program": "standard_cashback",
+        "status": "approved",
+        "valid_from": "2026-08-01",
+        "valid_to": "2026-08-31",
+        "max_amount": 20,
+        "remaining_amount": 20,
+        "used_amount": 0,
+        "used": False,
+    }
+    initial = db.accounts["acc_1187"].balance
+    accrued = db.cashback_rules["gromov_a_1187"].accrued_current_period
+    args = {
+        "permission_id": "test-authority",
+        "transaction_id": "txn_552290",
+        "amount": 20,
+        "idempotency_key": "adjust-once",
+    }
+    first = decode(s.call("execute_cashback_adjustment", args))
+    again = decode(s.call("execute_cashback_adjustment", args))
+    assert first == again
+    assert db.accounts["acc_1187"].balance == initial + 20
+    assert db.cashback_rules["gromov_a_1187"].accrued_current_period == accrued
+    assert db.cashback_adjustment_permissions["test-authority"]["remaining_amount"] == 0
+    assert s.call(
+        "execute_cashback_adjustment", {**args, "idempotency_key": "new-key"}
+    ).is_error
+    assert db.accounts["acc_1187"].balance == initial + 20
+
+
+def test_amendment_keeps_one_case_and_supersedes_document():
+    s = identified("Bank 41")
+    c = "egorova_n_3358"
+    first = decode(
+        s.call(
+            "create_cashback_investigation",
+            {
+                "customer_id": c,
+                "program": "N40",
+                "period": "2026-08",
+                "amount": 70,
+                "items": [{"transaction_id": "txn_077031", "amount": 70}],
+            },
+        )
+    )
+    before = decode(s.call("get_case_documents", {"case_id": first["id"]}))
+    args = {
+        "case_id": first["id"],
+        "items": [{"transaction_id": "txn_077040", "amount": 108}],
+    }
+    updated = decode(s.call("amend_cashback_investigation", args))
+    again = decode(s.call("amend_cashback_investigation", args))
+    assert updated == again and updated["amount"] == 178 and updated["version"] == 2
+    docs = decode(s.call("get_case_documents", {"case_id": first["id"]}))
+    assert any(d["version"] == "1" and d["readiness"] == "superseded" for d in docs)
+    current = [
+        d for d in docs if d["audience"] == "customer" and d["readiness"] == "ready"
+    ]
+    assert (
+        len(current) == 1
+        and current[0]["version"] == "2"
+        and "178" in current[0]["body"]
+    )
+    assert len([v for v in s.env.tools.db.cases.values() if v.id == first["id"]]) == 1
+    assert any(d["version"] == "1" for d in before)
+
+
+def test_channel_confirmation_changes_bank_state_not_only_client_text():
+    s = identified("Bank 41")
+    c = "egorova_n_3358"
+    contact = "doc-contact-unconfirmed-" + c
+    from tau2.domains.banking_ru.data_model import ClientAnswer
+
+    s.env.tools.db.client_answers[c] = [
+        a
+        for a in s.env.tools.db.client_answers[c]
+        if not a.document_channel_confirmation
+    ]
+    s.env.tools.db.client_answers[c].append(
+        ClientAnswer(
+            keywords=[],
+            answer="Подтвердил",
+            document_channel_confirmation={"contact_id": contact, "confirmed": True},
+        )
+    )
+    assert not s.env.tools.db.document_contacts[contact].verified
+    decode(
+        s.call(
+            "ask_client",
+            {
+                "customer_id": c,
+                "request": {
+                    "type": "document_channel_confirmation",
+                    "contact_id": contact,
+                },
+            },
+        )
+    )
+    contacts = decode(s.call("get_document_delivery_contacts", {"customer_id": c}))
+    assert next(x for x in contacts if x["id"] == contact)["verified"] is True
+
+
+def test_delivery_unknown_is_recovered_by_status_and_same_key_without_second_delivery():
+    s = identified("Bank 41")
+    c = "egorova_n_3358"
+    from tau2.domains.banking_ru.document_service_models import DocumentServiceProfile
+
+    s.env.tools.db.document_service_profiles[c] = DocumentServiceProfile(
+        delivery_outcome_unknown=True
+    )
+    case = decode(
+        s.call(
+            "create_cashback_investigation",
+            {
+                "customer_id": c,
+                "program": "N40",
+                "amount": 178,
+                "items": [
+                    {"transaction_id": "txn_077031", "amount": 70},
+                    {"transaction_id": "txn_077040", "amount": 108},
+                ],
+            },
+        )
+    )
+    args = {
+        "document_id": case["id"] + ":registration_confirmation",
+        "contact_id": "doc-contact-" + c,
+        "idempotency_key": "delivery-once",
+    }
+    first = decode(s.call("deliver_case_document", args))
+    assert first["status"] == "outcome_unknown"
+    status = decode(
+        s.call(
+            "get_bank_operation_status",
+            {"customer_id": c, "request_id": first["request_id"]},
+        )
+    )
+    assert status["status"] == "delivered"
+    repeated = decode(s.call("deliver_case_document", args))
+    assert repeated["status"] == "delivered"
+    assert len(s.env.tools.db.document_deliveries) == 1
+
+
+def test_unobserved_document_version_change_returns_recoverable_conflict():
+    s = identified("Bank 41")
+    c = "egorova_n_3358"
+    from tau2.domains.banking_ru.document_service_models import DocumentServiceProfile
+
+    s.env.tools.db.document_service_profiles[c] = DocumentServiceProfile()
+    case = decode(
+        s.call(
+            "create_cashback_investigation",
+            {
+                "customer_id": c,
+                "program": "N40",
+                "amount": 178,
+                "items": [
+                    {"transaction_id": "txn_077031", "amount": 70},
+                    {"transaction_id": "txn_077040", "amount": 108},
+                ],
+            },
+        )
+    )
+    docid = case["id"] + ":registration_confirmation"
+    decode(s.call("get_case_documents", {"case_id": case["id"]}))
+    # An independent bank-side revision unseen by the caller, not a secret task rule.
+    s.env.tools.db.documents[docid].version = "2"
+    args = {
+        "document_id": docid,
+        "contact_id": "doc-contact-" + c,
+        "idempotency_key": "conflict-recovery",
+        "expected_version": "1",
+    }
+    result = s.call("deliver_case_document", args)
+    assert result.is_error and "ERR_DOCUMENT_CONFLICT" in result.content[0].text
+    decode(s.call("get_case_documents", {"case_id": case["id"]}))
+    assert (
+        decode(s.call("deliver_case_document", {**args, "expected_version": "2"}))[
+            "status"
+        ]
+        == "delivered"
+    )
+    assert s.env.tools.assert_case_document_delivery_attempts(c, "N40")
+
+
+def test_distinct_partial_fee_refunds_keep_all_ledger_rows_and_remaining_budget():
+    s = identified("Bank 40")
+    db = s.env.tools.db
+    before = db.accounts["acc_7734"].balance
+    args = {"transaction_id": "txn_088214", "request": {"type": "fee_correction"}}
+    decode(
+        s.call("refund_fee", {**args, "amount": 50, "idempotency_key": "partial-50"})
+    )
+    decode(
+        s.call("refund_fee", {**args, "amount": 20, "idempotency_key": "partial-20"})
+    )
+    linked = [
+        t
+        for t in db.transactions.values()
+        if t.original_transaction_id == "txn_088214" and t.kind == "fee_refund"
+    ]
+    assert len(linked) == 2 and sum(t.amount for t in linked) == 70
+    assert db.accounts["acc_7734"].balance == before + 70
+    state = decode(s.call("get_fee_refund_state", {"transaction_id": "txn_088214"}))
+    assert state["remaining"] == 129
+
+
+@pytest.mark.parametrize("bad_field", ["used_amount", "balance"])
+def test_adjustment_validates_every_amount_before_first_write(bad_field):
+    from copy import deepcopy
+
+    s = identified("Bank 2")
+    db = s.env.tools.db
+    if bad_field == "used_amount":
+        db.cashback_adjustment_permissions["adjustment-A"]["used_amount"] = "invalid"
+    else:
+        db.accounts["acc_1187"].balance = 0.001
+    before = deepcopy(db.model_dump())
+    result = s.call(
+        "execute_cashback_adjustment",
+        {
+            "permission_id": "adjustment-A",
+            "transaction_id": "txn_552290",
+            "amount": 20,
+            "idempotency_key": "atomic",
+        },
+    )
+    assert result.is_error
+    assert db.model_dump() == before
+
+
+pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")

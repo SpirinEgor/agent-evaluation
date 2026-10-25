@@ -14,6 +14,16 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
+from tau2.domains.banking_ru.document_service_models import (
+    DocumentContact,
+    DocumentDelivery,
+    DocumentServiceProfile,
+)
+from tau2.domains.banking_ru.reward_resolution_models import (
+    RewardResolutionExecution,
+    RewardResolutionOffer,
+    RewardResolutionPreferences,
+)
 from tau2.environment.db import DB
 
 CardType = Literal["debit", "credit"]
@@ -23,6 +33,7 @@ AccountStatus = Literal["active", "closed"]
 TransactionStatus = Literal["posted", "hold", "declined", "processing", "blocked"]
 TransactionKind = Literal[
     "purchase",
+    "refund",
     "fee",
     "transfer",
     "fee_refund",
@@ -212,6 +223,7 @@ class CardLimits(BaseModel):
 
 
 class Transaction(BaseModel):
+    reward_discrepancy_type: str | None = None
     id: str = Field(description="Идентификатор операции")
     customer_id: str = Field(description="Клиент, которому принадлежит операция")
     account_id: str = Field(description="Счёт операции")
@@ -269,6 +281,14 @@ class Transaction(BaseModel):
     original_transaction_id: Optional[str] = Field(
         default=None, description="Исходная операция, к которой относится возврат"
     )
+    fee_refund_update: Optional[dict] = None
+    reward_program: Optional[str] = None
+    posted_at: Optional[str] = None
+    purchased_at: Optional[str] = None
+    receipt_id: Optional[str] = None
+    compensates_cashback: bool = False
+    refund_outcome_unknown: bool = False
+    refund_requires_consent: bool = False
     fee_refunded: bool = Field(
         default=False, description="По операции выполнен возврат комиссии"
     )
@@ -429,6 +449,21 @@ class BranchComplaint(BaseModel):
         return "Ленинский проспект" if normalized in aliases else value
 
 
+class CashbackInvestigationItem(BaseModel):
+    """Calculated underpayment assigned to one purchase in a CRM investigation."""
+
+    model_config = ConfigDict(extra="forbid")
+    transaction_id: str = Field(min_length=1)
+    amount: float = Field(gt=0, allow_inf_nan=False)
+
+
+class CashbackAdjustmentReservation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    permission_id: str
+    transaction_id: str
+    amount: float = Field(gt=0, allow_inf_nan=False)
+
+
 class Case(BaseModel):
     """Обращение в профильное подразделение банка.
 
@@ -439,7 +474,23 @@ class Case(BaseModel):
 
     id: str = Field(description="Идентификатор обращения")
     customer_id: str = Field(description="Клиент, по которому создано обращение")
-    category: CaseCategory = Field(description="Категория обращения")
+    category: CaseCategory | Literal["cashback_investigation"] = Field(
+        description="Категория обращения"
+    )
+    reward_program: Optional[
+        Literal["standard_cashback", "cashback_reconciliation", "N40"]
+    ] = None
+    reward_items: list[CashbackInvestigationItem] = Field(default_factory=list)
+    reward_period: Optional[str] = None
+    version: int = 1
+    review_status: Literal["draft", "registered"] = "draft"
+    review_source_version: Optional[int] = None
+    review_amount: Optional[float] = None
+    review_items: list[CashbackInvestigationItem] = Field(default_factory=list)
+    state_revision: Optional[int] = None
+    adjustment_reservations: list[CashbackAdjustmentReservation] = Field(
+        default_factory=list
+    )
     investment_consultation: Optional[InvestmentConsultation] = Field(
         default=None, description="Предмет инвестиционного вопроса клиента"
     )
@@ -536,6 +587,32 @@ class Device(BaseModel):
     )
 
 
+class RewardContract(BaseModel):
+    """Contract product scope and card continuity."""
+
+    id: str
+    customer_id: str
+    account_id: str
+    product_code: str
+    card_ids: list[str]
+    effective_from: str
+    effective_to: Optional[str] = None
+    rules_revision: str
+    replaced_card_id: Optional[str] = None
+    replacement_card_id: Optional[str] = None
+    replacement_effective_from: Optional[str] = None
+
+
+class PromotionActivation(BaseModel):
+    """Facts from the customer activation journal."""
+
+    id: str
+    customer_id: str
+    promotion_id: str
+    activated_at: str
+    revoked_at: Optional[str] = None
+
+
 class Promotion(BaseModel):
     id: str = Field(description="Идентификатор акции")
     customer_id: str = Field(description="Участник акции")
@@ -545,6 +622,15 @@ class Promotion(BaseModel):
     required_purchases: int = Field(description="Сколько покупок нужно совершить")
     min_purchase_amount: float = Field(description="Минимальная сумма покупки, ₽")
     valid_until: str = Field(description="Дата окончания акции")
+    product_code: Optional[str] = None
+    program: Optional[str] = None
+    merchant: Optional[str] = None
+    mcc_codes: list[str] = Field(default_factory=list)
+    valid_from: Optional[str] = None
+    rate: Optional[float] = None
+    per_purchase_cap: Optional[float] = None
+    activation_required: bool = False
+    replaces_standard: bool = False
     # Прогресс намеренно не хранится: агент обязан посчитать его по операциям.
 
 
@@ -660,6 +746,19 @@ class ClientAnswer(BaseModel):
         default=None,
         description="Ответ клиента о выбранном договоре и области прекращения платежей",
     )
+    clarification_topic: Optional[
+        Literal[
+            "partial_execution",
+            "third_party_message",
+            "existing_case",
+            "third_party_code",
+            "promotion_activation",
+            "request_scope",
+        ]
+    ] = None
+    transaction_selection: Optional[dict] = None
+    fee_refund_confirmation: Optional[dict] = None
+    document_channel_confirmation: Optional[dict] = None
     tariff_change_confirmation: Optional[TariffChangeConfirmation] = None
     account_closure_signature: Optional[AccountClosureSignature] = None
     identity_method: Optional[Literal["code_word", "birth_date"]] = Field(
@@ -719,6 +818,15 @@ class Document(BaseModel):
     shared: bool = Field(
         default=False, description="Документ передан клиенту через share_document"
     )
+    origin: Literal["bank", "customer"] = "bank"
+    customer_facts: Optional[dict] = None
+    case_id: Optional[str] = None
+    purpose: Optional[str] = None
+    audience: Optional[str] = None
+    transmissible: Optional[bool] = None
+    version: Optional[str] = None
+    readiness: Optional[str] = None
+    allowed_channels: list[str] = Field(default_factory=list)
 
 
 class Subscription(BaseModel):
@@ -942,6 +1050,15 @@ class CashbackRules(BaseModel):
     categories: list[CashbackCategory] = Field(
         default_factory=list, description="Категории и ставки кешбэка"
     )
+    categories_history: list[dict] = Field(
+        default_factory=list, description="История категорий и ставок с датами действия"
+    )
+    cycles: list[dict] = Field(default_factory=list)
+    monthly_cap: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False)
+    cap_remaining_before_transaction: dict[str, float] = Field(
+        default_factory=dict,
+        description="Доступный остаток месячного лимита до конкретной покупки, без её собственных выплат",
+    )
     excluded_mcc: list[str] = Field(
         default_factory=list, description="MCC-коды, исключённые из начисления"
     )
@@ -966,6 +1083,9 @@ class Session(BaseModel):
 
 
 class BankingDB(DB):
+    reward_client_submissions: dict[str, dict] = Field(default_factory=dict)
+    reward_statement_registrations: dict[str, dict] = Field(default_factory=dict)
+    reward_statement_attempts: list[dict] = Field(default_factory=list, exclude=True)
     today: str = Field(description="Фиксированная текущая дата домена, ГГГГ-ММ-ДД")
     dispute_window_days: int = Field(
         default=120,
@@ -981,9 +1101,16 @@ class BankingDB(DB):
     cases: dict[str, Case] = Field(default_factory=dict)
     devices: dict[str, Device] = Field(default_factory=dict)
     promotions: dict[str, Promotion] = Field(default_factory=dict)
+    reward_contracts: dict[str, RewardContract] = Field(default_factory=dict)
+    promotion_activations: dict[str, PromotionActivation] = Field(default_factory=dict)
     statements: dict[str, Statement] = Field(default_factory=dict)
     limit_requests: dict[str, LimitRequest] = Field(default_factory=dict)
     documents: dict[str, Document] = Field(default_factory=dict)
+    document_contacts: dict[str, DocumentContact] = Field(default_factory=dict)
+    document_deliveries: dict[str, DocumentDelivery] = Field(default_factory=dict)
+    document_service_profiles: dict[str, DocumentServiceProfile] = Field(
+        default_factory=dict
+    )
     articles: dict[str, Article] = Field(default_factory=dict)
     client_answers: dict[str, list[ClientAnswer]] = Field(
         default_factory=dict,
@@ -1002,6 +1129,23 @@ class BankingDB(DB):
     deposits: dict[str, Deposit] = Field(default_factory=dict)
     loans: dict[str, Loan] = Field(default_factory=dict)
     cashback_rules: dict[str, CashbackRules] = Field(default_factory=dict)
+    cashback_adjustment_permissions: dict[str, dict] = Field(default_factory=dict)
+    cashback_settlements: dict[str, dict] = Field(default_factory=dict)
+    cashback_state_revisions: dict[str, int] = Field(default_factory=dict)
+    cashback_revision_states: dict[str, dict] = Field(default_factory=dict)
+    cashback_execution_profiles: dict[str, dict] = Field(default_factory=dict)
+    cashback_adjustment_operations: dict[str, dict] = Field(default_factory=dict)
+    reward_resolution_offer_updates: dict[str, dict] = Field(default_factory=dict)
+    reward_resolution_offers: dict[str, RewardResolutionOffer] = Field(
+        default_factory=dict
+    )
+    reward_resolution_preferences: dict[str, RewardResolutionPreferences] = Field(
+        default_factory=dict
+    )
+    reward_resolution_executions: dict[str, RewardResolutionExecution] = Field(
+        default_factory=dict
+    )
+    bank_operations: dict[str, dict] = Field(default_factory=dict)
     session: Session = Field(default_factory=Session, exclude=True)
 
     def get_statistics(self) -> dict:
@@ -1020,3 +1164,11 @@ class BankingDB(DB):
 
 
 ClientAnswer.model_rebuild()
+
+
+class FeeRefundState(RootModel[dict]):
+    """Observed fee reconciliation state."""
+
+
+class CashbackStateResult(RootModel[dict]):
+    """Structured cashback business facts, preserving numeric JSON types."""

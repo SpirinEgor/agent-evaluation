@@ -481,8 +481,16 @@ class TaskIssue(BaseModel):
 class ActionOrder(BaseModel):
     """Require one successful action witness before the first target attempt."""
 
+    target_item_ids: list[str] = Field(
+        default_factory=list,
+        description="Apply this dependency only to attempts whose items include one of these transaction_id values.",
+    )
     before_action_id: str
     after_action_id: str
+    target_argument_options: dict[str, list[Any]] = Field(
+        default_factory=dict,
+        description="Apply this causal edge only to target attempts with these argument values; absent values are None.",
+    )
     require_result_before_target: bool = Field(
         default=False,
         description=(
@@ -504,7 +512,16 @@ class ResultEvidenceSource(BaseModel):
 class ResultEvidence(BaseModel):
     """A fact read from a successful tool result, independent of the read route."""
 
+    target_argument_options: dict[str, list[Any]] = Field(
+        default_factory=dict,
+        description="Scope to target attempts whose argument paths contain an allowed value; paths support * for array members. All declared paths must match.",
+    )
+    target_item_ids: list[str] = Field(
+        default_factory=list,
+        description="Apply this dependency only to attempts whose items include one of these transaction_id values.",
+    )
     evidence_id: str = Field(min_length=1)
+    recoverable_result_statuses: list[str] = Field(default_factory=list)
     tool_names: list[str] = Field(min_length=1)
     record_id: str = Field(min_length=1)
     expected_fields: dict[str, object] = Field(min_length=1)
@@ -889,7 +906,12 @@ class EvaluationCriteria(BaseModel):
     See `docs/evaluation.md`.
     """
 
+    business_process_only: bool = Field(
+        default=False,
+        description="Grade banking effects and obligations; rejected API probes and protocol completion are diagnostics. Safety checks still inspect all outgoing calls.",
+    )
     completion_mode: Literal["legacy_reply", "completion_only"] = "legacy_reply"
+    cashback_state_policy: dict | None = None
 
     action_reward_scope: Literal["full_contract", "presence_and_order"] = Field(
         default="full_contract",

@@ -445,3 +445,33 @@ ERROR_SCENARIOS = {name: _missing_identity(name) for name in WRITE_ARGUMENTS}
 
 
 # The tool result is kept internal; no outgoing client call receives it.
+
+
+def cashback_investigation(env):
+    identify(env, "gromov_a_1187")
+    balances = {key: value.balance for key, value in env.tools.db.accounts.items()}
+    result = succeed(
+        env,
+        "create_cashback_investigation",
+        customer_id="gromov_a_1187",
+        program="standard_cashback",
+        amount=30,
+        items=[{"transaction_id": "txn_552290", "amount": 30}],
+    )
+    assert result["category"] == "cashback_investigation"
+    assert result["reward_items"] == [{"transaction_id": "txn_552290", "amount": 30}]
+    assert {
+        key: value.balance for key, value in env.tools.db.accounts.items()
+    } == balances
+
+
+SUCCESS_SCENARIOS["create_cashback_investigation"] = cashback_investigation
+WRITE_ARGUMENTS["create_cashback_investigation"] = {
+    "customer_id": "gromov_a_1187",
+    "program": "standard_cashback",
+    "amount": 30,
+    "items": [{"transaction_id": "txn_552290", "amount": 30}],
+}
+ERROR_SCENARIOS["create_cashback_investigation"] = _missing_identity(
+    "create_cashback_investigation"
+)

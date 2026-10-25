@@ -25,9 +25,21 @@ SYSTEMS = {
 }
 
 TOOL_OWNERS = {
+    "unlock_discoverable_agent_tool": "support",
+    "call_discoverable_agent_tool": "support",
+    "give_discoverable_user_tool": "support",
+    "submit_cashback_review": "crm",
+    "register_reward_statement": "loyalty",
+    "get_reward_statement_status": "loyalty",
+    "corpus_command": "knowledge",
     "find_customer": "crm",
     "get_customer_profile": "crm",
     "create_case": "crm",
+    "create_cashback_investigation": "crm",
+    "get_cashback_investigations": "crm",
+    "amend_cashback_investigation": "crm",
+    "get_bank_operation_status": "core_banking",
+    "get_bank_date": "core_banking",
     "open_card_loss_case": "crm",
     "notify_card_loss_case": "crm",
     "verify_identity": "identity",
@@ -76,6 +88,7 @@ TOOL_OWNERS = {
     "request_credit_holidays": "core_banking",
     "calculate": "core_banking",
     "refund_fee": "core_banking",
+    "get_fee_refund_state": "core_banking",
     "get_subscriptions": "servicing",
     "cancel_subscription": "servicing",
     "cancel_autopayment": "servicing",
@@ -84,10 +97,23 @@ TOOL_OWNERS = {
     "change_tariff": "servicing",
     "get_cashback_rules": "loyalty",
     "get_promotions": "loyalty",
+    "get_reward_contracts": "loyalty",
+    "get_promotion_activations": "loyalty",
     "grant_cashback": "loyalty",
+    "get_reward_resolution_offers": "loyalty",
+    "get_reward_resolution_components": "loyalty",
+    "execute_reward_resolution": "loyalty",
+    "get_cashback_adjustment_permissions": "loyalty",
+    "execute_cashback_adjustment": "loyalty",
+    "refresh_cashback_settlement": "loyalty",
+    "get_cashback_adjustment_status": "loyalty",
     "get_devices": "digital_access",
     "unblock_device": "digital_access",
     "get_documents": "documents",
+    "get_case_documents": "documents",
+    "get_document_status": "documents",
+    "get_document_delivery_contacts": "documents",
+    "deliver_case_document": "documents",
     "order_statement": "documents",
     "share_document": "documents",
     "unblock_operation": "risk",
@@ -117,6 +143,6 @@ def startup_policy() -> str:
     return (
         "# AGENTS.md\n\n"
         "Вы — агент банковской поддержки. Решите обращение клиента через подключённые MCP банковских систем.\n"
-        "Политики и справочные материалы доступны через MCP. Самостоятельно найдите применимые документы.\n"
+        "Политики и справочные материалы доступны через MCP. Самостоятельно найдите применимые документы. Имена специальных операций и клиентских действий указаны в документах; их схемы открываются через инструменты discovery.\n"
         "После выполнения работы и получения результатов вызовите done. Итоговый ответ клиенту не отправляйте. Структурированные запросы клиенту разрешены.\n"
     )

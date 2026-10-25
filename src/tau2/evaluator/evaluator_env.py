@@ -13,6 +13,7 @@ from tau2.data_model.message import (
 from tau2.data_model.simulation import DBCheck, EnvAssertionCheck, RewardInfo
 from tau2.data_model.tasks import Action, RewardType, Task
 from tau2.environment.environment import Environment
+from tau2.environment.reference_bindings import reference_arguments
 from tau2.evaluator.evaluator_base import EvaluatorBase
 from tau2.evaluator.trace_evidence import (
     ObservedCall,
@@ -94,10 +95,16 @@ def _reference_db_hashes(
                 message_history=list(message_history),
                 strict=strict_replay,
             )
+            received = {}
             for action, base_arguments in zip(actions, arguments_route):
                 arguments = {**base_arguments, **overrides.get(action.action_id, {})}
+                # Invalid received-result bindings invalidate the reference itself.
+                # Never turn them into a partial canonical end-state hash.
+                arguments = reference_arguments(
+                    action, arguments, criteria.result_argument_bindings, received
+                )
                 try:
-                    gold_environment.make_tool_call(
+                    received[action.action_id] = gold_environment.make_tool_call(
                         tool_name=action.name,
                         requestor=action.requestor,
                         **arguments,

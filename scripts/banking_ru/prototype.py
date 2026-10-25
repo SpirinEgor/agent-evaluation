@@ -1,0 +1,655 @@
+"""Fast, fail-closed banking prototype funnel. Only `probe` calls a model."""
+
+import argparse
+import asyncio
+import gzip
+import hashlib
+import json
+import os
+import re
+import shutil
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+import urllib.request
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def read(path):
+    """Read plain or compressed author evidence."""
+    path = Path(path)
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as stream:
+        return json.load(stream)
+
+
+def write(path, value):
+    """Persist a phase receipt; never overwrite model attempt directories."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n")
+
+
+def sha(path):
+    """Hash the exact bytes of an input or evidence file."""
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def hash_files(paths):
+    """Fingerprint explicit inputs; exclude disposable Python caches only."""
+    result = {}
+    for path in map(Path, paths):
+        if not path.exists():
+            raise ValueError(f"Missing input: {path}")
+        for item in sorted(path.rglob("*")) if path.is_dir() else [path]:
+            if (
+                "__pycache__" in item.parts
+                or ".pytest_cache" in item.parts
+                or item.suffix == ".pyc"
+            ):
+                continue
+            if item.is_symlink():
+                raise ValueError(f"Symlink input is not permitted: {item}")
+            if item.is_file():
+                result[str(item.absolute())] = sha(item)
+    return result
+
+
+def path_for(value):
+    return ROOT / value
+
+
+def inputs(spec):
+    paths = [path_for(p) for p in spec["inputs"]]
+    paths += [path_for(spec["data_dir"]), path_for(spec["solution_contract"])]
+    boundary = spec["boundary"]
+    paths += [path_for(boundary[k]) for k in ["receipt", "anchor_version"]]
+    paths += [
+        path_for(boundary["receipt"]).parent / n
+        for n in ["image.json", "cli-request.json"]
+    ]
+    files = hash_files(paths)
+    files["SPEC"] = hashlib.sha256(
+        json.dumps(spec, sort_keys=True).encode()
+    ).hexdigest()
+    return files
+
+
+def fingerprint(files):
+    return hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
+
+
+def current(spec, out):
+    sealed = read(out / "seal.json")
+    if sealed["files"] != inputs(spec):
+        raise ValueError(
+            "Inputs changed after seal; create a new candidate, do not reuse gates"
+        )
+    return sealed["fingerprint"]
+
+
+def check_control(path, expected):
+    """Check actual HALF/FULL DB×ENV×ACTION, not a test process exit code."""
+    report = read(path)
+    for mode in ["half", "full"]:
+        result = report[mode]
+        if set(result["reward_basis"]) != {"DB", "ENV_ASSERTION", "ACTION"}:
+            raise ValueError(f"{path}: incomplete reward basis in {mode}")
+        values = result["reward_breakdown"]
+        product = values["DB"] * values["ENV_ASSERTION"] * values["ACTION"]
+        if result["reward"] != expected or product != expected:
+            raise ValueError(
+                f"{path}: incorrect {mode} grade: {result['reward']}, {values}"
+            )
+
+
+def leak_hits(surfaces, private_tokens):
+    """A finite leak screen; physical isolation is a separate mandatory gate."""
+    patterns = [
+        r"solution-contracts",
+        r"Solution Contract",
+        r"compatibility_certificates",
+        r"bank2_resolution_oracle",
+        r"AUTHOR_ONLY_[A-Za-z0-9_-]+",
+    ]
+    patterns += [re.escape(t) for t in private_tokens if t]
+    return [
+        {"surface": name, "pattern": pattern}
+        for name, body in surfaces.items()
+        for pattern in patterns
+        if re.search(pattern, body, re.I)
+    ]
+
+
+def record_outcome(record):
+    """Separate observed zeroes from confirmed substantive model failures."""
+    if record.get("confirmed_external_refusal"):
+        return "unreviewed_zero"
+    if record.get("technical_failure") or record.get("classification", "").startswith(
+        "invalid_"
+    ):
+        return "technical_failure"
+    if record.get("state", {}).get("status") != "done":
+        return "technical_failure"
+    return "success" if record.get("final_reward") == 1 else "unreviewed_zero"
+
+
+def decision(attempts):
+    outcomes = [a["outcome"] for a in attempts]
+    if "false_zero" in outcomes:
+        return "repair_evaluator"
+    if "success" in outcomes:
+        return "retire_candidate"
+    if "unreviewed_zero" in outcomes:
+        return "audit_required"
+    if outcomes.count("substantive_failure") >= 3:
+        return "confirmation_ready"
+    if "substantive_failure" in outcomes:
+        return "repeat_unchanged"
+    return "inconclusive"
+
+
+def attempts(out):
+    result = []
+    for folder in sorted((out / "attempts").glob("*")):
+        if not folder.is_dir():
+            continue
+        receipt = folder / "outcome.json"
+        result.append(
+            read(receipt)
+            if receipt.exists()
+            else {"index": folder.name, "outcome": "unfinished"}
+        )
+    return result
+
+
+def allow_attempt(previous, maximum):
+    if len(previous) >= maximum:
+        raise ValueError("Attempt budget exhausted; every started attempt counts")
+    if previous and decision(previous) != "repeat_unchanged":
+        raise ValueError(
+            "Repeat requires audited substantive failure; success retires the candidate"
+        )
+
+
+def boundary_check(spec):
+    """Reuse real apply_patch/CLI-stub proof only for unchanged runtime and image."""
+    b = spec["boundary"]
+    receipt = read(path_for(b["receipt"]))
+    flags = [
+        "host_boundary_pass",
+        "apply_patch_confined_to_container",
+        "no_host_mounts",
+        "external_tools_disabled",
+        "instructions_and_skills_not_in_request",
+    ]
+    if not all(receipt.get(k) is True for k in flags):
+        raise ValueError("Unverified model boundary")
+    parent = path_for(b["receipt"]).parent
+    if read(parent / "image.json")["id"] != spec["model"]["image"]:
+        raise ValueError("Image differs from verified preflight")
+    if (
+        "--dangerously-bypass-approvals-and-sandbox"
+        not in read(parent / "cli-request.json")["command"]
+    ):
+        raise ValueError("Preflight did not verify required full-access CLI")
+    anchor = read(path_for(b["anchor_version"]))["files"]
+    names = [k for k in anchor if k.startswith("src/tau2/")] + [
+        "scripts/banking_ru/run_codex_harness.py",
+        "scripts/banking_ru/codex_container.py",
+    ]
+    if not names or any(sha(ROOT / k) != anchor[k] for k in names):
+        raise ValueError(
+            "Runtime/harness changed: a fresh physical preflight is required"
+        )
+    return {
+        "passed": True,
+        "files_verified": len(names),
+        "image": spec["model"]["image"],
+    }
+
+
+def seal(spec, out):
+    roles = {c["role"] for c in spec["controls"]}
+    if not {"positive", "alternative", "noop", "negative"} <= roles:
+        raise ValueError(
+            "Reference, alternative, no-op and relevant wrong paths are required"
+        )
+    if len({c["name"] for c in spec["controls"]}) != len(spec["controls"]):
+        raise ValueError("Control names must be distinct")
+    if any(
+        c["expected"] != int(c["role"] in {"positive", "alternative"})
+        for c in spec["controls"]
+    ):
+        raise ValueError("Invalid control expectation")
+    if not spec["hypothesis"] or not spec["references"] or not spec["unique_outcome"]:
+        raise ValueError("Declare the hypothesis, primary references and outcome proof")
+    if any(
+        not r["url"].startswith("https://") or not r["mechanism"]
+        for r in spec["references"]
+    ):
+        raise ValueError("References need actual URLs and transferable mechanisms")
+    if (out / "seal.json").exists():
+        raise ValueError("A sealed candidate is immutable; use a new output directory")
+    files = inputs(spec)
+    write(out / "spec.json", spec)
+    write(
+        out / "seal.json",
+        {
+            "fingerprint": fingerprint(files),
+            "files": files,
+            "created_at": time.time(),
+            "model_calls": 0,
+        },
+    )
+
+
+def validate(spec, out):
+    fp = current(spec, out)
+    substitutions = {
+        "python": sys.executable,
+        "repo": str(ROOT),
+        "out": str(out),
+        "data": str(path_for(spec["data_dir"])),
+    }
+    command = [arg.format(**substitutions) for arg in spec["validation_command"]]
+    env = os.environ.copy()
+    env.update(BANKING_PROTOTYPE_DATA_DIR=substitutions["data"], USE_LANGFUSE="false")
+    env[spec["evidence_env"]] = str(out / "controls")
+    started = time.time()
+    receipt = {"fingerprint": fp, "passed": False, "command": command, "model_calls": 0}
+    try:
+        with (out / "validation.log").open("w") as log:
+            subprocess.run(
+                command,
+                cwd=ROOT,
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                timeout=spec.get("validation_timeout", 600),
+                check=True,
+            )
+        for control in spec["controls"]:
+            check_control(
+                out / "controls" / (control["name"] + ".json.gz"), control["expected"]
+            )
+        current(spec, out)
+        receipt.update(passed=True, controls=spec["controls"])
+    except Exception as exc:
+        receipt["error"] = str(exc)
+        raise
+    finally:
+        receipt["elapsed_seconds"] = round(time.time() - started, 3)
+        write(out / "validation.json", receipt)
+
+
+def surface_child(spec, out):
+    """Runs only in an author subprocess with a separate throwaway bank session."""
+    from run_codex_harness import build_prompt
+
+    from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.platform.session import PlatformSession
+
+    task = next(t for t in get_tasks() if t.id == spec["task_id"])
+    session = PlatformSession(
+        task, get_environment, max_calls=100, max_errors=20, mcp_layout="systems"
+    )
+    schemas = [t.model_dump(mode="json") for t in session.mcp_tools]
+    startup = session.policy
+    single = session.env.get_policy()
+    corpus = session.env.tools.corpus
+    bodies = {name: corpus.read(name)["content"] for name in corpus.documents}
+    visible = {
+        "startup": startup,
+        "single_startup": single,
+        "schemas": json.dumps(schemas),
+        "prompt": build_prompt(policy=startup, ticket=task.ticket),
+        **bodies,
+    }
+    hits = leak_hits(visible, spec.get("private_tokens", []))
+    for token in spec.get("forbidden_startup_tokens", []):
+        if token in startup or token in single or token in json.dumps(schemas):
+            hits.append({"surface": "startup_or_schema", "token": token})
+    hidden = [
+        "/tasks.json",
+        "/db.json",
+        "/scripts/banking_ru/bank2_resolution_oracle.py",
+        str(path_for(spec["solution_contract"])),
+        str(ROOT / "AGENTS.md"),
+        str(out / "AUTHOR_ONLY_canary.txt"),
+    ]
+    denied = {p: session.call("file_read", {"path": p}).is_error for p in hidden}
+    canary = (out / "AUTHOR_ONLY_canary.txt").read_text().strip()
+    searched = session.call(
+        "file_search", {"pattern": canary, "root": "/", "limit": 200}
+    )
+    search_result = (
+        json.loads(searched.content[0].text) if not searched.is_error else None
+    )
+    search_clean = search_result is not None and search_result.get("matches") == []
+    write(
+        out / "surface-packet.json",
+        {
+            "startup": startup,
+            "single_startup": single,
+            "prompt": visible["prompt"],
+            "schemas": schemas,
+            "corpus": [
+                {"path": n, "sha256": hashlib.sha256(b.encode()).hexdigest()}
+                for n, b in bodies.items()
+            ],
+        },
+    )
+    write(
+        out / "surface-result.json",
+        {
+            "passed": not hits and all(denied.values()) and search_clean,
+            "leak_hits": hits,
+            "hidden_reads_denied": denied,
+            "canary_not_searchable": search_clean,
+            "limits": "Finite content screen and MCP probes; physical CLI boundary checked separately",
+            "model_calls": 0,
+        },
+    )
+
+
+def surface(spec, out):
+    fp = current(spec, out)
+    boundary = boundary_check(spec)
+    (out / "AUTHOR_ONLY_canary.txt").write_text(
+        "AUTHOR_ONLY_" + os.urandom(16).hex() + "\n"
+    )
+    with tempfile.TemporaryDirectory(prefix="bank-prototype-surface-") as temp:
+        root = Path(temp) / "data"
+        shutil.copytree(path_for(spec["data_dir"]), root / "tau2/domains/banking_ru")
+        env = os.environ.copy()
+        env.update(
+            TAU2_DATA_DIR=str(root), PYTHONPATH=str(ROOT / "src"), USE_LANGFUSE="false"
+        )
+        with (out / "surface.log").open("w") as log:
+            subprocess.run(
+                [sys.executable, __file__, "_surface", "--out", str(out)],
+                cwd=ROOT,
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                check=True,
+                timeout=90,
+            )
+    result = read(out / "surface-result.json")
+    result.update(fingerprint=fp, boundary=boundary)
+    write(out / "surface.json", result)
+    current(spec, out)
+    if not result["passed"]:
+        raise ValueError("Visible surface or hidden-read probe failed")
+
+
+async def probe(spec, out):
+    """Reuse supported harness with a fresh bank server, session and isolated container."""
+    fp = current(spec, out)
+    for phase in ["validation", "surface"]:
+        receipt = read(out / (phase + ".json"))
+        if not receipt["passed"] or receipt["fingerprint"] != fp:
+            raise ValueError(f"Missing/stale {phase} gate")
+    boundary_check(spec)
+    previous = attempts(out)
+    allow_attempt(previous, spec["max_attempts"])
+    folder = out / "attempts" / f"{len(previous) + 1:02}"
+    folder.mkdir(parents=True, exist_ok=False)
+    write(
+        folder / "manifest.json",
+        {
+            "fingerprint": fp,
+            "started_at": time.time(),
+            "model": spec["model"],
+            "new_server_session_container": True,
+        },
+    )
+    from run_codex_harness import build_prompt, run_one_attempt
+
+    from tau2.platform.client import PlatformClient
+
+    record = None
+    try:
+        with tempfile.TemporaryDirectory(prefix="bank-prototype-model-") as temp:
+            root = Path(temp)
+            shutil.copytree(
+                path_for(spec["data_dir"]), root / "data/tau2/domains/banking_ru"
+            )
+            work = root / "work"
+            work.mkdir()
+            with socket.socket() as sock:
+                sock.bind(("127.0.0.1", 0))
+                port = sock.getsockname()[1]
+            model = spec["model"]
+            env = os.environ.copy()
+            env.update(
+                TAU2_DATA_DIR=str(root / "data"),
+                PYTHONPATH=str(ROOT / "src"),
+                USE_LANGFUSE="false",
+            )
+            command = [
+                sys.executable,
+                "-m",
+                "tau2.platform",
+                "--domain",
+                "banking_ru",
+                "--split",
+                "base",
+                "--mcp-layout",
+                "systems",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+                "--max-calls",
+                str(model["max_calls"]),
+                "--max-errors",
+                str(model["max_errors"]),
+                "--results-dir",
+                str(folder / "platform"),
+            ]
+            write(folder / "server-command.json", command)
+            with (folder / "server.log").open("w") as log:
+                server = subprocess.Popen(
+                    command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT
+                )
+                try:
+                    for _ in range(200):
+                        if server.poll() is not None:
+                            raise RuntimeError("Bank server exited before readiness")
+                        try:
+                            with urllib.request.urlopen(
+                                f"http://127.0.0.1:{port}/health", timeout=0.3
+                            ):
+                                break
+                        except OSError:
+                            await asyncio.sleep(0.1)
+                    else:
+                        raise RuntimeError("Bank server readiness timeout")
+                    client = PlatformClient(f"http://127.0.0.1:{port}")
+                    original = client.open
+
+                    async def capture(*args, **kwargs):
+                        opened = await original(*args, **kwargs)
+                        (folder / "prompt.txt").write_text(
+                            build_prompt(policy=opened.policy, ticket=opened.ticket)
+                        )
+                        (folder / "startup.txt").write_text(opened.policy)
+                        async with client.connect_systems(opened) as systems:
+                            schemas = {
+                                name: (await tool.list_tools()).model_dump(mode="json")
+                                for name, tool in systems.items()
+                            }
+                        write(folder / "schemas.json", schemas)
+                        return opened
+
+                    client.open = capture
+                    try:
+                        record = await run_one_attempt(
+                            client=client,
+                            task_id=spec["task_id"],
+                            model=model["name"],
+                            effort=model["effort"],
+                            timeout_seconds=model["timeout_seconds"],
+                            work_root=work,
+                            mcp_layout="systems",
+                            container_image=model["image"],
+                        )
+                    finally:
+                        await client._http.aclose()
+                finally:
+                    server.terminate()
+                    try:
+                        server.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        server.kill()
+                        server.wait()
+        write(folder / "record.json", record)
+        current(spec, out)
+        write(
+            folder / "outcome.json",
+            {"outcome": record_outcome(record), "fingerprint": fp},
+        )
+    except Exception as exc:
+        if record is not None:
+            write(folder / "record.json", record)
+        write(
+            folder / "outcome.json",
+            {"outcome": "technical_failure", "error": str(exc), "fingerprint": fp},
+        )
+        raise
+
+
+def review(spec, out, index, evidence):
+    """Attach an independent, explicit trajectory verdict; no keyword judge."""
+    fp = current(spec, out)
+    folder = out / "attempts" / f"{index:02}"
+    report = read(evidence)
+    if report["fingerprint"] != fp or report["record_sha256"] != sha(
+        folder / "record.json"
+    ):
+        raise ValueError("Review is not bound to this candidate and attempt")
+    if report["verdict"] not in [
+        "substantive_failure",
+        "false_zero",
+        "technical_failure",
+        "success",
+    ]:
+        raise ValueError("Unknown audit verdict")
+    if not report["reason"] or not report["evidence_files"]:
+        raise ValueError("Audit needs a reason and actual evidence files")
+    hashes = hash_files([path_for(p) for p in report["evidence_files"]])
+    if not hashes:
+        raise ValueError("Empty audit evidence")
+    if (
+        report["verdict"] == "substantive_failure"
+        and record_outcome(read(folder / "record.json")) != "unreviewed_zero"
+    ):
+        raise ValueError("Cannot relabel a timeout or success as a substantive failure")
+    write(
+        folder / "review.json",
+        {**report, "evidence_hashes": hashes, "review_file_sha256": sha(evidence)},
+    )
+    write(folder / "outcome.json", {"outcome": report["verdict"], "fingerprint": fp})
+
+
+def compress_verified(path):
+    """Delete an original log only after lossless compression and hash verification."""
+    path = Path(path)
+    target = path.with_suffix(path.suffix + ".gz")
+    if target.exists():
+        raise ValueError(f"Existing compressed evidence: {target}")
+    digest = sha(path)
+    with path.open("rb") as src, gzip.open(target, "wb") as dst:
+        shutil.copyfileobj(src, dst)
+    with gzip.open(target, "rb") as stream:
+        if hashlib.sha256(stream.read()).hexdigest() != digest:
+            raise ValueError("Compressed evidence differs")
+    before = path.stat().st_size
+    path.unlink()
+    return {
+        "path": str(target),
+        "sha256": digest,
+        "before_bytes": before,
+        "after_bytes": target.stat().st_size,
+    }
+
+
+def cleanup(out):
+    if any(a["outcome"] == "unfinished" for a in attempts(out)):
+        raise ValueError("An unfinished attempt must be inspected before cleanup")
+    rows = []
+    for log in out.glob("attempts/*/server.log"):
+        rows.append(compress_verified(log))
+    temp = out / "check-tmp"
+    if temp.exists():
+        shutil.rmtree(temp)
+    write(
+        out / f"cleanup-{time.time_ns()}.json",
+        {"operations": rows, "raw_attempts_retained": True},
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "phase",
+        choices=[
+            "seal",
+            "validate",
+            "surface",
+            "_surface",
+            "probe",
+            "review",
+            "status",
+            "cleanup",
+        ],
+    )
+    parser.add_argument("--spec", type=Path)
+    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--attempt", type=int)
+    parser.add_argument("--evidence", type=Path)
+    args = parser.parse_args()
+    out = args.out.resolve()
+    spec = read(args.spec) if args.phase == "seal" else read(out / "spec.json")
+    if args.phase == "seal":
+        seal(spec, out)
+    elif args.phase == "validate":
+        validate(spec, out)
+    elif args.phase == "surface":
+        surface(spec, out)
+    elif args.phase == "_surface":
+        surface_child(spec, out)
+    elif args.phase == "probe":
+        asyncio.run(probe(spec, out))
+    elif args.phase == "review":
+        review(spec, out, args.attempt, args.evidence)
+    elif args.phase == "cleanup":
+        cleanup(out)
+    previous = attempts(out)
+    print(
+        json.dumps(
+            {
+                "phase": args.phase,
+                "decision": decision(previous),
+                "attempts": previous,
+                "artifact_bytes": sum(
+                    p.stat().st_size for p in out.rglob("*") if p.is_file()
+                ),
+            },
+            ensure_ascii=False,
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()

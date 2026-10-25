@@ -9,6 +9,7 @@ from typing import Optional
 from pydantic import RootModel
 
 from tau2.domains.banking_ru.data_model import BankingDB
+from tau2.domains.banking_ru.discovery_workflow import DiscoveryBankingTools
 from tau2.domains.banking_ru.file_corpus import FileCorpus
 from tau2.domains.banking_ru.tools import BankingTools
 from tau2.domains.banking_ru.utils import BANKING_RU_DB_PATH
@@ -20,7 +21,7 @@ class FileResponse(RootModel[dict]):
     """Preserve JSON numbers/bools through Environment.to_json_str."""
 
 
-class FileBankingTools(BankingTools):
+class FileBankingTools(DiscoveryBankingTools, BankingTools):
     """Unchanged banking operations with a separate read-only corpus."""
 
     def __init__(self, db: BankingDB, corpus: FileCorpus):
@@ -72,7 +73,7 @@ class FileBankingTools(BankingTools):
 
     @is_tool(ToolType.READ)
     def file_read(self, path: str) -> FileResponse:
-        """Read an entire corpus file with revision, SHA256 and completeness.
+        """Read an entire article from the bank knowledge corpus.
 
         Args:
             path: Canonical absolute virtual file path obtained from the corpus.

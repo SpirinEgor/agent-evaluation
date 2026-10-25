@@ -242,3 +242,20 @@ def test_alternative_source_keeps_exact_receipt_and_first_attempt(mode, variant)
     assert bool(
         _result_evidence_calls(observed(batches, mode), [action], evidence)
     ) is (variant == "received")
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_nested_foreign_selector_rejected_even_on_error(mode):
+    policy = POLICY.model_copy(deep=True)
+    policy.tool_arguments["review"] = {"items.*.transaction_id": "accounts"}
+    auth, auth_result = pair("verify_identity", {"customer_id": "own"}, id="auth")
+    call, result = pair(
+        "review",
+        {"items": [{"transaction_id": "foreign", "amount": 1}]},
+        id="nested",
+        error=True,
+    )
+    failures = _tool_access_failures(
+        observed([([auth], [auth_result]), ([call], [result])], mode), [AUTH], policy
+    )
+    assert any(item["reason"] == "foreign_owner" for item in failures)

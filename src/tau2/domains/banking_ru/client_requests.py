@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from tau2.domains.banking_ru.closure_signature import closure_document, document_hash
-from tau2.domains.banking_ru.data_model import Customer
+from tau2.domains.banking_ru.data_model import CashbackInvestigationItem, Customer
 from tau2.domains.banking_ru.file_pilot import FileBankingTools, FileResponse
 from tau2.domains.banking_ru.final_wave import FinalWaveAssertions
 from tau2.domains.banking_ru.first_five import FirstFiveAssertions
@@ -87,6 +87,75 @@ class OperationConfirmationRequest(BaseModel):
     amount: float = Field(gt=0, allow_inf_nan=False)
 
 
+class TransactionSelectionRequest(BaseModel):
+    """Ask the client for the date or receipt of an ambiguous purchase."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["transaction_selection"]
+    merchant: str = Field(min_length=1)
+    amount: float = Field(gt=0, allow_inf_nan=False)
+    date: str | None = None
+    receipt: str | None = None
+
+
+class CaseClarificationRequest(BaseModel):
+    """Select a declared client fact or consent by topic, never by prose matching."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["case_clarification"]
+    topic: Literal[
+        "partial_execution",
+        "third_party_message",
+        "existing_case",
+        "third_party_code",
+        "promotion_activation",
+        "request_scope",
+        "resolution_preferences",
+    ]
+
+
+class ClientActionRequest(BaseModel):
+    """Execute a previously given deterministic customer action."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["client_action"]
+    tool_name: str
+    arguments: dict
+
+
+class RewardResolutionConfirmationRequest(BaseModel):
+    """Present a concrete settlement package for consent, not bank approval."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["reward_resolution_confirmation"]
+    offer_id: str
+    offer_version: int
+    payouts: list[CashbackInvestigationItem] = Field(min_length=1)
+    total_amount: float = Field(gt=0, allow_inf_nan=False)
+    case_id: str
+    resulting_claims: list[CashbackInvestigationItem] = Field(min_length=1)
+    state_revision: int
+    component_ids: list[str] = Field(default_factory=list)
+
+
+class FeeRefundConfirmationRequest(BaseModel):
+    """Present an explicit set of fee corrections for client consent."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["fee_refund_confirmation"]
+    card_id: str = Field(min_length=1)
+    refunds: list[CashbackInvestigationItem] = Field(min_length=1)
+    total_amount: float = Field(gt=0, allow_inf_nan=False)
+    state_version: str | None = None
+    state_versions: dict[str, str] = Field(default_factory=dict)
+
+
+class DocumentChannelConfirmationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["document_channel_confirmation"]
+    contact_id: str = Field(min_length=1)
+
+
 class AccountClosureSignatureRequest(BaseModel):
     """Present the account-closure document in the declared protected app."""
 
@@ -108,6 +177,7 @@ class LoanRepaymentConfirmationRequest(BaseModel):
 
 ClientRequest = Annotated[
     IdentityRequest
+    | ClientActionRequest
     | TariffChangeConfirmationRequest
     | RestructuringDocumentsRequest
     | InternetOperationsConfirmationRequest
@@ -117,7 +187,12 @@ ClientRequest = Annotated[
     | UtilityPaymentAccountsRequest
     | OperationConfirmationRequest
     | LoanRepaymentConfirmationRequest
-    | AccountClosureSignatureRequest,
+    | AccountClosureSignatureRequest
+    | TransactionSelectionRequest
+    | CaseClarificationRequest
+    | RewardResolutionConfirmationRequest
+    | FeeRefundConfirmationRequest
+    | DocumentChannelConfirmationRequest,
     Field(discriminator="type"),
 ]
 REQUEST_ADAPTER = TypeAdapter(ClientRequest)
@@ -194,6 +269,17 @@ class StructuredIdentityBankingTools(
         Для распознавания своих устройств выберите device_recognition без question
         после получения get_devices. Получите data.items с id и recognized до
         регистрации suspicious_device; неизвестное устройство не разблокируйте.
+        Для уточнения покупки выберите transaction_selection с merchant и amount.
+        Ответ содержит data.id, дату и чек выбранной клиентом операции.
+        Для уточнения согласия на допустимую часть, существующего дела или
+        обстоятельств сообщения третьего лица используйте case_clarification
+        с topic из схемы. Это факты клиента, не банковские полномочия и не identity.
+        Для согласия на набор возвратов выберите fee_refund_confirmation с card_id,
+        refunds (transaction_id и amount каждого возврата) и total_amount.
+        Ответ confirmed содержит confirmation_id для последующих refund_fee.
+        state_versions связывает согласие с версией каждой операции.
+        document_channel_confirmation с contact_id моделирует подтверждение
+        контакта клиентом; банковский статус доступен в контактах сервиса.
         Все вопросы формируются по явному типу запроса. Свободные question и
         clarification не поддерживаются; итоговый клиентский ответ запрещён.
 
@@ -214,6 +300,245 @@ class StructuredIdentityBankingTools(
         """
         self._get_customer(customer_id)
         request = REQUEST_ADAPTER.validate_python(request)
+        if isinstance(request, ClientActionRequest):
+            if question or any(
+                v is not None
+                for v in [transaction_id, loan_id, account_id, payout_account_id]
+            ):
+                raise ValueError("ERR_INVALID_CLIENT_ACTION")
+            return FileResponse(
+                self.perform_customer_action(
+                    customer_id, request.tool_name, request.arguments
+                )
+            )
+        if isinstance(request, RewardResolutionConfirmationRequest):
+            self._require_verified(customer_id)
+            if question or any(
+                v is not None
+                for v in (transaction_id, loan_id, account_id, payout_account_id)
+            ):
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: Согласие принимает только пакет request"
+                )
+            from tau2.domains.banking_ru.reward_resolution import confirm
+
+            return FileResponse(confirm(self, customer_id, request))
+        if isinstance(request, CaseClarificationRequest):
+            self._require_verified(customer_id)
+            if question or any(
+                value is not None
+                for value in [transaction_id, loan_id, account_id, payout_account_id]
+            ):
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: case_clarification принимает только topic"
+                )
+            if request.topic == "resolution_preferences":
+                preferences = self.db.reward_resolution_preferences.get(customer_id)
+                return FileResponse(
+                    dict(
+                        customer_id=customer_id,
+                        request_type=request.type,
+                        status="answered" if preferences else "unknown",
+                        data=preferences.model_dump() if preferences else None,
+                    )
+                )
+            sources = [
+                answer
+                for answer in self.db.client_answers.get(customer_id, [])
+                if answer.clarification_topic == request.topic
+            ]
+            if not sources:
+                return FileResponse({"status": "unknown", "data": None})
+            if len(sources) != 1:
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: неоднозначный фиксированный ответ"
+                )
+            return FileResponse(
+                {
+                    "customer_id": customer_id,
+                    "request_type": request.type,
+                    "status": "answered",
+                    "data": {"topic": request.topic},
+                    "text": sources[0].answer,
+                }
+            )
+        if isinstance(request, DocumentChannelConfirmationRequest):
+            self._require_verified(customer_id)
+            contact = self.db.document_contacts.get(request.contact_id)
+            if contact is None or contact.customer_id != customer_id:
+                raise ValueError("ERR_FOREIGN_RESOURCE: Контакт не принадлежит клиенту")
+            sources = [
+                a.document_channel_confirmation
+                for a in self.db.client_answers.get(customer_id, [])
+                if a.document_channel_confirmation
+                and a.document_channel_confirmation.get("contact_id") == contact.id
+            ]
+            if len(sources) != 1:
+                return FileResponse({"status": "unsupported_context", "data": None})
+            if sources[0].get("confirmed"):
+                contact.verified = True
+            return FileResponse(
+                {
+                    "customer_id": customer_id,
+                    "request_type": request.type,
+                    "status": "confirmed" if contact.verified else "failed",
+                    "contact_id": contact.id,
+                }
+            )
+        if isinstance(
+            request, (TransactionSelectionRequest, FeeRefundConfirmationRequest)
+        ):
+            self._require_verified(customer_id)
+            if question or any(
+                value is not None
+                for value in (transaction_id, loan_id, account_id, payout_account_id)
+            ):
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: запрос формируется из структурированных данных"
+                )
+            if isinstance(request, TransactionSelectionRequest):
+                answers = [
+                    a.transaction_selection
+                    for a in self.db.client_answers.get(customer_id, [])
+                    if a.transaction_selection is not None
+                    and a.transaction_selection.get("merchant", "").casefold()
+                    == request.merchant.casefold()
+                    and a.transaction_selection.get("amount") == request.amount
+                    and (
+                        request.date is None
+                        or a.transaction_selection.get("date") == request.date
+                    )
+                    and (
+                        request.receipt is None
+                        or a.transaction_selection.get("receipt") == request.receipt
+                    )
+                ]
+                if len(answers) != 1:
+                    return FileResponse(
+                        {
+                            "status": "unknown",
+                            "data": None,
+                            "request_type": request.type,
+                        }
+                    )
+                return FileResponse(
+                    {
+                        "answer_id": "transaction-selection-answer-1",
+                        "customer_id": customer_id,
+                        "status": "answered",
+                        "request_type": request.type,
+                        "question": f"Уточните дату или чек покупки {request.merchant} на {request.amount:g} ₽.",
+                        "data": answers[0],
+                    }
+                )
+            card = self._get_card(request.card_id)
+            if card.customer_id != customer_id:
+                raise ValueError("ERR_INVALID_ARGUMENT: карта другого клиента")
+            refunds = sorted(
+                [item.model_dump() for item in request.refunds],
+                key=lambda x: x["transaction_id"],
+            )
+            if (
+                len({item["transaction_id"] for item in refunds}) != len(refunds)
+                or round(sum(item["amount"] for item in refunds), 2)
+                != request.total_amount
+            ):
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: сумма не соответствует набору возвратов"
+                )
+            for item in refunds:
+                transaction = self._get_transaction(item["transaction_id"])
+                if (
+                    transaction.customer_id != customer_id
+                    or transaction.card_id != request.card_id
+                ):
+                    raise ValueError(
+                        "ERR_INVALID_ARGUMENT: возврат относится к другой карте"
+                    )
+            answers = [
+                a.fee_refund_confirmation
+                for a in self.db.client_answers.get(customer_id, [])
+                if a.fee_refund_confirmation is not None
+                and a.fee_refund_confirmation.get("card_id") == request.card_id
+                and a.fee_refund_confirmation.get("total_amount")
+                == request.total_amount
+                and sorted(
+                    a.fee_refund_confirmation.get("refunds", []),
+                    key=lambda x: x["transaction_id"],
+                )
+                == refunds
+            ]
+            if len(answers) != 1:
+                return FileResponse(
+                    {
+                        "status": "unsupported_context",
+                        "data": None,
+                        "request_type": request.type,
+                    }
+                )
+            approved = answers[0].get("approved_refunds", refunds)
+            data = {
+                **answers[0],
+                "customer_id": customer_id,
+                "refunds": approved,
+                "state_version": request.state_version,
+                "state_versions": request.state_versions,
+                "requested_total_amount": request.total_amount,
+                "total_amount": round(sum(item["amount"] for item in approved), 2),
+            }
+            if request.state_versions and set(request.state_versions) != set(
+                item["transaction_id"] for item in approved
+            ):
+                raise ValueError("ERR_INVALID_ARGUMENT: Нужны версии точного набора")
+            if request.state_version is not None or request.state_versions:
+                if any(
+                    self._fee_state_version(
+                        self._get_transaction(item["transaction_id"])
+                    )
+                    != request.state_versions.get(
+                        item["transaction_id"], request.state_version
+                    )
+                    for item in approved
+                ):
+                    raise ValueError(
+                        "ERR_INVALID_ARGUMENT: состояние возврата изменилось"
+                    )
+            for item in approved:
+                transaction = self._get_transaction(item["transaction_id"])
+                if (
+                    transaction.fee_refund_update
+                    and self._get_transaction(
+                        transaction.fee_refund_update["settlement_transaction_id"]
+                    ).status
+                    == "processing"
+                ):
+                    data["update_available"] = True
+            if not data.get("confirmed"):
+                return FileResponse(
+                    {"status": "declined", "data": data, "request_type": request.type}
+                )
+            for cid, previous in self._fee_refund_confirmations.items():
+                if previous == data:
+                    break
+            else:
+                cid = (
+                    f"fee-refund-confirmation-{len(self._fee_refund_confirmations) + 1}"
+                )
+                self._fee_refund_confirmations[cid] = data
+            return FileResponse(
+                {
+                    "confirmation_id": cid,
+                    "status": "partial_confirmed"
+                    if approved != refunds
+                    else "confirmed",
+                    "update_available": data.get("update_available", False),
+                    "data": data,
+                    "customer_id": customer_id,
+                    "request_type": request.type,
+                    "question": f"Согласны на возвраты по карте *{card.last4} общей суммой {request.total_amount:g} ₽?",
+                    "presented_refunds": refunds,
+                }
+            )
         if isinstance(request, AccountClosureSignatureRequest):
             return self._sign_closure(
                 customer_id,

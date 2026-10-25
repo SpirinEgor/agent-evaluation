@@ -69,6 +69,16 @@ def _action_matches(
     ) and all(re.search(pattern, content) for pattern in action.result_patterns)
 
 
+def _business_observed(criteria, observed):
+    """Exclude rejected no-effect probes only from business constraints.
+
+    Callers retain the original trace for ownership and actual disclosures.
+    """
+    if not criteria.business_process_only:
+        return observed
+    return [item for item in observed if item.result is None or not item.result.error]
+
+
 def _forbidden_failures(
     observed: list[_ObservedCall], forbidden: list[Action]
 ) -> list[str]:
@@ -268,6 +278,25 @@ def _discovery_violation(
     return None
 
 
+def _access_argument_values(arguments: dict, path: str) -> list:
+    """Resolve declared ownership selectors, including structured array items."""
+    values = [arguments]
+    for part in path.split("."):
+        following = []
+        for value in values:
+            if part == "*" and isinstance(value, list):
+                following.extend(value)
+            elif isinstance(value, dict) and part in value:
+                following.append(value[part])
+        values = following
+    return [
+        item
+        for value in values
+        for item in (value if isinstance(value, list) else [value])
+        if item is not None
+    ]
+
+
 def _tool_access_failures(
     observed: list[_ObservedCall],
     actions: list[Action],
@@ -347,14 +376,13 @@ def _tool_access_failures(
         if (
             fields
             and not error
-            and not any(call.arguments.get(field) is not None for field in fields)
+            and not any(
+                _access_argument_values(call.arguments, field) for field in fields
+            )
         ):
             violation(item, "unresolved_owner")
         for field, collection in fields.items():
-            value = call.arguments.get(field)
-            if value is None:
-                continue
-            selectors = value if isinstance(value, list) else [value]
+            selectors = _access_argument_values(call.arguments, field)
             for selector in selectors:
                 owner = (
                     owners[collection].get(selector)
@@ -606,6 +634,48 @@ def _forbidden_message_pattern_failures(
     return failures
 
 
+def _has_target_item(call, transaction_ids):
+    """Scope a reward-item dependency to the attempted items, including errors."""
+    if not transaction_ids:
+        return True
+    items = call.call.arguments.get("items")
+    return isinstance(items, list) and any(
+        isinstance(item, dict) and item.get("transaction_id") in transaction_ids
+        for item in items
+    )
+
+
+def _evidence_target_attempt(item, action, observed):
+    """Only explicitly changing facts may defer a safely rejected state attempt.
+
+    Authorization, original sources and unrelated dependencies keep their first
+    attempt boundary. A conflict never erases a known prohibited request.
+    """
+    if not _action_attempt_matches(action, observed):
+        return False
+    if any(
+        not any(
+            value in options
+            for value in _access_argument_values(observed.call.arguments, path)
+        )
+        for path, options in item.target_argument_options.items()
+    ):
+        return False
+    if (
+        item.recoverable_result_statuses
+        and observed.result
+        and not observed.result.error
+    ):
+        try:
+            return (
+                json.loads(observed.result.content or "{}").get("status")
+                not in item.recoverable_result_statuses
+            )
+        except (ValueError, TypeError, AttributeError):
+            pass
+    return True
+
+
 def _result_evidence_calls(
     observed: list[_ObservedCall],
     actions: list[Action],
@@ -665,7 +735,8 @@ def _result_evidence_calls(
         attempts = [
             index
             for index, call in enumerate(observed)
-            if _action_attempt_matches(target, call)
+            if _evidence_target_attempt(item, target, call)
+            and _has_target_item(call, item.target_item_ids)
         ]
         if not attempts:
             return []
@@ -724,7 +795,8 @@ def _result_evidence_failures(
             item.only_if_target_attempted
             and item.before_action_id in by_id
             and not any(
-                _action_attempt_matches(by_id[item.before_action_id], call)
+                _evidence_target_attempt(item, by_id[item.before_action_id], call)
+                and _has_target_item(call, item.target_item_ids)
                 for call in observed
             )
         )
@@ -1116,11 +1188,27 @@ def _order_failures(
         )
         before = by_id[pair.before_action_id]
         after = by_id[pair.after_action_id]
+
+        def eligible(call):
+            if not _has_target_item(call, pair.target_item_ids):
+                return False
+            for path, options in pair.target_argument_options.items():
+                value = call.call.arguments
+                for key in path.split("."):
+                    value = value.get(key) if isinstance(value, dict) else None
+                if value not in options:
+                    return False
+            return True
+
         target_attempts = [
             index
             for index, call in enumerate(observed)
-            if _action_attempt_matches(actions[after], call)
+            if _action_attempt_matches(actions[after], call) and eligible(call)
         ]
+        if not target_attempts and (
+            pair.target_argument_options or pair.target_item_ids
+        ):
+            continue
         if not target_attempts:
             failures.append(
                 {
@@ -1249,6 +1337,28 @@ def _semantic_actions(criteria):
     ]
 
 
+def _message_pattern_failures(trace: TraceEvidence, criteria) -> list[str]:
+    """Keep disclosure evidence while skipping completion-only native prose quality."""
+    failures = []
+    for rule in criteria.forbidden_message_patterns:
+        messages = trace.messages
+        if (
+            criteria.completion_mode == "completion_only"
+            and rule.native_text_scope == "utterance"
+        ):
+            messages = [m.model_copy(update={"content": None}) for m in messages]
+        failures.extend(
+            _forbidden_message_pattern_failures(
+                messages,
+                [rule],
+                observed=trace.observed,
+                actions=criteria.actions,
+                positions=trace.positions,
+            )
+        )
+    return failures
+
+
 def _presence_and_order_reward(
     task: Task, trace: TraceEvidence, tool_types: Optional[dict[str, ToolType]]
 ) -> RewardInfo:
@@ -1287,12 +1397,34 @@ def _presence_and_order_reward(
     ]
     checks = _check_actions(trace.observed, actions, tool_types, require_success=False)
     failures = _order_failures(trace.observed, actions, orders, require_success=False)
-    reward = float(all(check.action_match for check in checks) and not failures)
+    # Disclosure is a safety constraint under every ACTION scope. Structural
+    # matching must not bypass it while semantic witnesses still live in ENV.
+    disclosure_failures = _forbidden_message_pattern_failures(
+        trace.messages,
+        [
+            r
+            for r in criteria.forbidden_message_patterns
+            if r.native_text_scope == "disclosure"
+        ],
+        observed=trace.observed,
+        actions=criteria.actions,
+        positions=trace.positions,
+    )
+    reward = float(
+        all(check.action_match for check in checks)
+        and not failures
+        and not disclosure_failures
+    )
+    info = {}
+    if failures:
+        info["action_order"] = failures
+    if disclosure_failures:
+        info["forbidden_message_patterns"] = disclosure_failures
     return RewardInfo(
         reward=reward,
         action_checks=checks,
         reward_breakdown={RewardType.ACTION: reward},
-        info={"action_order": failures} if failures else None,
+        info=info or None,
     )
 
 
@@ -1375,26 +1507,21 @@ class ActionEvaluator(EvaluatorBase[Message]):
             task.ticket or "",
         )
         observed = trace.observed
+        business_observed = _business_observed(task.evaluation_criteria, observed)
         access_failures = _tool_access_failures(
             observed, task.evaluation_criteria.actions or [], access_policy
         )
         order_failures = _order_failures(
-            observed,
+            business_observed,
             golden_actions,
             task.evaluation_criteria.action_order,
             task.evaluation_criteria.require_successful_actions,
         )
-        forbidden_failures = _forbidden_failures(observed, forbidden_actions)
+        forbidden_failures = _forbidden_failures(business_observed, forbidden_actions)
         pattern_failures = _forbidden_argument_pattern_failures(
             observed, forbidden_patterns
         )
-        message_failures = _forbidden_message_pattern_failures(
-            trace.messages,
-            message_patterns,
-            observed=observed,
-            actions=task.evaluation_criteria.actions,
-            positions=trace.positions,
-        )
+        message_failures = _message_pattern_failures(trace, task.evaluation_criteria)
         message_failures.extend(
             numeric_claim_failures(
                 observed,
@@ -1406,16 +1533,25 @@ class ActionEvaluator(EvaluatorBase[Message]):
             )
         )
         evidence_failures = _result_evidence_failures(
-            observed, _semantic_actions(task.evaluation_criteria), evidence_items
+            business_observed,
+            _semantic_actions(task.evaluation_criteria),
+            evidence_items,
         )
         argument_failures = _argument_evidence_failures(
-            observed, golden_actions, argument_items, trace, evidence_items
+            business_observed, golden_actions, argument_items, trace, evidence_items
         )
         binding_failures = _result_argument_binding_failures(
-            observed,
+            business_observed,
             _semantic_actions(task.evaluation_criteria),
             bindings,
             access_policy,
+        )
+        from tau2.evaluator.cashback_state import cashback_state_failures
+
+        binding_failures.extend(
+            cashback_state_failures(
+                business_observed, task.evaluation_criteria.cashback_state_policy
+            )
         )
         reward = (
             1.0
@@ -1585,26 +1721,21 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             task.ticket or "",
         )
         observed = trace.observed
+        business_observed = _business_observed(task.evaluation_criteria, observed)
         access_failures = _tool_access_failures(
             observed, task.evaluation_criteria.actions or [], access_policy
         )
         order_failures = _order_failures(
-            observed,
+            business_observed,
             golden_actions,
             task.evaluation_criteria.action_order,
             task.evaluation_criteria.require_successful_actions,
         )
-        forbidden_failures = _forbidden_failures(observed, forbidden_actions)
+        forbidden_failures = _forbidden_failures(business_observed, forbidden_actions)
         pattern_failures = _forbidden_argument_pattern_failures(
             observed, forbidden_patterns
         )
-        message_failures = _forbidden_message_pattern_failures(
-            trace.messages,
-            message_patterns,
-            observed=observed,
-            actions=task.evaluation_criteria.actions,
-            positions=trace.positions,
-        )
+        message_failures = _message_pattern_failures(trace, task.evaluation_criteria)
         message_failures.extend(
             numeric_claim_failures(
                 observed,
@@ -1616,16 +1747,25 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             )
         )
         evidence_failures = _result_evidence_failures(
-            observed, _semantic_actions(task.evaluation_criteria), evidence_items
+            business_observed,
+            _semantic_actions(task.evaluation_criteria),
+            evidence_items,
         )
         argument_failures = _argument_evidence_failures(
-            observed, golden_actions, argument_items, trace, evidence_items
+            business_observed, golden_actions, argument_items, trace, evidence_items
         )
         binding_failures = _result_argument_binding_failures(
-            observed,
+            business_observed,
             _semantic_actions(task.evaluation_criteria),
             bindings,
             access_policy,
+        )
+        from tau2.evaluator.cashback_state import cashback_state_failures
+
+        binding_failures.extend(
+            cashback_state_failures(
+                business_observed, task.evaluation_criteria.cashback_state_policy
+            )
         )
         reward = (
             1.0

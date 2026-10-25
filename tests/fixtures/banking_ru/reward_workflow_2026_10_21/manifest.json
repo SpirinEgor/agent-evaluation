@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "documents": {
+    "/knowledge/service_notes/doc_0150.md": {
+      "sha256": "a509e297b2b039cecbfa573307a606a373c5a6570ca80e20afd6501693bfad43",
+      "metadata": {
+        "id": "reward_statement_applicability",
+        "title": "Заявления о разногласиях по вознаграждению",
+        "revision_id": "customer-statements-v1",
+        "effective_from": "2026-06-01"
+      }
+    }
+  },
+  "legacy_db_sha256": "051963068deefee63b6f7d19162967eb557a26bc911f493ccf2bcee16af1135b",
+  "intake_answers_sha256": "2721d4b491d4f6d36a18d6b5db573c6ed935962086bda9b2d8729a1664779807",
+  "presentation": "legacy_helpdesk",
+  "discoverable_workflows": true
+}

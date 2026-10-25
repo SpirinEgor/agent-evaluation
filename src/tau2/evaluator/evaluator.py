@@ -116,23 +116,24 @@ def evaluate_simulation(
     Returns:
         RewardInfo with the evaluation results.
     """
-    # Banking completion-only grades observable MCP work, never diagnostic prose.
-    # Copy before removing native text; original evidence remains immutable.
+    business_only = bool(
+        domain == "banking_ru"
+        and task.evaluation_criteria
+        and task.evaluation_criteria.business_process_only
+    )
+    # Completion-only does not require customer prose. Keep the original text:
+    # outgoing disclosures are safety evidence even in a diagnostic message.
     if domain == "banking_ru":
-        simulation = simulation.model_copy(deep=True)
-        for message in simulation.messages or []:
-            if message.role == "assistant":
-                message.content = None
-        for tick in simulation.ticks or []:
-            if tick.agent_chunk is not None:
-                tick.agent_chunk.content = None
-        if simulation.termination_reason != TerminationReason.AGENT_STOP:
+        if (
+            not business_only
+            and simulation.termination_reason != TerminationReason.AGENT_STOP
+        ):
             return RewardInfo(
                 reward=0.0,
                 reward_basis=None,
                 info={"note": "Banking completion-only requires actual done"},
             )
-    if simulation.termination_reason not in {
+    if not business_only and simulation.termination_reason not in {
         TerminationReason.AGENT_STOP,
         TerminationReason.USER_STOP,
     }:
@@ -157,18 +158,12 @@ def evaluate_simulation(
     trajectory = simulation.ticks if is_full_duplex else simulation.messages
 
     completion_errors = []
-    if task.evaluation_criteria.completion_mode == "completion_only":
-        # Diagnostic prose is not a customer channel. Preserve every tool call,
-        # result and its outgoing arguments, including failed attempts.
-        if is_full_duplex:
-            trajectory = [
-                tick.model_copy(update={"agent_chunk": None}) for tick in trajectory
-            ]
-        else:
-            trajectory = [
-                m.model_copy(update={"content": None}) if m.role == "assistant" else m
-                for m in trajectory
-            ]
+    if (
+        task.evaluation_criteria.completion_mode == "completion_only"
+        and not business_only
+    ):
+        # Prose-quality rules are suppressed by ACTION, separately from its
+        # raw-trace disclosure checks. Never discard evidence at this boundary.
         if simulation.termination_reason != TerminationReason.AGENT_STOP:
             completion_errors.append("missing_agent_completion")
         metadata = simulation.info or {}
@@ -418,4 +413,6 @@ def evaluate_simulation(
         for component in ("action", "env")
     ):
         reward_info.info["grading_status"] = "needs_review"
+    if business_only:
+        reward_info.info = {**(reward_info.info or {}), "business_process_only": True}
     return reward_info

@@ -39,6 +39,8 @@ from tau2.domains.banking_ru.data_model import (
     CardLimits,
     Case,
     CaseCategory,
+    CashbackAdjustmentReservation,
+    CashbackInvestigationItem,
     CashbackRules,
     ClosureReadiness,
     Customer,
@@ -50,20 +52,34 @@ from tau2.domains.banking_ru.data_model import (
     Document,
     EscalationRequest,
     FeeRefundRequest,
+    FeeRefundState,
     InvestmentConsultation,
     InvestmentEscalationRequest,
     LimitRequest,
     LimitType,
     Loan,
     Promotion,
+    PromotionActivation,
     RepaymentMode,
+    RewardContract,
     Statement,
     Subscription,
     Tariff,
     Transaction,
     TransactionRefundRequest,
 )
+from tau2.domains.banking_ru.document_service import DocumentServiceMixin
+from tau2.domains.banking_ru.document_service_models import (
+    DocumentContact,
+    DocumentDelivery,
+)
 from tau2.domains.banking_ru.limit_claims import has_false_limit_claim
+from tau2.domains.banking_ru.reward_workflows import (
+    RewardWorkflowMixin,
+    cents,
+    money,
+    register_operation,
+)
 from tau2.environment.toolkit import ToolKitBase, ToolType, is_tool
 from tau2.utils import get_dict_hash
 
@@ -181,23 +197,127 @@ def _error(code: str, message: str) -> ValueError:
     return ValueError(f"{code}: {message}")
 
 
-class BankingTools(ToolKitBase):
+class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
     """Инструменты банковской поддержки."""
 
     db: BankingDB
 
     def __init__(self, db: BankingDB) -> None:
         super().__init__(db)
+        self._resolution_consents = {}
+        self._resolution_violations = set()
+        self._refund_keys = {}
+        self._adjustment_keys = {}
+        self._excess_adjustment_attempts = set()
+        self._compensation_conflicts = set()
+        self._workflow_attempts = []
+        self._seen_document_versions = {}
         self._successful_tool_calls: list[str] = []
         self._excess_fee_refund_attempts: set[str] = set()
+        self._initial_reward_items = {
+            case.id: {item.transaction_id: item.amount for item in case.reward_items}
+            for case in db.cases.values()
+        }
+        self._cashback_investigation_attempts: list[dict] = []
+        self._duplicate_cashback_investigation_attempts: set[str] = set()
+        self._fee_refund_confirmations: dict[str, dict] = {}
         self._operation_confirmations: dict[str, dict] = {}
         self._loan_repayment_confirmations: dict[str, dict] = {}
         self._used_loan_repayment_confirmations: set[str] = set()
         self._pending_limit_attempts: set[tuple[str, str]] = set()
+        from tau2.domains.banking_ru.cashback_state import capture_revision
+
+        for scope in db.cashback_state_revisions:
+            customer_id, period = scope.rsplit(":", 1)
+            capture_revision(db, customer_id, period)
 
     def get_db_hash(self) -> str:
         """Compare cases by content, not allocation order of generated IDs."""
         snapshot = self.db.model_dump()
+        # These records track optimistic concurrency and request identity. Monetary
+        # effects remain in transactions/balances/permissions; unresolved work is
+        # checked by the trajectory and reservation assertions.
+        snapshot.pop("cashback_state_revisions", None)
+        snapshot.pop("cashback_revision_states", None)
+        snapshot.pop("cashback_adjustment_operations", None)
+        snapshot.pop("reward_resolution_executions", None)
+        from tau2.domains.banking_ru.reward_workflows import standard_cycle
+
+        semantic_cases = set()
+        for case in snapshot["cases"].values():
+            cycle = (
+                standard_cycle(self.db, case["customer_id"], case.get("reward_period"))
+                if case.get("reward_program")
+                in {"standard_cashback", "cashback_reconciliation"}
+                else None
+            )
+            if cycle and cycle.get("rules_revision") in {
+                "posting-v2",
+                "multi-program-v1",
+            }:
+                semantic_cases.add(case["id"])
+                case.pop("version", None)
+                case.pop("review_source_version", None)
+                case.pop("adjustment_reservations", None)
+        from tau2.domains.banking_ru.reward_workflows import cents, money
+
+        for permission in self.db.cashback_adjustment_permissions.values():
+            cycle = standard_cycle(
+                self.db, permission["customer_id"], permission.get("period")
+            )
+            if not cycle or cycle.get("rules_revision") not in {
+                "posting-v2",
+                "multi-program-v1",
+            }:
+                continue
+            root_id = "cashback-adjustment:" + permission["id"]
+            credits = [
+                (k, v)
+                for k, v in snapshot["transactions"].items()
+                if k == root_id or k.startswith(root_id + ":used:")
+            ]
+
+            def signature(row):
+                return {k: v for k, v in row.items() if k not in {"id", "amount"}}
+
+            if credits and all(
+                signature(v) == signature(credits[0][1]) for _, v in credits
+            ):
+                combined = {
+                    **credits[0][1],
+                    "id": root_id,
+                    "amount": money(sum(cents(v["amount"]) for _, v in credits)),
+                }
+                for key, _ in credits:
+                    del snapshot["transactions"][key]
+                snapshot["transactions"][root_id] = combined
+        # A legal split amendment can generate another revision of exactly the
+        # same final document. Normalize only receipts for the actual current
+        # official document; stale/wrong receipts retain their distinct hash.
+        for records in [snapshot["document_deliveries"], snapshot["bank_operations"]]:
+            for receipt in records.values():
+                doc = self.db.documents.get(receipt.get("document_id"))
+                if (
+                    doc is not None
+                    and doc.case_id in semantic_cases
+                    and doc.id == f"{doc.case_id}:registration_confirmation"
+                    and doc.purpose == "registration_confirmation"
+                    and doc.readiness == "ready"
+                    and receipt.get("status") == "delivered"
+                    and receipt.get("case_id") == doc.case_id
+                    and receipt.get("customer_id") == doc.customer_id
+                    and receipt.get("version") == doc.version
+                ):
+                    receipt.pop("version", None)
+        for key, doc in list(snapshot["documents"].items()):
+            if (
+                doc.get("case_id") in semantic_cases
+                and doc.get("purpose") == "registration_confirmation"
+            ):
+                if doc.get("readiness") == "superseded":
+                    del snapshot["documents"][key]
+                else:
+                    doc.pop("version", None)
         if snapshot["cases"]:
             cases = [
                 {key: value for key, value in case.items() if key != "id"}
@@ -222,6 +342,13 @@ class BankingTools(ToolKitBase):
         но не за неверное чтение.
         """
         self.db.tool_calls_log.append(tool_name)
+        from copy import deepcopy
+
+        self._workflow_attempts.append(
+            {"name": tool_name, "arguments": deepcopy(kwargs)}
+        )
+        if tool_name == "create_cashback_investigation":
+            self._cashback_investigation_attempts.append(dict(kwargs))
         if tool_name == "set_limit":
             card_id, limit_type = kwargs.get("card_id"), kwargs.get("limit_type")
             card = self.db.cards.get(card_id)
@@ -248,7 +375,30 @@ class BankingTools(ToolKitBase):
                         and request.object_id == objects[request.object_type]
                     ):
                         self._pending_limit_attempts.add((card.id, limit_type))
-        result = super().use_tool(tool_name=tool_name, **kwargs)
+        attempt = self._workflow_attempts[-1]
+        try:
+            result = super().use_tool(tool_name=tool_name, **kwargs)
+        except Exception as error:
+            attempt["error"] = str(error)
+            raise
+        attempt["succeeded"] = True
+        if tool_name in {"get_documents", "get_case_documents", "get_document_status"}:
+
+            def remember(record):
+                if isinstance(record, list):
+                    for row in record:
+                        remember(row)
+                elif (
+                    isinstance(record, dict)
+                    and record.get("id")
+                    and record.get("version")
+                ):
+                    self._seen_document_versions[record["id"]] = record["version"]
+
+            try:
+                remember(json.loads(result))
+            except (ValueError, TypeError):
+                pass
         self._successful_tool_calls.append(tool_name)
         return result
 
@@ -576,6 +726,9 @@ class BankingTools(ToolKitBase):
         date_to: Optional[str] = None,
         limit: int = 20,
         offset: int = 0,
+        posted_from: Optional[str] = None,
+        posted_to: Optional[str] = None,
+        original_transaction_id: Optional[str] = None,
     ) -> dict:
         """
         Получить страницу операций клиента с фильтрами по карте, счёту и периоду.
@@ -586,6 +739,9 @@ class BankingTools(ToolKitBase):
             account_id: Отбор по счёту.
             date_from: Начало периода, ГГГГ-ММ-ДД, включительно.
             date_to: Конец периода, ГГГГ-ММ-ДД, включительно.
+            posted_from: Начальная дата проводки включительно.
+            posted_to: Конечная дата проводки включительно.
+            original_transaction_id: Своя исходная операция связанных записей.
             limit: Размер страницы, не более 50. По умолчанию 20.
             offset: Сколько операций пропустить с начала выборки.
 
@@ -612,6 +768,25 @@ class BankingTools(ToolKitBase):
             result = [t for t in result if t.date >= date_from]
         if date_to is not None:
             result = [t for t in result if t.date <= date_to]
+        if original_transaction_id is not None:
+            original = self._get_transaction(original_transaction_id)
+            if original.customer_id != customer_id:
+                raise ValueError(
+                    "ERR_FOREIGN_RESOURCE: Исходная операция другого клиента"
+                )
+            result = [
+                t
+                for t in result
+                if t.original_transaction_id == original_transaction_id
+            ]
+        if posted_from is not None:
+            result = [
+                t for t in result if t.posted_at and t.posted_at[:10] >= posted_from
+            ]
+        if posted_to is not None:
+            result = [
+                t for t in result if t.posted_at and t.posted_at[:10] <= posted_to
+            ]
         result.sort(key=lambda t: (t.date, t.id), reverse=True)
         page = result[offset : offset + limit]
         return {
@@ -871,7 +1046,8 @@ class BankingTools(ToolKitBase):
             customer_id: Идентификатор клиента.
 
         Returns:
-            Правила начисления кешбэка.
+            Правила начисления. Для posting-v2 cycles содержит полный реестр
+            покупок и проведённых связей на settlement_as_of; готовых недоплат нет.
 
         Raises:
             ValueError: Если клиент или правила не найдены.
@@ -882,7 +1058,9 @@ class BankingTools(ToolKitBase):
             raise _error(
                 ERR_NOT_FOUND, f"Правила кешбэка для клиента {customer_id} не найдены."
             )
-        return rules
+        from tau2.domains.banking_ru.reward_workflows import rules_with_register
+
+        return rules_with_register(self.db, customer_id)
 
     @is_tool(ToolType.READ)
     def get_devices(self, customer_id: str) -> list[Device]:
@@ -902,6 +1080,38 @@ class BankingTools(ToolKitBase):
         """
         self._get_customer(customer_id)
         return [d for d in self.db.devices.values() if d.customer_id == customer_id]
+
+    @is_tool(ToolType.READ)
+    def get_reward_contracts(self, customer_id: str) -> list[RewardContract]:
+        """Получить договоры вознаграждений клиента, продукт, связанные карты и редакцию правил."""
+        self._get_customer(customer_id)
+        self._require_verified(customer_id)
+        return [
+            r for r in self.db.reward_contracts.values() if r.customer_id == customer_id
+        ]
+
+    @is_tool(ToolType.READ)
+    def get_promotion_activations(
+        self, customer_id: str, promotion_id: Optional[str] = None
+    ) -> list[PromotionActivation]:
+        """Получить журнал активаций клиента: акция, время активации и отзыва."""
+        self._get_customer(customer_id)
+        self._require_verified(customer_id)
+        if promotion_id is not None:
+            promotion = self.db.promotions.get(promotion_id)
+            if promotion is not None and promotion.customer_id != customer_id:
+                raise ValueError("ERR_FOREIGN_RESOURCE: Акция другого клиента")
+            if any(
+                a.promotion_id == promotion_id and a.customer_id != customer_id
+                for a in self.db.promotion_activations.values()
+            ):
+                raise ValueError("ERR_FOREIGN_RESOURCE: Активация другого клиента")
+        return [
+            a
+            for a in self.db.promotion_activations.values()
+            if a.customer_id == customer_id
+            and (promotion_id is None or a.promotion_id == promotion_id)
+        ]
 
     @is_tool(ToolType.READ)
     def get_promotions(
@@ -950,6 +1160,146 @@ class BankingTools(ToolKitBase):
         return [
             r for r in self.db.limit_requests.values() if r.customer_id == customer_id
         ]
+
+    @is_tool(ToolType.READ)
+    def get_bank_operation_status(self, customer_id: str, request_id: str) -> dict:
+        """Получить фактический результат операции по идентификатору запроса сервиса."""
+        return self._bank_operation_status(customer_id, request_id)
+
+    @is_tool(ToolType.READ)
+    def get_cashback_investigations(
+        self,
+        customer_id: str,
+        program: Optional[str] = None,
+        period: Optional[str] = None,
+    ) -> list[Case]:
+        """Получить свои расследования с программой, периодом, статусом и составом покупок."""
+        return self._get_reward_investigations(customer_id, program, period)
+
+    @is_tool(ToolType.WRITE)
+    def amend_cashback_investigation(
+        self,
+        case_id: str,
+        items: list[CashbackInvestigationItem],
+        reserved_adjustments: Optional[list[CashbackAdjustmentReservation]] = None,
+        expected_revision: Optional[int] = None,
+    ) -> Case:
+        """Дополнить открытое дело. Для standard_cashback и cashback_reconciliation items задаёт итоговые суммы
+        покупок, включая уже заявленное; уменьшение запрещено. Для будущей выплаты
+        передайте reserved_adjustments. Для иных программ добавляются только новые покупки.
+        """
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+
+        result = self._amend_reward_investigation(
+            case_id, items, reserved_adjustments, expected_revision
+        )
+        return CashbackStateResult(result) if isinstance(result, dict) else result
+
+    @is_tool(ToolType.WRITE)
+    def submit_cashback_review(
+        self, case_id: str, expected_version: int
+    ) -> Case | dict:
+        """Передать текущее обращение в подразделение рассмотрения.
+
+        Args:
+            case_id: Полученное собственное дело.
+            expected_version: Полученная версия состава дела.
+        """
+        case = self.db.cases.get(case_id)
+        if case is None:
+            raise ValueError("ERR_NOT_FOUND")
+        self._require_verified(case.customer_id)
+        if case.category != "cashback_investigation" or case.status != "open":
+            raise ValueError("ERR_CASE_SCOPE")
+        if case.review_status == "registered":
+            if expected_version in [case.review_source_version, case.version]:
+                return case
+        if expected_version != case.version:
+            from tau2.domains.banking_ru.discovery_workflow import DiscoveryResponse
+
+            return DiscoveryResponse(
+                dict(status="version_conflict", current_version=case.version)
+            )
+        case.review_source_version = case.version
+        case.review_items = [x.model_copy(deep=True) for x in case.reward_items]
+        case.review_amount = case.amount
+        case.review_status = "registered"
+        case.responsible_unit = "rewards_review"
+        case.version += 1
+        self._revise_case_document(case)
+        return case
+
+    def assert_cashback_review(self, case_id: str) -> bool:
+        case = self.db.cases.get(case_id)
+        return bool(
+            case
+            and case.review_status == "registered"
+            and case.review_items == case.reward_items
+            and case.review_amount == case.amount
+            and not case.adjustment_reservations
+        )
+
+    @is_tool(ToolType.READ)
+    def get_case_documents(self, case_id: str) -> list[Document]:
+        """Получить документы зарегистрированного обращения с метаданными передачи.
+
+        Args:
+            case_id: Полученный идентификатор собственного обращения.
+        """
+        return self._case_documents(case_id)
+
+    @is_tool(ToolType.WRITE)
+    def get_document_status(self, document_id: str) -> Document:
+        """Получить текущий статус документа; явная проверка завершает подготовку.
+
+        Args:
+            document_id: Полученный идентификатор документа.
+        """
+        return self._document_status(document_id)
+
+    @is_tool(ToolType.READ)
+    def get_document_delivery_contacts(self, customer_id: str) -> list[DocumentContact]:
+        """Получить каналы профиля с фактическим признаком подтверждения.
+
+        Args:
+            customer_id: Идентификатор подтверждённого владельца.
+        """
+        return self._document_contacts(customer_id)
+
+    @is_tool(ToolType.WRITE)
+    def deliver_case_document(
+        self,
+        document_id: str,
+        contact_id: str,
+        idempotency_key: str,
+        expected_version: Optional[str] = None,
+    ) -> DocumentDelivery | dict:
+        """Доставить явно запрошенный документ дела через разрешённый канал.
+
+        Args:
+            document_id: Полученный документ; действие передаёт его полный текст.
+            contact_id: Полученный контакт профиля; введённый адрес не подтверждает канал.
+            idempotency_key: Ключ безопасного повтора того же запроса.
+            expected_version: Полученная версия; неизвестное обновление возвращает
+                конфликт для повторного получения метаданных.
+
+        Returns:
+            Фактическая квитанция delivered; повтор возвращает ту же квитанцию.
+            outcome_unknown содержит request_id для проверки статуса доставки.
+        """
+        return self._deliver_case_document(
+            document_id, contact_id, idempotency_key, expected_version
+        )
+
+    def assert_case_document_delivered(self, customer_id: str, program: str) -> bool:
+        """Check one real official document delivery for the investigation."""
+        return self._assert_case_document_delivered(customer_id, program)
+
+    def assert_case_document_delivery_attempts(
+        self, customer_id: str, program: str
+    ) -> bool:
+        """Reject forbidden document/contact attempts even before a corrected delivery."""
+        return self._assert_case_document_delivery_attempts(customer_id, program)
 
     @is_tool(ToolType.READ)
     def get_documents(self, customer_id: str) -> list[Document]:
@@ -1445,6 +1795,256 @@ class BankingTools(ToolKitBase):
     # ------------------------------------------------------------------
     # Обращения
     # ------------------------------------------------------------------
+
+    @is_tool(ToolType.READ)
+    def get_bank_date(self) -> dict:
+        """Получить текущую дату банковского сценария, ГГГГ-ММ-ДД."""
+        return {"date": self.db.today}
+
+    @is_tool(ToolType.WRITE)
+    def create_cashback_investigation(
+        self,
+        customer_id: str,
+        program: Literal["standard_cashback", "N40"],
+        amount: float,
+        items: list[CashbackInvestigationItem],
+        period: Optional[str] = None,
+        reserved_adjustments: Optional[list[CashbackAdjustmentReservation]] = None,
+    ) -> Case:
+        """Зарегистрировать расследование недоплаты без зачисления денег.
+
+        Args:
+            customer_id: Владелец всех указанных покупок.
+            program: Программа вознаграждения.
+            amount: Рассчитанная агентом общая сумма недоплаты, ₽.
+            period: Период программы, ГГГГ-ММ.
+            reserved_adjustments: Предусмотренные этой операцией корректировки
+                (permission_id, transaction_id, amount), исключённые из требования.
+            items: Покупки и рассчитанная недоплата каждой; порядок несущественен.
+                Общая сумма должна совпадать с суммой разбивки.
+
+        Returns:
+            Обращение со статусом open. Повтор того же набора возвращает
+            существующую запись; он не создаёт ещё одну выплату или обращение.
+        """
+        self._get_customer(customer_id)
+        self._require_verified(customer_id)
+        values = [CashbackInvestigationItem.model_validate(item) for item in items]
+        ids = [item.transaction_id for item in values]
+        if (
+            not values
+            or len(ids) != len(set(ids))
+            or program not in {"standard_cashback", "N40"}
+        ):
+            raise _error(
+                ERR_INVALID_ARGUMENT, "Нужен непустой набор разных покупок и программа."
+            )
+        if any(item.amount != round(item.amount, 2) for item in values) or (
+            not isfinite(amount)
+            or amount <= 0
+            or amount != round(amount, 2)
+            or round(sum(item.amount for item in values), 2) != amount
+        ):
+            raise _error(ERR_INVALID_ARGUMENT, "Общая сумма не соответствует разбивке.")
+        for item in values:
+            transaction = self._get_transaction(item.transaction_id)
+            if transaction.customer_id != customer_id or transaction.kind != "purchase":
+                raise _error(ERR_INVALID_ARGUMENT, "Нужны собственные покупки клиента.")
+        reservations = [
+            CashbackAdjustmentReservation.model_validate(x)
+            for x in (reserved_adjustments or [])
+        ]
+        self._validate_reward_reservations(
+            customer_id, period, program, values, reservations
+        )
+        from tau2.domains.banking_ru.reward_workflows import cashback_period
+
+        if period and any(
+            not cashback_period(
+                self.db, self._get_transaction(x.transaction_id), program, period
+            )
+            for x in values
+        ):
+            raise ValueError("ERR_INVALID_ARGUMENT: Покупка другого периода")
+        values.sort(key=lambda item: item.transaction_id)
+        for existing in self.db.cases.values():
+            if (
+                existing.customer_id == customer_id
+                and existing.category == "cashback_investigation"
+                and existing.reward_program == program
+                and existing.reward_period == period
+                and existing.status == "open"
+                and existing.transaction_ids == sorted(ids)
+            ):
+                self._duplicate_cashback_investigation_attempts.add(customer_id)
+                if existing.amount != amount or existing.reward_items != values:
+                    raise _error(
+                        ERR_INVALID_ARGUMENT,
+                        "По этим покупкам уже открыто другое расследование.",
+                    )
+                return existing
+        case = Case(
+            id=self._next_case_id(),
+            customer_id=customer_id,
+            category="cashback_investigation",
+            reward_program=program,
+            reward_items=values,
+            reward_period=period,
+            adjustment_reservations=reservations,
+            transaction_ids=sorted(ids),
+            transaction_id=sorted(ids)[0],
+            amount=amount,
+            status="open",
+            created_at=self.db.today,
+            responsible_unit="rewards_operations",
+        )
+        self.db.cases[case.id] = case
+        self._ensure_case_documents(case)
+        return case
+
+    def assert_no_reward_compensation_conflicts(self, customer_id: str) -> bool:
+        """A prohibited overlapping claim is not repaired by a later correct one."""
+        return customer_id not in self._compensation_conflicts
+
+    def assert_no_excess_cashback_adjustment_attempts(self, permission_id: str) -> bool:
+        """Reject a new monetary attempt after the permission was consumed."""
+        return permission_id not in self._excess_adjustment_attempts
+
+    def assert_standard_reward_attempts(
+        self, customer_id: str, case_id: str, transaction_ids: list[str]
+    ) -> bool:
+        """Validate business boundaries and API failures, without enumerating call arguments."""
+        selected = set(transaction_ids)
+        for attempt in self._workflow_attempts:
+            name, args = attempt["name"], attempt["arguments"]
+            if name not in {
+                "execute_cashback_adjustment",
+                "amend_cashback_investigation",
+                "create_cashback_investigation",
+                "grant_cashback",
+            }:
+                continue
+            if name in {"create_cashback_investigation", "grant_cashback"}:
+                return False
+            if attempt.get("error"):
+                # Unknown IDs may be corrected; known invalid business attempts may not.
+                if (
+                    "ERR_NOT_FOUND" not in attempt["error"]
+                    and "ERR_PERMISSION_NOT_FOUND" not in attempt["error"]
+                ):
+                    return False
+                continue
+            if name == "execute_cashback_adjustment":
+                if args.get("transaction_id") not in selected:
+                    return False
+                tx = self.db.transactions.get(args.get("transaction_id"))
+                if not tx or tx.customer_id != customer_id:
+                    return False
+            if name == "amend_cashback_investigation" and (
+                args.get("case_id") != case_id
+                or any(
+                    x.get("transaction_id") not in selected
+                    and self._initial_reward_items.get(case_id, {}).get(
+                        x.get("transaction_id")
+                    )
+                    != x.get("amount")
+                    for x in args.get("items", [])
+                )
+            ):
+                return False
+        return customer_id not in self._compensation_conflicts
+
+    def assert_workflow_attempts(self, allowed: dict) -> bool:
+        """Compare every declared protected attempt, including calls rejected by the API."""
+
+        def nested(value, path):
+            for field in path.split("."):
+                if not isinstance(value, dict) or field not in value:
+                    return None
+                value = value[field]
+            return value
+
+        def equal(actual, expected):
+            if isinstance(actual, list) and isinstance(expected, list):
+                return sorted(json.dumps(x, sort_keys=True) for x in actual) == sorted(
+                    json.dumps(x, sort_keys=True) for x in expected
+                )
+            return actual == expected
+
+        for attempt in self._workflow_attempts:
+            if attempt["name"] not in allowed:
+                continue
+            alternatives = allowed[attempt["name"]]
+            if not any(
+                all(equal(nested(attempt["arguments"], k), v) for k, v in row.items())
+                for row in alternatives
+            ):
+                return False
+        return True
+
+    def assert_cashback_investigation(
+        self,
+        customer_id: str,
+        program: str,
+        amount: float,
+        items: list[dict],
+        period: Optional[str] = None,
+    ) -> bool:
+        """Check the exact CRM outcome, independent of item order."""
+        expected = sorted((item["transaction_id"], item["amount"]) for item in items)
+        cases = [
+            case
+            for case in self.db.cases.values()
+            if case.customer_id == customer_id
+            and case.category == "cashback_investigation"
+            and (period is None or case.reward_period == period)
+        ]
+        return (
+            len(cases) == 1
+            and cases[0].reward_program == program
+            and cases[0].amount == amount
+            and sorted(
+                (item.transaction_id, item.amount) for item in cases[0].reward_items
+            )
+            == expected
+        )
+
+    def assert_cashback_investigation_attempts(
+        self, customer_id: str, program: str, amount: float, items: list[dict]
+    ) -> bool:
+        """Verify all submitted investigations, including unsuccessful attempts."""
+        expected = sorted((item["transaction_id"], item["amount"]) for item in items)
+        for attempt in self._cashback_investigation_attempts:
+            try:
+                payload = [
+                    item.model_dump()
+                    if isinstance(item, CashbackInvestigationItem)
+                    else item
+                    for item in attempt.get("items", [])
+                ]
+                actual = sorted(
+                    (item["transaction_id"], item["amount"]) for item in payload
+                )
+            except (KeyError, TypeError):
+                return False
+            if (
+                attempt.get("customer_id") != customer_id
+                or attempt.get("program") != program
+                or attempt.get("amount") != amount
+                or actual != expected
+            ):
+                return False
+        return True
+
+    def assert_no_duplicate_cashback_investigation_attempts(
+        self, customer_id: str
+    ) -> bool:
+        """A later idempotent return does not erase a duplicate registration attempt."""
+        return customer_id not in self._duplicate_cashback_investigation_attempts
+
+    def assert_reward_payout_due(self, program: str) -> bool:
+        """N40 overdue investigation is available after its planned payout date."""
+        return program == "N40" and self.db.today >= "2026-09-01"
 
     @is_tool(ToolType.WRITE)
     def create_case(
@@ -2167,23 +2767,110 @@ class BankingTools(ToolKitBase):
     # Комиссии и кешбэк
     # ------------------------------------------------------------------
 
+    def _fee_state_version(self, transaction: Transaction) -> str:
+        posted = sum(
+            item.amount
+            for item in self.db.transactions.values()
+            if item.kind == "fee_refund"
+            and item.status == "posted"
+            and item.original_transaction_id == transaction.id
+            and (item.customer_id, item.account_id, item.card_id)
+            == (transaction.customer_id, transaction.account_id, transaction.card_id)
+        )
+        return f"fee-state:{transaction.id}:{posted:.2f}"
+
+    @is_tool(ToolType.WRITE)
+    def get_fee_refund_state(self, transaction_id: str) -> FeeRefundState:
+        """Получить актуальную сверку возвратов; синхронизировать объявленное событие процессинга.
+
+        Args:
+            transaction_id: Своя исходная комиссия.
+        Returns:
+            Версия состояния, проведённые/ожидающие суммы и невозмещённый остаток.
+            Объявленное событие синхронизируется однократно; повтор не зачисляет деньги.
+        """
+        transaction = self._get_transaction(transaction_id)
+        self._require_verified(transaction.customer_id)
+        update = transaction.fee_refund_update
+        settlement = None
+        if update:
+            settlement = self._get_transaction(update["settlement_transaction_id"])
+            if settlement.original_transaction_id != transaction_id or (
+                settlement.customer_id,
+                settlement.account_id,
+                settlement.card_id,
+            ) != (transaction.customer_id, transaction.account_id, transaction.card_id):
+                raise _error(ERR_INVALID_ARGUMENT, "Несовместимое событие сверки")
+            ready = any(
+                receipt.get("update_available")
+                and any(
+                    item["transaction_id"] == transaction_id
+                    for item in receipt["refunds"]
+                )
+                for receipt in self._fee_refund_confirmations.values()
+            )
+            if ready and settlement.status == "processing":
+                settlement.status = "posted"
+                account = self._get_account(settlement.account_id)
+                account.balance = money(
+                    cents(account.balance) + cents(settlement.amount)
+                )
+        linked = [
+            item
+            for item in self.db.transactions.values()
+            if item.kind == "fee_refund"
+            and item.original_transaction_id == transaction_id
+            and (item.customer_id, item.account_id, item.card_id)
+            == (transaction.customer_id, transaction.account_id, transaction.card_id)
+        ]
+        posted = money(
+            sum(cents(item.amount) for item in linked if item.status == "posted")
+        )
+        processing = money(
+            sum(cents(item.amount) for item in linked if item.status == "processing")
+        )
+        fee = (
+            transaction.amount
+            if transaction.kind == "fee"
+            else (transaction.fee_amount or 0)
+        )
+        return FeeRefundState(
+            {
+                "id": transaction_id,
+                "customer_id": transaction.customer_id,
+                "card_id": transaction.card_id,
+                "account_id": transaction.account_id,
+                "state_version": self._fee_state_version(transaction),
+                "posted_refunds": posted,
+                "processing_refunds": processing,
+                "remaining": money(cents(fee) - cents(posted)),
+                "settlement_status": settlement.status if settlement else None,
+            }
+        )
+
     @is_tool(ToolType.WRITE)
     def refund_fee(
         self,
         transaction_id: str,
         request: FeeRefundRequest,
         amount: Optional[float] = None,
+        confirmation_id: Optional[str] = None,
+        idempotency_key: Optional[str] = None,
     ) -> dict:
         """Вернуть невозмещённую комиссию по проведённой операции.
 
         Args:
             transaction_id: Проведённая операция, по которой удержана комиссия.
             request: Структурированное основание; свободный текст не передаётся.
+            confirmation_id: Полученное согласие клиента на набор возвратов, если требуется.
+            idempotency_key: Непустой ключ безопасного повтора; сохраняйте при повторе.
             amount: Возвращаемая часть, ₽. Без указания запрашивается вся
                 исходная комиссия; при частичном возврате укажите остаток явно.
 
         Returns:
             Сумма, остаток счёта и ID возврата со ссылкой на исходную операцию.
+            При outcome_unknown получите статус по request_id; прежний ключ
+            возвращает фактический результат без повторного зачисления.
 
         Raises:
             ValueError: Нет идентификации, проведённой комиссии, активного
@@ -2191,6 +2878,18 @@ class BankingTools(ToolKitBase):
         """
         request = FeeRefundRequest.model_validate(request)
         transaction = self._get_transaction(transaction_id)
+        self._require_verified(transaction.customer_id)
+        signature = (transaction_id, amount, confirmation_id, request.type)
+        if idempotency_key is not None:
+            if not idempotency_key.strip():
+                raise ValueError("ERR_INVALID_ARGUMENT: Пустой ключ")
+            if idempotency_key in self._refund_keys:
+                previous, result = self._refund_keys[idempotency_key]
+                if previous != signature:
+                    raise ValueError("ERR_INVALID_ARGUMENT: Ключ другого запроса")
+                return dict(result)
+        if transaction.refund_requires_consent and confirmation_id is None:
+            raise ValueError("ERR_CONSENT_REQUIRED: Требуется согласие на возврат")
         self._require_verified(transaction.customer_id)
         account = self._get_account(transaction.account_id)
         if transaction.status != "posted" or account.status != "active":
@@ -2223,8 +2922,8 @@ class BankingTools(ToolKitBase):
             raise _error(
                 ERR_INVALID_ARGUMENT, "Некорректные суммы связанных возвратов."
             )
-        refunded = round(sum(item.amount for item in refunds), 2)
-        remaining = round(fee - refunded, 2)
+        refunded = money(sum(cents(item.amount) for item in refunds))
+        remaining = money(cents(fee) - cents(refunded))
         refund_amount = float(amount) if amount is not None else fee
         if isfinite(refund_amount) and refund_amount > remaining:
             self._excess_fee_refund_attempts.add(transaction_id)
@@ -2238,8 +2937,50 @@ class BankingTools(ToolKitBase):
                 ERR_INVALID_ARGUMENT,
                 f"Возврат должен быть в пределах невозмещённой комиссии {remaining:.2f} ₽.",
             )
+        if transaction.fee_refund_update:
+            consent = self._fee_refund_confirmations.get(confirmation_id)
+            if (
+                consent is None
+                or (
+                    consent.get("state_versions", {}).get(
+                        transaction_id, consent.get("state_version")
+                    )
+                    != self._fee_state_version(transaction)
+                )
+                or consent.get("update_available")
+            ):
+                raise _error(
+                    ERR_INVALID_ARGUMENT,
+                    "Требуется согласие на актуальное состояние возврата",
+                )
+        if confirmation_id is not None:
+            consent = self._fee_refund_confirmations.get(confirmation_id)
+            item = {"transaction_id": transaction_id, "amount": refund_amount}
+            if (
+                consent is None
+                or consent["customer_id"] != transaction.customer_id
+                or consent["card_id"] != transaction.card_id
+                or item not in consent["refunds"]
+                or (
+                    transaction.refund_requires_consent
+                    and consent.get("state_versions", {}).get(
+                        transaction_id, consent.get("state_version")
+                    )
+                    != self._fee_state_version(transaction)
+                )
+            ):
+                raise _error(
+                    ERR_INVALID_ARGUMENT, "Нет согласия на конкретный возврат."
+                )
+        ledger_id = (
+            ("fee-refund:" + transaction_id)
+            if idempotency_key is not None
+            else self._next_transaction_id()
+        )
+        if ledger_id in self.db.transactions:
+            ledger_id += ":" + str(cents(refunded) + cents(refund_amount))
         refund = Transaction(
-            id=self._next_transaction_id(),
+            id=ledger_id,
             customer_id=transaction.customer_id,
             account_id=account.id,
             card_id=transaction.card_id,
@@ -2251,16 +2992,33 @@ class BankingTools(ToolKitBase):
             status="posted",
             channel="online",
         )
-        account.balance = round(account.balance + refund_amount, 2)
-        transaction.fee_refunded = round(refunded + refund_amount, 2) == round(fee, 2)
+        account.balance = money(cents(account.balance) + cents(refund_amount))
+        transaction.fee_refunded = cents(refunded) + cents(refund_amount) == cents(fee)
         self.db.transactions[refund.id] = refund
-        return {
+        result = {
             "refunded": refund_amount,
             "request": request.model_dump(),
             "account_balance": account.balance,
             "refund_transaction_id": refund.id,
             "original_transaction_id": transaction_id,
         }
+        if idempotency_key is not None:
+            result["status"] = "posted"
+            request_id = "fee-operation:" + transaction_id
+            if request_id in self.db.bank_operations:
+                request_id += ":" + str(cents(refunded) + cents(refund_amount))
+            self._refund_keys[idempotency_key] = (
+                signature,
+                {"request_id": request_id, **result},
+            )
+            return register_operation(
+                self,
+                request_id,
+                transaction.customer_id,
+                result,
+                transaction.refund_outcome_unknown,
+            )
+        return result
 
     @is_tool(ToolType.WRITE)
     def refund_transaction(
@@ -2307,6 +3065,150 @@ class BankingTools(ToolKitBase):
             "account_balance": account.balance,
         }
 
+    @is_tool(ToolType.READ)
+    def get_reward_resolution_offers(
+        self, customer_id: str, case_id: str
+    ) -> list[dict]:
+        """Получить банковские записи предложений урегулирования своего дела."""
+        from tau2.domains.banking_ru.reward_resolution import list_offers
+
+        return list_offers(self, customer_id, case_id)
+
+    @is_tool(ToolType.READ)
+    def get_reward_resolution_components(
+        self, offer_id: str, offset: int = 0, limit: int = 50
+    ) -> dict:
+        """Получить страницу компонентов своего предложения. offset >= 0,
+        limit от 1 до 100. next_offset=null означает конец списка.
+        """
+        from tau2.domains.banking_ru.reward_resolution import list_components
+
+        return list_components(self, offer_id, offset, limit)
+
+    @is_tool(ToolType.WRITE)
+    def execute_reward_resolution(
+        self,
+        offer_id: str,
+        offer_version: int,
+        payouts: list[CashbackInvestigationItem],
+        total_amount: float,
+        case_id: str,
+        confirmation_id: str,
+        expected_revision: int,
+        idempotency_key: str,
+        component_ids: Optional[list[str]] = None,
+    ) -> dict:
+        """Исполнить согласованное предложение. payouts — новые проводки по покупкам;
+        expected_revision — ожидаемая ревизия периода; idempotency_key — ключ повтора.
+        component_ids — выбранные части составного банковского предложения.
+        Возвращает статус и проведённые записи. Не меняет суммы CRM-дела.
+        """
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+        from tau2.domains.banking_ru.reward_resolution import execute
+
+        return CashbackStateResult(
+            execute(
+                self,
+                offer_id,
+                offer_version,
+                payouts,
+                total_amount,
+                case_id,
+                confirmation_id,
+                expected_revision,
+                idempotency_key,
+                component_ids,
+            )
+        )
+
+    def assert_reward_resolution_attempts(self, customer_id: str, case_id: str) -> bool:
+        """Policy validity independent of whether the customer optimum was attained."""
+        if customer_id in self._resolution_violations:
+            return False
+        for attempt in self._workflow_attempts:
+            if attempt["name"] == "execute_reward_resolution" and attempt.get("error"):
+                if "ERR_NOT_FOUND" not in attempt["error"]:
+                    return False
+        return True
+
+    @is_tool(ToolType.READ)
+    def get_cashback_adjustment_permissions(self, customer_id: str) -> list[dict]:
+        """Получить записи полномочий на дополнительную компенсацию своего клиента.
+
+        Записи определяют покупку, программу, максимум, срок и статус; идентификация
+        клиента и его просьба не заменяют полномочие подразделения лояльности.
+        """
+        from tau2.domains.banking_ru.adjustment_authority import list_permissions
+
+        return list_permissions(self, customer_id)
+
+    @is_tool(ToolType.WRITE)
+    def execute_cashback_adjustment(
+        self,
+        permission_id: str,
+        transaction_id: str,
+        amount: float,
+        idempotency_key: Optional[str] = None,
+        expected_revision: Optional[int] = None,
+    ) -> dict:
+        """Исполнить дополнительную компенсацию по действующему разрешению.
+
+        Это денежное зачисление, расходующее разрешение по конкретной покупке
+        и программе, в пределах суммы. Поручение клиента обязательно; разрешение
+        другой покупки/программы не подходит. Повтор расходованного разрешения
+        с прежним idempotency_key возвращает прежний результат; новый ключ
+        не восстанавливает израсходованное разрешение. Корректировка не расходует
+        лимит договорного начисления повторно. Регистрация расследования денег не выплачивает.
+        """
+        from tau2.domains.banking_ru.adjustment_authority import execute_adjustment
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+
+        result = execute_adjustment(
+            self,
+            permission_id,
+            transaction_id,
+            amount,
+            idempotency_key,
+            expected_revision,
+        )
+        return (
+            CashbackStateResult(result) if self.db.cashback_state_revisions else result
+        )
+
+    def assert_cashback_reservations_closed(
+        self, customer_id: str, period: str
+    ) -> bool:
+        """A future monetary promise cannot remain after completion."""
+        return not any(
+            c.adjustment_reservations
+            for c in self.db.cases.values()
+            if c.customer_id == customer_id and c.reward_period == period
+        )
+
+    @is_tool(ToolType.WRITE)
+    def refresh_cashback_settlement(self, customer_id: str, period: str) -> dict:
+        """Синхронизировать банковскую обработку начислений своего клиента за период.
+
+        Возвращает статус, предыдущую/актуальную версии и ссылки на изменившиеся
+        ledger-записи. Повтор не проводит начисления второй раз. Остатки не рассчитывает.
+        """
+        from tau2.domains.banking_ru.cashback_state import refresh
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+
+        return CashbackStateResult(refresh(self, customer_id, period))
+
+    @is_tool(ToolType.READ)
+    def get_cashback_adjustment_status(self, operation_id: str) -> dict:
+        """Получить фактическое исполнение своей операции корректировки по operation_id.
+
+        succeeded содержит покупку, сумму, полномочие, ledger ID и state_revision.
+        execution_unknown в первом ответе выплаты не означает отсутствия исполнения.
+        """
+        from tau2.domains.banking_ru.cashback_state import adjustment_status
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+
+        return CashbackStateResult(adjustment_status(self, operation_id))
+
     @is_tool(ToolType.WRITE)
     def grant_cashback(self, transaction_id: str, amount: float) -> dict:
         """
@@ -2324,6 +3226,13 @@ class BankingTools(ToolKitBase):
         """
         transaction = self._get_transaction(transaction_id)
         self._require_verified(transaction.customer_id)
+        if any(
+            c.review_status == "registered"
+            and c.customer_id == transaction.customer_id
+            and any(x.transaction_id == transaction_id for x in c.review_items)
+            for c in self.db.cases.values()
+        ):
+            raise ValueError("ERR_REVIEW_REGISTERED")
         if amount <= 0:
             raise _error(ERR_INVALID_ARGUMENT, "Сумма кешбэка должна быть больше нуля.")
         account = self._get_account(transaction.account_id)
@@ -2820,6 +3729,11 @@ class BankingTools(ToolKitBase):
         if document is None:
             raise _error(ERR_NOT_FOUND, f"Документ {document_id} не найден.")
         self._require_verified(document.customer_id)
+        if document.case_id or document.transmissible is False:
+            raise _error(
+                "ERR_DOCUMENT_FORBIDDEN",
+                "Для документа дела требуется разрешённая доставка.",
+            )
         if document.shared:
             raise _error(
                 ERR_ALREADY_SHARED, f"Документ {document_id} уже передан клиенту."

@@ -1,7 +1,7 @@
 ---
 id: "kb_final_41"
 title: "N40: полный порядок проверки и сопровождения кешбэка"
-revision_id: "2026-10-13-required-sources"
+revision_id: "2026-10-14-investigation"
 document_type: "bank-procedure-overview"
 trust: "bank-policy"
 effective_from: "2026-08-18"
@@ -10,11 +10,11 @@ keywords: ["кешбэк", "N40", "инцидент", "кафе", "август"
 effective_to: null
 superseded_by: null
 owner: "Программы лояльности"
-revision_date: "2026-10-13"
+revision_date: "2026-10-14"
 basis: "Собственные условия продукта, кампании или операционный порядок банка"
 regulatory_source_ids: []
-related_paths: ["/knowledge/kb_320.md", "/knowledge/kb_321.md", "/knowledge/kb_322.md", "/knowledge/kb_323.md", "/knowledge/kb_324.md", "/knowledge/kb_325.md", "/knowledge/kb_326.md", "/knowledge/kb_327.md", "/knowledge/kb_328.md", "/knowledge/kb_329.md", "/knowledge/kb_330.md", "/knowledge/kb_331.md", "/knowledge/kb_332.md", "/knowledge/kb_333.md"]
-related_bundle_paths: ["/knowledge/kb_final_41_part_1.md"]
+related_paths: ["/knowledge/kb_320.md", "/knowledge/kb_321.md", "/knowledge/kb_322.md", "/knowledge/kb_323.md", "/knowledge/kb_324.md", "/knowledge/kb_325.md", "/knowledge/kb_326.md", "/knowledge/kb_327.md", "/knowledge/kb_328.md", "/knowledge/kb_329.md", "/knowledge/kb_330.md", "/knowledge/kb_331.md", "/knowledge/kb_332.md", "/knowledge/kb_333.md", "/knowledge/kb_reward_reconciliation.md"]
+related_bundle_paths: ["/knowledge/kb_final_41_part_1.md", "/knowledge/kb_final_41_part_2.md"]
 ---
 
 # N40: полный порядок проверки и сопровождения кешбэка
@@ -45,21 +45,23 @@ related_bundle_paths: ["/knowledge/kb_final_41_part_1.md"]
 
 ## Полные источники
 
-- [N40: проверка и сопровождение недостающего кешбэка](/knowledge/kb_320.md)
-- [Окно инцидента начисления кешбэка в августе](/knowledge/kb_321.md)
-- [Уже начисленный кешбэк](/knowledge/kb_322.md)
-- [Категория рестораны для N40](/knowledge/kb_323.md)
-- [Статус операции при проверке N40](/knowledge/kb_324.md)
-- [Вид операции при проверке N40](/knowledge/kb_325.md)
-- [Канал покупки в инциденте N40](/knowledge/kb_326.md)
-- [Страна покупки в инциденте N40](/knowledge/kb_327.md)
-- [Минимальная сумма покупки N40](/knowledge/kb_328.md)
-- [N40: подтверждение подходящих операций](/knowledge/kb_329.md)
-- [N40: плановое начисление и проверка после срока](/knowledge/kb_330.md)
-- [Базовая ставка категории](/knowledge/kb_331.md)
-- [Поправка тарифа Classic для N40](/knowledge/kb_332.md)
-- [Потолок компенсации N40](/knowledge/kb_333.md)
+- [kb_320](/knowledge/kb_320.md)
+- [kb_321](/knowledge/kb_321.md)
+- [kb_322](/knowledge/kb_322.md)
+- [kb_323](/knowledge/kb_323.md)
+- [kb_324](/knowledge/kb_324.md)
+- [kb_325](/knowledge/kb_325.md)
+- [kb_326](/knowledge/kb_326.md)
+- [kb_327](/knowledge/kb_327.md)
+- [kb_328](/knowledge/kb_328.md)
+- [kb_329](/knowledge/kb_329.md)
+- [kb_330](/knowledge/kb_330.md)
+- [kb_331](/knowledge/kb_331.md)
+- [kb_332](/knowledge/kb_332.md)
+- [kb_333](/knowledge/kb_333.md)
+- [kb_reward_reconciliation](/knowledge/kb_reward_reconciliation.md)
 
 ## Сборники полных текстов
 
 - [Часть 1](/knowledge/kb_final_41_part_1.md)
+- [Часть 2](/knowledge/kb_final_41_part_2.md)

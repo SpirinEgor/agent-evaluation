@@ -220,3 +220,8 @@ If you use a specific component of $\tau^3$-bench, please cite the corresponding
 
 The 61-task banking release, installation requirements, offline checks, and MCP usage
 are described in [the banking guide](data/tau2/domains/banking_ru/README.md).
+
+
+Banking task authors: start with [Banking.ru development and task references](docs/banking-ru.md).
+The accepted banking score is `DB × ACTION`; the guide records the pending
+implementation migration and preserves shared ENV support for other domains.

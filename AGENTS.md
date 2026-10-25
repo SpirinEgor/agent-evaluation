@@ -2,6 +2,30 @@
 
 > Instructions for AI coding agents working on the τ-bench codebase.
 
+## Контракт банковского домена — решение 25 октября 2026
+
+Общий концепт банковского бенчмарка и основная инструкция разработчика:
+[Banking.ru: общий концепт бенчмарка и разработка задач](docs/banking-ru.md).
+Перед изменением домена или задач читать этот документ: в нём описаны вход
+агента (тикет и краткий startup AGENTS.md), базы знаний и политик, MCP систем,
+клиентские уточнения, самостоятельное завершение через done, механика DB/ACTION
+и правила валидации. Там же находятся прямые ссылки на сложные задания.
+Банковская оценка состоит только из `DB × ACTION`: конечное состояние и
+допустимость траектории. Банковский ENV исключается после переноса уникальных
+проверок в ACTION и проверки покрытия дублей DB. Поддержка ENV других доменов
+в общем движке сохраняется. COMMUNICATE и NL_ASSERTION в банковский балл не входят.
+
+Это принятое требование, а не заявление о готовности: текущие данные и код ещё
+используют прежний трёхкомпонентный контракт. Не отключать защиты простым
+удалением ENV из reward_basis. Исторические результаты не переписывать;
+проверка миграции адресная, без автоматического расширения модельных запусков.
+
+## Приоритет оценки бизнес-процесса — решение 21 октября 2026
+
+Итоговая оценка отражает только выполнение банковского поручения и нарушения бизнес-процесса: деньги, продукты, полномочия, согласие, конфиденциальность, реальные состояния и обязательные зависимости. Само отсутствие чтения конкретной статьи, неверное имя или параметр API, несуществующий путь и отклонённый запрос без банковских последствий не дают ноль после корректного восстановления. Эти события сохраняются в журнале отдельно от бизнес-балла. Права и фактическое разглашение проверяются по полному исходному журналу. Успешное запрещённое действие не оправдывается последующим откатом. done остаётся протоколом завершения; при бизнес-профиле его отсутствие само по себе не обнуляет уже выполненные цели.
+
+Отдельное прекращение после пяти ошибок отключается (max_errors=0); максимум100 банковских вызовов сохраняется. Незавершённый по прежнему лимиту ошибок прогон не доказывает ошибку банковской логики. Это решение имеет приоритет над прежними требованиями оценивать технические ошибки и обязательные чтения. Применение профиля к данным не подтверждает проверку остальных задач; адресная валидация обязательна.
+
 ## Project Overview
 
 τ-bench is a simulation framework for evaluating conversational customer service agents. It supports text and voice interactions in half-duplex (turn-based) and full-duplex (simultaneous/streaming) communication modes. Domains include `mock`, `airline`, `retail`, `telecom`, and `banking_knowledge`.
@@ -208,6 +232,46 @@ test: add integration tests for retail domain
 
 The supported dataset is `data/tau2/domains/banking_ru` (61 tasks). Follow its README.
 Preserve the identical shared agent environment and the completion_only contract.
-Keep DB × ENV_ASSERTION × ACTION, received-result dependencies, authentication,
+Keep DB × ACTION, received-result dependencies, authentication,
 ownership and outgoing tool-argument confidentiality. Do not require final customer prose.
 Do not commit local model logs, session tokens, snapshots, secrets or lock files.
+
+
+## Banking benchmark: full-access launch policy (2026-10-14)
+
+Always run benchmark Codex with full access:
+`codex exec --dangerously-bypass-approvals-and-sandbox ...`.
+This selects `sandbox_mode="danger-full-access"` and `approval_policy="never"`.
+Do not use automatic approval review or a restricted Codex sandbox for these runs.
+Apply this launch policy identically to all banking tasks; record the effective
+command and access settings with each attempt.
+
+The benchmark environment owns the restrictions: expose only the session's bank
+MCP, its allowlisted corpus and fresh scenario state. Preserve ownership,
+authentication, tool budgets, forbidden-attempt logging and DB × ACTION.
+Keep shell/web/apps/plugins/local skills and automatic project instructions disabled.
+Do not expose Wiki, evaluator sources, references, solutions, Solution Contracts,
+previous trajectories or unrelated tools to the tested model.
+
+Full access removes Codex's host filesystem protections. Tool visibility alone
+is insufficient if a built-in such as apply_patch can still access host files.
+Before live runs, verify the actual model-visible tools and enforce isolation in
+an external execution environment (without host/Wiki/evaluator mounts), or in
+an equivalently verified tool boundary. An unresolved host access channel blocks
+live launch; do not describe an unverified boundary as isolated. This policy does
+not authorize additional attempts, a full regression, or changes to task data/grading.
+
+
+### Verified full-access container transport (2026-10-14)
+
+The supported banking harness now creates a fresh Docker container for each
+Codex process via `scripts/banking_ru/codex_container.py`. Full access applies
+inside that container. Never add host bind/volume mounts, Docker socket,
+privileged mode, host PID/IPC/network namespace or host checkout to it.
+Pin the image ID for an experiment (`--container-image sha256:...`). Only the
+bank startup and a temporary CLI authentication credential copy are delivered;
+auth lives in container tmpfs and is removed with the container. No evaluator,
+Wiki, data files, Solution Contracts, previous histories or host skills are copied.
+Bank MCP remains a separate fresh process/session with its own corpus boundary.
+The actual apply_patch confinement and model request must be verified before
+model runs; CLI/HTTP-stub and native patch probes do not call a model.

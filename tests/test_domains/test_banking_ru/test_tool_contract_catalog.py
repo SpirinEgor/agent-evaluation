@@ -12,6 +12,11 @@ GROUPS = (
     "file_tool_contracts",
     "finance_tool_contracts",
     "card_case_tool_contracts",
+    "case_document_tool_contracts",
+    "authority_tool_contracts",
+    "fee_state_tool_contracts",
+    "reward_workflow_tool_contracts",
+    "resolution_tool_contracts",
 )
 
 
@@ -29,7 +34,7 @@ SUCCESS = collect_scenarios("SUCCESS_SCENARIOS")
 
 ERROR = collect_scenarios("ERROR_SCENARIOS")
 
-NO_ERROR_INPUT = {"list_tariffs"}
+NO_ERROR_INPUT = {"list_tariffs", "get_bank_date"}
 
 
 def test_every_registered_tool_has_success_and_error_contracts():

@@ -75,3 +75,46 @@ def test_unknown_tool_is_an_error_not_a_crash():
     s = make()
     res = s.call("drop_database", {})
     assert res.is_error is True and s.errors == 1
+
+
+def test_banking_default_allows_six_errors_and_stops_at_100_calls():
+    s = make()
+    for _ in range(6):
+        s.call("unknown_tool", {})
+    assert s.status is SessionStatus.OPEN
+    for _ in range(93):
+        s.call("find_customer", {"phone": "+7 903 555-11-22"})
+    assert s.status is SessionStatus.OPEN
+    s.call("find_customer", {"phone": "+7 903 555-11-22"})
+    assert s.status is SessionStatus.BUDGET_EXHAUSTED
+    assert len(s.log) == 100
+
+
+def test_other_domain_keeps_default_error_stop_and_explicit_override():
+    from tau2.domains.mock.environment import get_environment as mock_environment
+    from tau2.domains.mock.environment import get_tasks as mock_tasks
+
+    task = mock_tasks()[0]
+    s = PlatformSession(task, mock_environment)
+    assert s.max_calls == 60
+    for _ in range(4):
+        s.call("unknown_tool", {})
+    assert s.status is SessionStatus.OPEN
+    s.call("unknown_tool", {})
+    assert s.status is SessionStatus.TOO_MANY_ERRORS
+    overridden = PlatformSession(task, mock_environment, max_calls=2, max_errors=0)
+    for _ in range(2):
+        overridden.call("unknown_tool", {})
+    assert overridden.status is SessionStatus.BUDGET_EXHAUSTED
+
+
+def test_business_success_without_done_survives_protocol_cleanup():
+    s = make()
+    s.task = s.task.model_copy(deep=True)
+    s.task.evaluation_criteria.business_process_only = True
+    s.replay_actions(s.task.evaluation_criteria.actions)
+    assert s.status is SessionStatus.OPEN
+    assert s.errors == 0
+    assert s.grade().final_reward == 1.0
+    s.call("done", {})
+    assert s.grade().final_reward == 1.0

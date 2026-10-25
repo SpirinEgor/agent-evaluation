@@ -241,3 +241,23 @@ TERM_DARK_MODE = True
 # Платформа оценки внешних агентов через MCP-сессии (src/tau2/platform)
 PLATFORM_PORT = 8010
 PLATFORM_DATA_DIR = _DATA_DIR / "platform"
+
+PLATFORM_MAX_CALLS = 60
+PLATFORM_MAX_ERRORS = 5
+BANKING_PLATFORM_MAX_CALLS = 100
+BANKING_PLATFORM_MAX_ERRORS = 0
+
+
+def platform_budgets(
+    domain: str, max_calls: int | None = None, max_errors: int | None = None
+) -> tuple[int, int]:
+    """Resolve domain defaults while preserving explicit participant limits."""
+    banking = domain == "banking_ru"
+    return (
+        max_calls
+        if max_calls is not None
+        else (BANKING_PLATFORM_MAX_CALLS if banking else PLATFORM_MAX_CALLS),
+        max_errors
+        if max_errors is not None
+        else (BANKING_PLATFORM_MAX_ERRORS if banking else PLATFORM_MAX_ERRORS),
+    )

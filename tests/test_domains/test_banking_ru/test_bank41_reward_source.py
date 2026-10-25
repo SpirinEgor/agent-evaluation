@@ -1,4 +1,4 @@
-"""Bank41 exact operative N40 sources replace the redundant rewards policy."""
+"""N40 atomic/bundle knowledge sources preserve rewards intake authority."""
 
 import json
 import os
@@ -26,15 +26,6 @@ from tests.utils.banking_full_grade import grade_full_session
 def test_bank41_reward_source(mode, route, expected):
     task = deepcopy(next(t for t in get_tasks() if t.id == "Bank 41"))
     actions = deepcopy(task.evaluation_criteria.actions)
-    if route != "reference":
-        actions = [
-            a
-            for a in actions
-            if not (
-                a.name == "file_read"
-                and a.arguments.get("path") == "/policies/fees_rewards.md"
-            )
-        ]
     if route in ["bundle_only", "overview_only", "partial_bundle", "unrelated"]:
         actions = [
             a
@@ -60,7 +51,18 @@ def test_bank41_reward_source(mode, route, expected):
             }
             if route == "partial_bundle":
                 source.arguments.update(start_line=1, end_line=1)
-            actions.insert(0, source)
+            if route == "bundle_only":
+                from tau2.domains.banking_ru import utils
+
+                folder = utils.BANKING_RU_DATA_DIR / "corpus/knowledge"
+                for index, bundle in enumerate(
+                    sorted(folder.glob("kb_final_41_part_*.md"))
+                ):
+                    item = deepcopy(source)
+                    item.arguments = {"path": "/knowledge/" + bundle.name}
+                    actions.insert(index, item)
+            else:
+                actions.insert(0, source)
     session = PlatformSession(task, get_environment, max_calls=250, max_errors=100)
     if route == "early_private":
         session.call("get_accounts", {"customer_id": "egorova_n_3358"})
@@ -95,3 +97,7 @@ def test_bank41_reward_source(mode, route, expected):
         ).replace("мускат", "[MASKED]")
         (path / f"{route}-{mode}.json").write_text(payload)
     assert reward.final_reward == expected, reward.info
+
+
+# Explicitly retain the historical scenario version; composite tests live separately.
+pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")

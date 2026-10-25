@@ -8,6 +8,7 @@ from tau2.domains.banking_ru.environment import (
     get_tasks,
     get_tasks_split,
 )
+from tau2.domains.banking_ru.mcp_systems import TOOL_OWNERS
 from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.registry import registry
 
@@ -39,7 +40,14 @@ def test_corpus_and_tools_are_shipped_and_available():
     b = get_environment(task_id="Bank 7")
     tools_a = {t.name: t.params.model_json_schema() for t in a.get_tools()}
     assert tools_a == {t.name: t.params.model_json_schema() for t in b.get_tools()}
-    assert len(tools_a) == 65
+    # The shared tool surface evolves. Require every exposed API to have a
+    # system route and every shipped access selector to target an available API.
+    assert tools_a.keys() <= TOOL_OWNERS.keys()
+    for task in get_tasks():
+        assert (
+            task.evaluation_criteria.tool_access_policy.tool_arguments.keys()
+            <= tools_a.keys()
+        )
     assert {
         "file_read",
         "file_search",

@@ -1,5 +1,17 @@
 # AGENTS.md — src/tau2/evaluator/
 
+## Banking.ru override — 25 October 2026
+
+The accepted banking contract is `DB × ACTION`; see the
+[banking development guide](../../../docs/banking-ru.md).
+Banking ENV trajectory guards must move into ACTION and redundant state checks
+must be verified before removal. Current runtime still has the old three-part
+contract: this documentation does not certify a completed migration.
+Preserve raw-trace ownership and confidentiality checks, valid alternatives,
+and the business-process policy. Do not require final customer prose or a
+particular document-reading path. Shared ENV support for other domains remains.
+The generic evaluator descriptions below do not override this banking decision.
+
 ## Overview
 
 The evaluator module scores simulation runs. Each evaluator is a classmethod-only class that takes a task and trajectory, and returns a `RewardInfo`.

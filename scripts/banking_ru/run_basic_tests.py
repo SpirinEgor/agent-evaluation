@@ -28,14 +28,63 @@ GROUPS = {
         "tests/test_trace_evidence.py",
         "tests/test_results_format.py",
         "tests/test_evaluator_access_contract.py",
+        "tests/test_evaluator_raw_confidentiality.py",
+        "tests/test_evaluator_business_process.py",
     ),
-    "infra": ("tests/test_platform", *CORPUS),
+    "infra": (
+        *(
+            "tests/test_platform/" + name
+            for name in (
+                "test_bank32_solution_isolation.py",
+                "test_banking_prototype.py",
+                "test_banking_startup_discovery.py",
+                "test_client.py",
+                "test_codex_container.py",
+                "test_codex_harness.py",
+                "test_main.py",
+                "test_mcp_bridge.py",
+                "test_mcp_systems.py",
+                "test_package.py",
+                "test_service.py",
+                "test_session.py",
+            )
+        ),
+        *CORPUS,
+    ),
 }
-# Resolve inventory relative to the repo even when invoked from another cwd.
+# Frozen maintained inventory. Historical experiment modules remain directly
+# addressable; adding a file does not silently expand the basic test contract.
+# See tests/fixtures/banking_ru/README.md for the boundary and retained guarantees.
 GROUPS["regressions"] = tuple(
-    str(path.relative_to(ROOT))
-    for path in sorted((ROOT / BANK).glob("test_*.py"))
-    if str(path.relative_to(ROOT)) not in {BASELINE, TOOLS, *CORPUS}
+    str(BANK / name)
+    for name in (
+        "test_case_document_service.py",
+        "test_cashback_investigation_tools.py",
+        "test_cashback_review.py",
+        "test_cashback_settlement_state.py",
+        "test_discovery_workflow.py",
+        "test_document_revision_delivery.py",
+        "test_reward_workflow_protocols.py",
+        "test_structured_operation_requests.py",
+        "test_structured_escalation.py",
+        "test_optional_operation_questions.py",
+        "test_file_read_repair_contract.py",
+        "test_historical_fixture_integrity.py",
+        "test_bank2_parent_fixture.py",
+        "test_resolution_compatibility.py",
+        "test_resolution_component_pages.py",
+        "test_resolution_deductions.py",
+        "test_resolution_dependencies.py",
+        "test_resolution_funding_pools.py",
+        "test_resolution_percentage_deductions.py",
+        "test_resolution_selection.py",
+        "test_selection_bitset_oracle.py",
+        "test_compatibility_certificate.py",
+        "test_multisource_runtime.py",
+        "test_promotion_source_guard.py",
+        "test_bank2_bank7_generator_repair.py",
+        "test_contract_infrastructure.py",
+    )
 )
 
 

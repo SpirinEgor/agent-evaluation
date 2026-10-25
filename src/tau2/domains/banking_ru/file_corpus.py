@@ -84,6 +84,13 @@ class FileCorpus:
             raise ValueError("Corpus file not found")
         doc = self.documents[path]
         self._read_paths.add(path)
+        if self.manifest.get("presentation") == "legacy_helpdesk":
+            # Same complete immutable article; publication metadata stays internal.
+            return {
+                "id": doc["metadata"]["id"],
+                "title": doc["metadata"].get("title", doc["metadata"]["id"]),
+                "content": doc["content"],
+            }
         receipt = {
             "id": doc["metadata"]["id"],
             "path": path,
@@ -223,4 +230,7 @@ class FileCorpus:
                     "line_truncated": len(text) > 800,
                 }
             )
+        if self.manifest.get("presentation") == "legacy_helpdesk":
+            for hit in hits:
+                hit["id"] = self.documents[hit["path"]]["metadata"]["id"]
         return {"matches": hits[:limit], "truncated": len(hits) > limit}

@@ -17,6 +17,7 @@ from typing import Optional
 import mcp.types as t
 from mcp.server.lowlevel import Server
 
+from tau2.config import platform_budgets
 from tau2.data_model.message import AssistantMessage, Message, ToolCall, ToolMessage
 from tau2.data_model.simulation import RewardInfo, SimulationRun, TerminationReason
 from tau2.data_model.tasks import Action, Task
@@ -28,6 +29,7 @@ from tau2.domains.banking_ru.mcp_systems import (
     startup_policy,
 )
 from tau2.environment.environment import Environment
+from tau2.environment.reference_bindings import reference_arguments
 from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
 from tau2.platform.mcp_bridge import (
     DONE_TOOL_NAME,
@@ -54,8 +56,8 @@ class PlatformSession:
         task: Task,
         environment_constructor: Callable[..., Environment],
         *,
-        max_calls: int = 60,
-        max_errors: int = 5,
+        max_calls: int | None = None,
+        max_errors: int | None = None,
         participant: Optional[str] = None,
         on_finish: Optional[Callable[["PlatformSession"], None]] = None,
         mcp_layout: MCPLayout = "single",
@@ -83,8 +85,9 @@ class PlatformSession:
                 json.dumps(task_snapshot, sort_keys=True, ensure_ascii=False).encode()
             ).hexdigest()
             self.env.run_metadata["task_snapshot"] = task_snapshot
-        self.max_calls = max_calls
-        self.max_errors = max_errors
+        self.max_calls, self.max_errors = platform_budgets(
+            self.env.domain_name, max_calls, max_errors
+        )
         self.participant = participant
         self._on_finish = on_finish
         self.status = SessionStatus.OPEN
@@ -98,6 +101,7 @@ class PlatformSession:
         self.mcp_events: list[dict] = []
         self._messages: list[Message] = []
         self._results: dict[str, ToolMessage] = {}
+        self._canonical_trace_calls: dict[str, ToolCall] = {}
         self._event_order = 0
         self._finish_notified = False
         self.mcp_tools: list[t.Tool] = [
@@ -166,16 +170,40 @@ class PlatformSession:
             or not self._allowed(name, system)
             or bool(call.arguments)
         )
+        trace_call = call
+        if (
+            name == "call_discoverable_agent_tool"
+            and self.env.domain_name == "banking_ru"
+        ):
+            from tau2.domains.banking_ru.discovery_workflow import SPECIAL_TOOLS
+
+            nested_name = call.arguments.get("name")
+            nested_args = call.arguments.get("arguments")
+            if (
+                set(call.arguments) == {"name", "arguments"}
+                and nested_name in SPECIAL_TOOLS
+                and isinstance(nested_args, dict)
+            ):
+                trace_call = call.model_copy(
+                    update={"name": nested_name, "arguments": nested_args}
+                )
+                event["canonical_name"] = nested_name
+                event["canonical_arguments"] = nested_args
+        self._canonical_trace_calls[call.id] = trace_call
         if event["trace_call"]:
             self._messages.append(
-                AssistantMessage(role="assistant", content=None, tool_calls=[call])
+                AssistantMessage(
+                    role="assistant", content=None, tool_calls=[trace_call]
+                )
             )
         return call, event
 
     def _allowed(self, name: str, system: Optional[str]) -> bool:
-        return system is None or name in {
-            tool.name for tool in self.system_tools.get(system, [])
-        }
+        return (
+            name in {tool.name for tool in self.mcp_tools}
+            if system is None
+            else name in {tool.name for tool in self.system_tools.get(system, [])}
+        )
 
     def result_sent(self, attempt: tuple) -> None:
         """Record completed HTTP emission, not merely a computed tool result."""
@@ -268,6 +296,8 @@ class PlatformSession:
             self.finish(SessionStatus.DONE)
             return text_result(STOP_TOKEN)
         call.execution_order = len(self.log)
+        if call.id in self._canonical_trace_calls:
+            self._canonical_trace_calls[call.id].execution_order = call.execution_order
         event["execution_order"] = call.execution_order
         if invalid_done:
             # The declared done schema has no arguments. Keep rejected outgoing
@@ -281,7 +311,17 @@ class PlatformSession:
                 content="Error: ERR_INVALID_ARGUMENT: done accepts no arguments",
             )
         elif allowed:
+            if name == "call_discoverable_agent_tool":
+                self.env.tools.__dict__["_discovery_dispatch_entered"] = False
             message = self.env.get_response(call)
+            if (
+                name == "call_discoverable_agent_tool"
+                and message.error
+                and not self.env.tools.__dict__.get(
+                    "_discovery_dispatch_entered", False
+                )
+            ):
+                message.execution_rejected = True
         else:
             message = ToolMessage(
                 id=call.id,
@@ -303,11 +343,23 @@ class PlatformSession:
             self.result_sent(attempt)
         if message.error:
             self.errors += 1
-        if self.errors >= self.max_errors:
+        if self.max_errors > 0 and self.errors >= self.max_errors:
             self.finish(SessionStatus.TOO_MANY_ERRORS)
         elif len(self.log) >= self.max_calls:
             self.finish(SessionStatus.BUDGET_EXHAUSTED)
-        return to_call_result(message)
+        result = to_call_result(message)
+        result.content.append(
+            t.TextContent(
+                type="text",
+                text=f"Ресурсный бюджет: использовано {len(self.log)}/{self.max_calls}, осталось {max(0, self.max_calls - len(self.log))}; ошибок {self.errors}"
+                + (
+                    f"/{self.max_errors}."
+                    if self.max_errors > 0
+                    else "; без отдельного лимита."
+                ),
+            )
+        )
+        return result
 
     def finish(self, status: SessionStatus) -> None:
         """Перевести сессию в терминальный статус ровно один раз."""
@@ -358,8 +410,16 @@ class PlatformSession:
 
     def replay_actions(self, actions: Optional[list[Action]]) -> None:
         """Прогнать список действий tau2 через call — эталон как участник."""
+        criteria = self.task.evaluation_criteria
+        bindings = criteria.result_argument_bindings if criteria else []
+        received = {}
         for action in actions or []:
-            self.call(action.name, dict(action.arguments))
+            arguments = reference_arguments(
+                action, action.arguments, bindings, received
+            )
+            result = self.call(action.name, arguments)
+            if not result.is_error:
+                received[action.action_id] = result.content[0].text
 
     def grade(self) -> RewardInfo:
         """Оценка всеми основаниями задачи по журналу.

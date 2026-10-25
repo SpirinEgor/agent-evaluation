@@ -183,3 +183,50 @@ def test_unresolved_result_does_not_publish_numeric_final_label(app, monkeypatch
     row = run_with_app(app, go)
     assert row["reward"] is None
     assert row["grading_status"] == "needs_review"
+
+
+def test_service_advertises_effective_banking_budget(app):
+    async def go(http):
+        return await open_session(http)
+
+    info = run_with_app(app, go)
+    assert (info["max_calls"], info["max_errors"]) == (100, 0)
+
+
+@pytest.mark.parametrize("profile", [False, True])
+def test_result_exposes_effective_business_profile_without_promoting_noop(
+    settings, monkeypatch, profile
+):
+    from tau2.platform.service import build_app
+    from tau2.registry import registry
+
+    task = next(t for t in get_tasks("base") if t.id == "Bank 46").model_copy(deep=True)
+    task.evaluation_criteria.business_process_only = profile
+    monkeypatch.setattr(
+        registry, "get_tasks_loader", lambda domain: lambda **kw: [task]
+    )
+
+    async def go(http):
+        info = await open_session(http)
+        url = f"http://platform{info['mcp_path']}"
+        async with streamable_http_client(url, http_client=http) as streams:
+            async with ClientSession(streams[0], streams[1]) as mcp:
+                await mcp.initialize()
+                await mcp.call_tool("done", {})
+        return (await http.get(f"/sessions/{info['token']}/result")).json()
+
+    result = run_with_app(build_app(settings), go)
+    assert result["business_process_only"] is profile
+    assert result["reward"] == 0.0
+
+
+def test_service_preserves_explicit_banking_limits(settings):
+    from tau2.platform.service import build_app
+
+    settings.max_calls, settings.max_errors = 7, 2
+
+    async def go(http):
+        return await open_session(http)
+
+    info = run_with_app(build_app(settings), go)
+    assert (info["max_calls"], info["max_errors"]) == (7, 2)

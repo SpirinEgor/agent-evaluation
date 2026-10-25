@@ -72,3 +72,12 @@ The `banking_knowledge` domain extends the standard domain pattern significantly
 - **Extended data directory**: `data/tau2/domains/banking_knowledge/` contains `documents/` (700+ JSON docs), `prompts/` (per-variant policy templates), and `tasks/` (individual task JSON files) in addition to `db.json`.
 - **Retrieval pipeline**: Uses the `src/tau2/knowledge/` module for embeddings, BM25, grep, reranking, and sandboxed shell access. See `src/tau2/knowledge/README.md`.
 - **Solo mode**: Not supported (raises `ValueError`).
+
+
+## Banking.ru development
+
+For `banking_ru`, read the [banking development guide](../../../docs/banking-ru.md)
+before authoring tasks or changing shared tools. The accepted score is `DB × ACTION`;
+the current implementation still needs migration from the old three-part contract.
+Use the guide's concrete task references; preserve the common environment for all
+banking tasks. Do not apply early banking design documents as current requirements.

@@ -103,3 +103,15 @@ Retrieval e2e tests use skip markers to gate tests that require external depende
 - Do not add tests that require live API keys to the default test suite — gate them with markers or environment variables.
 - Do not modify shared test audio files in `testdata/` without regenerating via `generate_test_audio.py`.
 - Do not use `mock` domain tasks for testing domain-specific behavior — use the actual domain's fixtures.
+
+
+## Banking.ru tests
+
+The [banking development guide](../docs/banking-ru.md) defines the
+accepted `DB × ACTION` contract and its migration status. Do not remove existing
+ENV guards until their unique checks are preserved in ACTION and state duplicates
+are verified against DB. Reference, allowed alternatives, noop and substantial
+wrong routes must retain their expected whole-grade outcomes.
+Run targeted offline checks for the changed guarantees. Historical fixtures must
+be self-contained; maintained tests must not depend on ignored `artifacts/`.
+Full regression and model runs are not implied by a documentation change.

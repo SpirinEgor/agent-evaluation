@@ -14,10 +14,10 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from loguru import logger
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from starlette.routing import Mount
 
-from tau2.config import PLATFORM_DATA_DIR
+from tau2.config import PLATFORM_DATA_DIR, platform_budgets
 from tau2.data_model.tasks import Task
 from tau2.domains.banking_ru.mcp_systems import SINGLE_SERVER, MCPLayout
 from tau2.platform.mcp_transport import MCPTransportJournal
@@ -30,11 +30,19 @@ MCP_MOUNT_PREFIX = "/s"
 class PlatformSettings(BaseModel):
     domain: str = "banking_ru"
     split: str = "base"
-    max_calls: int = 60
-    max_errors: int = 5
+    max_calls: int | None = None
+    max_errors: int | None = None
     reveal_checks: bool = False
     results_dir: Path = PLATFORM_DATA_DIR
     mcp_layout: Optional[MCPLayout] = None
+
+    @model_validator(mode="after")
+    def resolve_budgets(self):
+        """Apply the same effective limits as direct MCP sessions and the CLI."""
+        self.max_calls, self.max_errors = platform_budgets(
+            self.domain, self.max_calls, self.max_errors
+        )
+        return self
 
 
 class SessionCreate(BaseModel):
@@ -73,6 +81,7 @@ class SessionResult(BaseModel):
     task_id: str
     status: SessionStatus
     reward: float | None
+    business_process_only: bool = False
     grading_status: str | None = None
     reward_breakdown: Optional[dict[str, float]] = None
     env_assertions: Optional[list[dict]] = None
@@ -300,6 +309,11 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             task_id=s.task.id,
             status=s.status,
             reward=reward.final_reward,
+            business_process_only=bool(
+                s.env.domain_name == "banking_ru"
+                and s.task.evaluation_criteria
+                and s.task.evaluation_criteria.business_process_only
+            ),
             **(
                 {"grading_status": "needs_review"}
                 if reward.grading_status == "needs_review"

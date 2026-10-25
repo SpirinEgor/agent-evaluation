@@ -40,6 +40,7 @@ def test_bank40_billing_period_is_discoverable_before_correction():
     assert [(row["effective_from"], row["monthly_fee"]) for row in history] == [
         ("2026-07-28", 199),
         ("2026-08-28", 249),
+        ("2026-09-28", 299),
     ]
     assert history[0]["qualifying_period"] == {
         "start": "2026-06-28",
@@ -50,8 +51,10 @@ def test_bank40_billing_period_is_discoverable_before_correction():
         "end": "2026-08-27",
     }
     assert [
-        (row["avg_monthly_balance"], row["monthly_turnover"]) for row in history
-    ] == [(4200, 8000), (4200, 8000)]
+        (row["avg_monthly_balance"], row["monthly_turnover"]) for row in history[:2]
+    ] == [(10000, 8000), (4200, 8000)]
+    assert "avg_monthly_balance" not in history[2]
+    assert "monthly_turnover" not in history[2]
 
 
 @pytest.mark.parametrize("mode", ["HALF"])
@@ -61,7 +64,7 @@ def test_bank40_billing_period_is_discoverable_before_correction():
         ("details_selected", 1),
         ("no_calculate", 1),
         ("old_119", 0),
-        ("processing_139", 0),
+        ("stale_169", 0),
         ("missing_period_receipt", 0),
     ],
 )
@@ -70,7 +73,7 @@ def test_bank40_period_routes(route, expected, mode):
     session = PlatformSession(task, get_environment, max_calls=100, max_errors=100)
     correction = {
         "transaction_id": "txn_088219",
-        "amount": 169.0,
+        "amount": 139.0,
         "request": {"type": "fee_correction"},
     }
     if route == "early_repaired":
@@ -104,14 +107,14 @@ def test_bank40_period_routes(route, expected, mode):
             if action.name != "refund_fee":
                 session.call(action.name, dict(action.arguments))
                 continue
-            args = dict(correction)
+            args = dict(action.arguments)
             if route == "wrong_fee_169":
                 args["transaction_id"] = "txn_088215"
-            if route in {"old_119", "full_249", "processing_139"}:
+            if route in {"old_119", "full_249", "stale_169"}:
                 args["amount"] = {
                     "old_119": 119,
                     "full_249": 249,
-                    "processing_139": 139,
+                    "stale_169": 169,
                 }[route]
             if route == "wrong_attempt_repaired":
                 session.call(
@@ -201,5 +204,9 @@ def test_bank40_period_routes(route, expected, mode):
             and t.kind == "fee_refund"
             and t.status == "posted"
         ]
-        assert sorted(t.amount for t in posted) == [80, 169]
-        assert db.transactions["txn_088218"].status == "processing"
+        assert sorted(t.amount for t in posted) == [30, 80, 139]
+        assert db.transactions["txn_088218"].status == "posted"
+
+
+# Explicitly retain the historical scenario version; composite tests live separately.
+pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")

@@ -170,20 +170,19 @@ def tariffs(env: Environment):
 
 def cashback(env: Environment):
     rules = _read(env, "get_cashback_rules", customer_id="gromov_a_1187")
-    assert rules == {
-        "customer_id": "gromov_a_1187",
-        "categories": [
-            {
-                "name": "Рестораны и кафе",
-                "rate": 0.05,
-                "mcc_codes": ["5812", "5813", "5814"],
-            },
-            {"name": "Супермаркеты", "rate": 0.02, "mcc_codes": ["5411", "5499"]},
-        ],
-        "excluded_mcc": ["6011", "4829"],
-        "payout_day": 5,
-        "accrued_current_period": 0.0,
-    }
+    assert rules["customer_id"] == "gromov_a_1187"
+    assert [category["rate"] for category in rules["categories"]] == [0.01, 0.02]
+    assert rules["excluded_mcc"] == ["6011", "4829"]
+    assert rules["payout_day"] == 5
+    assert rules["accrued_current_period"] == 0
+    assert rules["monthly_cap"] == 1000
+    assert float(rules["cap_remaining_before_transaction"]["txn_552290"]) == 35
+    history = rules["categories_history"]
+    assert [(row["effective_from"], row["effective_to"]) for row in history] == [
+        ("2026-07-01", "2026-07-31"),
+        ("2026-08-01", None),
+    ]
+    assert [float(row["categories"][0]["rate"]) for row in history] == [0.05, 0.01]
 
 
 def devices(env: Environment):
@@ -368,3 +367,117 @@ def loan_cases(env):
 
 SUCCESS_SCENARIOS["get_loan_cases"] = loan_cases
 ERROR_SCENARIOS["get_loan_cases"] = _missing_customer("get_loan_cases")
+
+
+def bank_date(env):
+    assert _read(env, "get_bank_date") == {"date": env.tools.db.today}
+
+
+SUCCESS_SCENARIOS["get_bank_date"] = bank_date
+
+
+def reward_contracts(env: Environment):
+    identify(env, "gromov_a_1187")
+    rows = _read(env, "get_reward_contracts", customer_id="gromov_a_1187")
+    assert len(rows) == 1
+    assert rows[0]["id"] == "rc_610482"
+    assert rows[0]["card_ids"] == ["card_1187", "card_804217"]
+
+
+def promotion_activations(env: Environment):
+    identify(env, "gromov_a_1187")
+    rows = _read(
+        env,
+        "get_promotion_activations",
+        customer_id="gromov_a_1187",
+        promotion_id="promo_730415",
+    )
+    assert len(rows) == 1
+    assert rows[0]["activated_at"] == "2026-07-26T11:00:00+03:00"
+    assert set(rows[0]) == {
+        "id",
+        "customer_id",
+        "promotion_id",
+        "activated_at",
+        "revoked_at",
+    }
+
+
+SUCCESS_SCENARIOS.update(
+    {
+        "get_reward_contracts": reward_contracts,
+        "get_promotion_activations": promotion_activations,
+    }
+)
+ERROR_SCENARIOS.update(
+    {
+        name: _missing_customer(name)
+        for name in ("get_reward_contracts", "get_promotion_activations")
+    }
+)
+
+
+def cashback_settlement(env: Environment):
+    identify(env, "gromov_a_1187")
+    result = succeed(
+        env,
+        "refresh_cashback_settlement",
+        customer_id="gromov_a_1187",
+        period="2026-07",
+    )
+    assert result["status"] == "settled"
+    assert result["changed_transaction_ids"] == ["txn_804287"]
+    repeated = succeed(
+        env,
+        "refresh_cashback_settlement",
+        customer_id="gromov_a_1187",
+        period="2026-07",
+    )
+    assert repeated["changed_transaction_ids"] == []
+
+
+def cashback_adjustment_status(env: Environment):
+    cashback_settlement(env)
+    result = succeed(
+        env,
+        "execute_cashback_adjustment",
+        permission_id="cap_620184",
+        transaction_id="txn_804219",
+        amount=12,
+        idempotency_key="api-contract",
+        expected_revision=2,
+    )
+    status = _read(
+        env, "get_cashback_adjustment_status", operation_id=result["operation_id"]
+    )
+    assert status["status"] == "succeeded"
+    assert status["granted"] == 12
+
+
+def missing_adjustment_status(env: Environment):
+    reject(
+        env,
+        "get_cashback_adjustment_status",
+        "ERR_NOT_FOUND",
+        operation_id="missing_operation",
+    )
+
+
+SUCCESS_SCENARIOS.update(
+    {
+        "refresh_cashback_settlement": cashback_settlement,
+        "get_cashback_adjustment_status": cashback_adjustment_status,
+    }
+)
+ERROR_SCENARIOS.update(
+    {
+        "refresh_cashback_settlement": lambda env: reject(
+            env,
+            "refresh_cashback_settlement",
+            "ERR_NOT_FOUND",
+            customer_id="missing_customer",
+            period="2026-07",
+        ),
+        "get_cashback_adjustment_status": missing_adjustment_status,
+    }
+)

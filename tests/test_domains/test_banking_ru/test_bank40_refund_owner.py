@@ -20,15 +20,23 @@ def make_session(route):
         if route == "missing_identity" and action.name == "verify_identity":
             continue
         args = dict(action.arguments)
-        if action.name == "refund_fee" and route.startswith("excess"):
+        if (
+            action.name == "refund_fee"
+            and args["transaction_id"] == "txn_088219"
+            and route.startswith("excess")
+        ):
             session.call(action.name, {**args, "amount": 199})
             if route == "excess_199":
                 continue
         session.call(action.name, args)
     if route in {"refund_details", "refund_details_repeat"}:
-        refund = next(r for c, r in session.log if c.name == "refund_fee")
+        refund = next(
+            r
+            for c, r in session.log
+            if c.name == "refund_fee" and c.arguments["transaction_id"] == "txn_088219"
+        )
         payload = json.loads(refund.content)
-        assert float(payload["refunded"]) == 169
+        assert float(payload["refunded"]) == 139
         assert payload["original_transaction_id"] == "txn_088219"
         session.call(
             "get_transaction_details",
@@ -77,3 +85,7 @@ def test_bank40_routes(route, expected, mode):
             )
         )
     assert reward.final_reward == expected, reward.info
+
+
+# Explicitly retain the historical scenario version; composite tests live separately.
+pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")

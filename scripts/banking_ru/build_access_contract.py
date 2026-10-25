@@ -16,6 +16,8 @@ ROOT = Path(__file__).resolve().parents[2]
 TOOLS_FILE = ROOT / "src/tau2/domains/banking_ru/tools.py"
 ARGUMENT_COLLECTIONS = {
     "customer_id": "customers",
+    "submission_id": "reward_client_submissions",
+    "statement_id": "reward_statement_registrations",
     "account_id": "accounts",
     "source_account_id": "accounts",
     "payout_account_id": "accounts",
@@ -23,6 +25,8 @@ ARGUMENT_COLLECTIONS = {
     "to_account_id": "accounts",
     "card_id": "cards",
     "transaction_id": "transactions",
+    "original_transaction_id": "transactions",
+    "promotion_id": "promotions",
     "transaction_ids": "transactions",
     "dispute_id": "disputes",
     "case_id": "cases",
@@ -33,12 +37,36 @@ ARGUMENT_COLLECTIONS = {
     "penalty_id": "penalties",
     "device_id": "devices",
     "document_id": "documents",
+    "contact_id": "document_contacts",
+    "permission_id": "cashback_adjustment_permissions",
+    "request_id": "bank_operations",
+    "operation_id": "cashback_adjustment_operations",
+    "offer_id": "reward_resolution_offers",
 }
-PUBLIC_ID_ARGUMENTS = {"article_id", "new_tariff_id", "confirmation_id", "quote_id"}
+PUBLIC_ID_ARGUMENTS = {
+    "article_id",
+    "new_tariff_id",
+    "confirmation_id",
+    "quote_id",
+    "merchant_id",
+}
+# Component IDs are offer-local keys, never selectors of another customer's data.
+# The enclosing offer_id is protected; execution verifies membership in that offer.
+LOCAL_ID_ARGUMENTS = {
+    "execute_reward_resolution": {"component_ids"},
+    "ask_client": {"component_ids"},
+}
 PRE_AUTH_TOOLS = ["verify_identity", "ask_client", "reply_to_ticket"]
 RESULT_COLLECTIONS = {
+    "ask_client": ["reward_client_submissions"],
+    "register_reward_statement": ["reward_statement_registrations"],
+    "get_reward_statement_status": ["reward_statement_registrations"],
+    "get_reward_resolution_offers": ["reward_resolution_offers"],
+    "execute_reward_resolution": ["transactions"],
     "get_accounts": ["accounts"],
     "get_cards": ["cards"],
+    "get_reward_contracts": ["reward_contracts"],
+    "get_promotion_activations": ["promotion_activations"],
     "get_transactions": ["transactions"],
     "get_operations": ["transactions"],
     "get_transaction_details": ["transactions"],
@@ -51,14 +79,31 @@ RESULT_COLLECTIONS = {
     "open_account": ["accounts"],
     "open_deposit": ["deposits"],
     "create_case": ["cases"],
+    "create_cashback_investigation": ["cases"],
     "request_account_closure": ["cases"],
     "open_card_loss_case": ["cases"],
     "request_credit_holidays": ["cases"],
     "escalate_to_human": ["cases"],
     "open_dispute": ["disputes"],
-    "refund_fee": ["transactions"],
+    "refund_fee": ["transactions", "bank_operations"],
     "refund_transaction": ["transactions"],
     "grant_cashback": ["transactions"],
+    "get_cashback_adjustment_permissions": ["cashback_adjustment_permissions"],
+    "execute_cashback_adjustment": ["transactions", "cashback_adjustment_operations"],
+    "get_cashback_adjustment_status": [
+        "transactions",
+        "cashback_adjustment_operations",
+    ],
+    "refresh_cashback_settlement": ["transactions"],
+    "get_case_documents": ["documents"],
+    "get_document_status": ["documents"],
+    "get_document_delivery_contacts": ["document_contacts"],
+    "deliver_case_document": ["document_deliveries", "bank_operations"],
+    "get_fee_refund_state": ["transactions"],
+    "get_bank_operation_status": ["bank_operations"],
+    "get_cashback_investigations": ["cases"],
+    "amend_cashback_investigation": ["cases"],
+    "submit_cashback_review": ["cases"],
 }
 
 
@@ -86,6 +131,7 @@ def protected_arguments() -> dict[str, dict[str, str]]:
             {arg for arg in arguments if arg.endswith(("_id", "_ids"))}
             - ARGUMENT_COLLECTIONS.keys()
             - PUBLIC_ID_ARGUMENTS
+            - LOCAL_ID_ARGUMENTS.get(method.name, set())
         )
         if unknown:
             raise ValueError(
@@ -107,13 +153,92 @@ def protected_arguments() -> dict[str, dict[str, str]]:
     result["ask_client"]["loan_id"] = "loans"
     result["ask_client"]["account_id"] = "accounts"
     result["ask_client"]["payout_account_id"] = "accounts"
+    result["ask_client"]["request.card_id"] = "cards"
+    result["ask_client"]["request.refunds.*.transaction_id"] = "transactions"
+    result["create_cashback_investigation"]["items.*.transaction_id"] = "transactions"
+    result["amend_cashback_investigation"]["items.*.transaction_id"] = "transactions"
+    result["create_cashback_investigation"]["reserved_adjustments.*.permission_id"] = (
+        "cashback_adjustment_permissions"
+    )
+    result["create_cashback_investigation"]["reserved_adjustments.*.transaction_id"] = (
+        "transactions"
+    )
+    result["amend_cashback_investigation"]["reserved_adjustments.*.permission_id"] = (
+        "cashback_adjustment_permissions"
+    )
+    result["amend_cashback_investigation"]["reserved_adjustments.*.transaction_id"] = (
+        "transactions"
+    )
+    result["ask_client"]["request.contact_id"] = "document_contacts"
+    result["ask_client"]["request.offer_id"] = "reward_resolution_offers"
+    result["ask_client"]["request.case_id"] = "cases"
+    result["ask_client"]["request.payouts.*.transaction_id"] = "transactions"
+    result["ask_client"]["request.resulting_claims.*.transaction_id"] = "transactions"
+    result["execute_reward_resolution"]["payouts.*.transaction_id"] = "transactions"
+    result["ask_client"]["request.arguments.case_id"] = "cases"
+    result["ask_client"]["request.arguments.transaction_ids.*"] = "transactions"
+    result["register_reward_statement"] = {
+        "customer_id": "customers",
+        "case_id": "cases",
+        "submission_id": "reward_client_submissions",
+    }
+    result["get_reward_statement_status"] = {
+        "customer_id": "customers",
+        "statement_id": "reward_statement_registrations",
+    }
     return result
+
+
+def validate_protected_arguments(arguments):
+    """Check effective inherited tool schemas against declared owner selectors."""
+    from tau2.domains.banking_ru.client_requests import StructuredIdentityBankingTools
+    from tau2.environment.tool import as_tool
+    from tau2.environment.toolkit import TOOL_ATTR
+
+    def selectors(node, schema, prefix=""):
+        if "$ref" in node:
+            target = schema
+            for key in node["$ref"].removeprefix("#/").split("/"):
+                target = target[key]
+            yield from selectors(target, schema, prefix)
+        for variant in [*node.get("anyOf", []), *node.get("oneOf", [])]:
+            yield from selectors(variant, schema, prefix)
+        for name, child in node.get("properties", {}).items():
+            path = f"{prefix}.{name}" if prefix else name
+            if name.endswith(("_id", "_ids")):
+                yield path, name
+            if child.get("type") == "array":
+                yield from selectors(child.get("items", {}), schema, path + ".*")
+            else:
+                yield from selectors(child, schema, path)
+
+    missing = []
+    for name in dir(StructuredIdentityBankingTools):
+        method = getattr(StructuredIdentityBankingTools, name)
+        if not getattr(method, TOOL_ATTR, False):
+            continue
+        schema = as_tool(method).params.model_json_schema()
+        for path, selector in selectors(schema, schema):
+            if (
+                selector in PUBLIC_ID_ARGUMENTS
+                or selector == "answer_id"
+                or selector in LOCAL_ID_ARGUMENTS.get(name, set())
+            ):
+                continue
+            collection = ARGUMENT_COLLECTIONS.get(selector)
+            if collection is None or arguments.get(name, {}).get(path) != collection:
+                missing.append(f"{name}.{path}")
+    if missing:
+        raise ValueError(f"Missing protected tool mapping: {missing}")
 
 
 def resource_catalog(db: dict) -> dict[str, dict[str, list[str]]]:
     """Group immutable initial resource owners; created records are learned later."""
     result = {}
-    for collection in sorted(set(ARGUMENT_COLLECTIONS.values())):
+    for collection in sorted(
+        set(ARGUMENT_COLLECTIONS.values())
+        | {c for collections in RESULT_COLLECTIONS.values() for c in collections}
+    ):
         groups = defaultdict(set)
         if collection == "customers":
             for customer_id in db["customers"]:
@@ -165,6 +290,7 @@ def discovery_catalog(db: dict) -> dict:
 def with_contract(tasks: list[dict], db: dict) -> list[dict]:
     """Attach access policy without changing reference actions or ticket content."""
     catalog, arguments = resource_catalog(db), protected_arguments()
+    validate_protected_arguments(arguments)
     for task in tasks:
         criteria = task["evaluation_criteria"]
         subjects = {
