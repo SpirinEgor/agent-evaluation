@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import runpy
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -9,10 +10,32 @@ from pathlib import Path
 import pytest
 
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.domains.banking_ru.task_store import load_tasks
 from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.platform.session import PlatformSession
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_shared_confidentiality_generator_preserves_omitted_empty_fields():
+    """Regeneration must not reintroduce optional empty rules into cleaned tasks."""
+    generator = runpy.run_path(
+        str(ROOT / "scripts/banking_ru/build_confidentiality_contract.py")
+    )
+    tasks = [
+        {
+            "id": "Bank 2",
+            "evaluation_criteria": {
+                "actions": [],
+                "banking_confidentiality_contract": "banking_v1",
+            },
+        }
+    ]
+    database = {"customers": {"synthetic": {"otp_code": "734829"}}, "cards": {}}
+    generated = generator["with_contract"](deepcopy(tasks), database)
+    assert generated == tasks
+    original = json.dumps(tasks, ensure_ascii=False, indent=2)
+    assert generator["render_contract"](original, generated, {"Bank 2"}) == original
 
 
 def access_generator():
@@ -28,7 +51,7 @@ def access_generator():
 
 def test_shipped_access_contracts_include_every_generated_selector():
     generator = access_generator()
-    tasks = json.loads((BANKING_RU_DATA_DIR / "tasks.json").read_text())
+    tasks = load_tasks(BANKING_RU_DATA_DIR / "tasks.json")
     db = json.loads((BANKING_RU_DATA_DIR / "db.json").read_text())
     assert generator.with_contract(deepcopy(tasks), db) == tasks
 
@@ -111,7 +134,7 @@ def test_access_generator_patch_applies_to_temporary_task_only(
     import subprocess
 
     generator = access_generator()
-    tasks = json.loads((BANKING_RU_DATA_DIR / "tasks.json").read_text())[:2]
+    tasks = load_tasks(BANKING_RU_DATA_DIR / "tasks.json")[:2]
     tasks[1]["evaluation_criteria"]["tool_access_policy"]["tool_arguments"] = {}
     untouched = deepcopy(tasks[0])
     task_file = tmp_path / "tasks.json"
