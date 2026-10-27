@@ -29,7 +29,7 @@
 | Общий runner τ-bench | [Запуск симуляций](../running_simulations.md), [слои runner](../../src/tau2/runner/README.md) | [src/tau2/runner/](../../src/tau2/runner/) |
 | Тикет, сценарий и контракт оценки | [Формат задачи](task-format.md), [раздельные файлы задания](#раздельные-файлы-задания) | [task_store.py](../../src/tau2/domains/banking_ru/task_store.py), [схема Task](../../src/tau2/data_model/tasks.py) |
 | Environment и банковские системы | [Общая среда](../banking-ru.md#общая-среда-и-выполнение-поручения), [данные домена](../../data/tau2/domains/banking_ru/README.md) | [environment.py](../../src/tau2/domains/banking_ru/environment.py), [mcp_systems.py](../../src/tau2/domains/banking_ru/mcp_systems.py) |
-| Каталог MCP и вызовы | [Целевая схема discovery](../banking-ru.md#каталог-mcp-и-постепенное-раскрытие-инструментов) | [Текущее discovery](../../src/tau2/domains/banking_ru/discovery_workflow.py), [MCP-сессия](../../src/tau2/platform/session.py) |
+| Каталог MCP и вызовы | [Контракт bank_directory и bank_call](discovery.md) | [Текущее discovery](../../src/tau2/domains/banking_ru/discovery_workflow.py), [MCP-сессия](../../src/tau2/platform/session.py) |
 | Знания и политики | [Правила работы с документами](../banking-ru.md#знания-и-политики) | [file_corpus.py](../../src/tau2/domains/banking_ru/file_corpus.py), [corpus_manifest.py](../../src/tau2/domains/banking_ru/corpus_manifest.py) |
 | Состояние, журнал и завершение | [Порядок попытки](#порядок-одной-попытки), [текущий механизм оценки](../banking-ru.md#как-работает-текущий-оценщик) | [session.py](../../src/tau2/platform/session.py), [mcp_transport.py](../../src/tau2/platform/mcp_transport.py) |
 | Оценщики и результат | [Банковская оценка](evaluation.md), [общие механизмы τ-bench](../evaluation.md) | [evaluator.py](../../src/tau2/evaluator/evaluator.py), [сохранение результатов платформы](../../src/tau2/platform/service.py) |
@@ -132,8 +132,10 @@ flowchart TB
 
 ## Доступ к среде
 
-В концепте уже приняты `bank_directory`, постепенное раскрытие инструментов
-и общий `bank_call`. На верхнем уровне это интерфейс между агентом и MCP
+В [контракте discovery](discovery.md) зафиксированы `bank_directory`,
+постепенное раскрытие инструментов и общий `bank_call`. На старте модели
+доступны схемы этих двух инструментов; каталоги и схемы операций открываются
+по запросу. Это принятый интерфейс, а не реализованный режим запуска. На верхнем уровне это интерфейс между агентом и MCP
 банковских систем. Конкретный способ передачи доступа при запуске ещё нужно
 описать: что получает harness, что видит модель и как связывается одна попытка
 с соответствующей банковской сессией.
@@ -146,7 +148,8 @@ flowchart TB
 ## Что уточняем дальше
 
 - Проверяемый контракт свежей агентской сессии и критерии готовности.
-- Передачу MCP-доступа агентскому harness и начальные инструменты модели.
+- Техническую передачу MCP-доступа агентскому harness; начальные инструменты
+  модели уже определены контрактом discovery.
 - Интерфейс поиска и чтения документов: функции, параметры, результаты и границы.
 - Отображение этих компонентов на текущую реализацию и необходимые изменения.
 
