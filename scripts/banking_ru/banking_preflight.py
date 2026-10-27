@@ -783,7 +783,43 @@ async def probe(spec, out):
             {"outcome": "technical_failure", "error": str(exc), "fingerprint": fp},
         )
         raise
-
+    finally:
+        if os.getenv("BANKING_LANGFUSE_ENABLED", "").lower() == "true":
+            # Telemetry is outside the model container and never changes grading.
+            try:
+                telemetry_record = folder / "record.json"
+                if record is None:
+                    telemetry_record = folder / "telemetry-failure.json"
+                    write(
+                        telemetry_record,
+                        {"task_id": spec["task_id"], "technical_failure": True},
+                    )
+                exported = subprocess.run(
+                    [
+                        "uv",
+                        "run",
+                        "--script",
+                        str(ROOT / "src/tau2/platform/langfuse_export.py"),
+                        "--record",
+                        str(telemetry_record),
+                        "--model",
+                        spec["model"]["name"],
+                        "--metadata-json",
+                        json.dumps(
+                            {"fingerprint": fp, "attempt_index": len(previous) + 1}
+                        ),
+                    ],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    check=True,
+                )
+                write(folder / "langfuse-export.json", json.loads(exported.stdout))
+            except Exception as telemetry_error:
+                print(
+                    f"Langfuse export failed: {type(telemetry_error).__name__}",
+                    file=sys.stderr,
+                )
 
 
 def review(spec, out, index, evidence):

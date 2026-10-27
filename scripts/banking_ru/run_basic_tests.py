@@ -45,6 +45,7 @@ GROUPS = {
                 "test_codex_container.py",
                 "test_codex_harness.py",
                 "test_main.py",
+                "test_langfuse_export.py",
                 "test_mcp_bridge.py",
                 "test_mcp_systems.py",
                 "test_service.py",

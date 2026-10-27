@@ -587,6 +587,7 @@ async def run_one_attempt(
     )
     return {
         "task_id": task_id,
+        "ticket": opened.ticket,
         "token": opened.token,
         "max_calls": opened.max_calls,
         "max_errors": opened.max_errors,
