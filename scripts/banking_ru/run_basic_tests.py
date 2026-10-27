@@ -52,6 +52,7 @@ GROUPS = {
                 "test_session.py",
             )
         ),
+        "tests/test_banking_repo_check.py",
         *CORPUS,
     ),
 }

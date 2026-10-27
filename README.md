@@ -24,6 +24,7 @@ Voice full-duplex · Knowledge retrieval · 75+ task fixes<br>
 > **Banking.ru development:** start with [AGENTS.md](AGENTS.md) and the
 > [banking documentation](docs/banking-ru.md). The upstream overview below also
 > covers other domains; `banking_ru` is our separate banking benchmark.
+> Quick offline documentation/structure check: `make check-banking-repo` (Python 3.10+, read-only).
 
 ## What's New in $\tau^3$-bench
 

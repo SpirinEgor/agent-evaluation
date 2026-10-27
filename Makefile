@@ -128,3 +128,8 @@ test-banking-task:
 ## Check mandatory shared contract generators without mutating data
 check-banking-contracts:
 	uv run python scripts/banking_ru/check_basic_contracts.py
+
+## Check banking docs, task storage, profiles and maintained test inputs (read-only)
+.PHONY: check-banking-repo
+check-banking-repo:
+	python3 scripts/banking_ru/check_repo.py
