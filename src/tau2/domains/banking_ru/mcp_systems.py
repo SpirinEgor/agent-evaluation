@@ -5,7 +5,7 @@ from typing import Literal
 
 import mcp.types as t
 
-MCPLayout = Literal["single", "systems"]
+MCPLayout = Literal["single", "systems", "directory"]
 SINGLE_SERVER = "banking_ru_pilot"
 
 SYSTEMS = {

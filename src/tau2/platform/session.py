@@ -9,6 +9,7 @@ import inspect
 import json
 import uuid
 from collections.abc import Callable
+from copy import deepcopy
 from datetime import datetime, timezone
 from enum import Enum
 from threading import RLock
@@ -30,6 +31,7 @@ from tau2.domains.banking_ru.mcp_systems import (
 from tau2.environment.environment import Environment
 from tau2.environment.reference_bindings import reference_arguments
 from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
+from tau2.platform.bank_directory import BankDirectory, DirectoryError, directory_tools
 from tau2.platform.mcp_bridge import (
     DONE_TOOL_NAME,
     STOP_TOKEN,
@@ -57,6 +59,7 @@ class PlatformSession:
         *,
         max_calls: int | None = None,
         max_errors: int | None = None,
+        max_discovery_calls: int | None = None,
         participant: Optional[str] = None,
         on_finish: Optional[Callable[["PlatformSession"], None]] = None,
         mcp_layout: MCPLayout = "single",
@@ -87,6 +90,13 @@ class PlatformSession:
         self.max_calls, self.max_errors = platform_budgets(
             self.env.domain_name, max_calls, max_errors
         )
+        if max_discovery_calls is not None and (
+            type(max_discovery_calls) is not int or max_discovery_calls < 1
+        ):
+            raise ValueError("max_discovery_calls must be positive or None")
+        self.max_discovery_calls = max_discovery_calls
+        self.discovery_calls = 0
+        self.tool_call_errors: list[dict] = []
         self.participant = participant
         self._on_finish = on_finish
         self.status = SessionStatus.OPEN
@@ -113,6 +123,27 @@ class PlatformSession:
         )
         if mcp_layout == "systems" and not self.system_tools:
             raise ValueError("System MCP layout is supported only for banking_ru")
+        self.directory = None
+        if mcp_layout == "directory":
+            if self.env.domain_name != "banking_ru":
+                raise ValueError(
+                    "Directory MCP layout is supported only for banking_ru"
+                )
+            from tau2.domains.banking_ru.discovery_workflow import SPECIAL_TOOLS
+            from tau2.environment.tool import as_tool
+
+            native = {tool.name: tool for tool in self.mcp_tools}
+            for name in SPECIAL_TOOLS:
+                if name not in native:
+                    native[name] = to_mcp_tool(as_tool(getattr(self.env.tools, name)))
+            for name in (
+                "unlock_discoverable_agent_tool",
+                "call_discoverable_agent_tool",
+            ):
+                native.pop(name, None)
+            self.system_tools = partition_tools(list(native.values()))
+            self.directory = BankDirectory(self.system_tools, token=self.token)
+            self.mcp_tools = directory_tools()
         self.policy = self.env.get_policy()
 
     # ------------------------------------------------------------- вызовы
@@ -126,7 +157,10 @@ class PlatformSession:
     ) -> t.CallToolResult:
         """Исполнить вызов участника на среде сессии и записать его в журнал."""
         with self._call_lock:
-            result = self._call(name, arguments, system=system, attempt=attempt)
+            dispatch = (
+                self._directory_call if self.directory is not None else self._call
+            )
+            result = dispatch(name, arguments, system=system, attempt=attempt)
             return result
 
     def begin_call(
@@ -136,7 +170,7 @@ class PlatformSession:
         # A previously computed grade describes the old trace only.
         self._reward_info = None
         call = ToolCall(
-            id=str(len(self.mcp_events)), name=name, arguments=arguments or {}
+            id=str(len(self.mcp_events)), name=name, arguments=deepcopy(arguments or {})
         )
         event = {
             "sequence": len(self.mcp_events),
@@ -157,6 +191,21 @@ class PlatformSession:
             or bool(call.arguments)
         )
         trace_call = call
+        if self.directory is not None:
+            if name == "bank_directory":
+                event["trace_call"] = False
+            elif name == "bank_call":
+                target = call.arguments.get("tool_name")
+                values = call.arguments.get("arguments")
+                if isinstance(target, str) and isinstance(values, dict):
+                    trace_call = call.model_copy(
+                        update={"name": target, "arguments": deepcopy(values)}
+                    )
+                    event["canonical_name"] = target
+                    event["canonical_arguments"] = deepcopy(values)
+                    event["system"] = call.arguments.get("system_id")
+                    if target == DONE_TOOL_NAME and not values:
+                        event["trace_call"] = False
         if (
             name == "call_discoverable_agent_tool"
             and self.env.domain_name == "banking_ru"
@@ -183,6 +232,103 @@ class PlatformSession:
                 )
             )
         return call, event
+
+    def _directory_call(self, name, arguments, *, system, attempt):
+        if self.status is not SessionStatus.OPEN:
+            return text_result(
+                f"Сессия завершена ({self.status.value}).", is_error=True
+            )
+        direct = attempt is None
+        attempt = attempt or self.begin_call(name, arguments, system)
+        call, event = attempt
+        try:
+            if system is not None:
+                raise DirectoryError(
+                    "WRONG_SYSTEM", "Используйте общий интерфейс каталога"
+                )
+            if name == "bank_directory":
+                self.discovery_calls += 1
+                if (
+                    self.max_discovery_calls is not None
+                    and self.discovery_calls > self.max_discovery_calls
+                ):
+                    raise DirectoryError(
+                        "DISCOVERY_BUDGET_EXHAUSTED",
+                        "Лимит discovery исчерпан; уже открытые операции остаются доступны",
+                    )
+                payload = self.directory.handle(call.arguments)
+                result = text_result(json.dumps(payload, ensure_ascii=False))
+                event.update(
+                    response=result.content[0].text,
+                    error=False,
+                    returned_at=datetime.now(timezone.utc).isoformat(),
+                )
+            elif name == "bank_call":
+                owner, target, values = self.directory.validate_call(call.arguments)
+                # Computed schemas are not yet received schemas. Reopening an
+                # already received schema never revokes the earlier receipt.
+                if not any(
+                    e.get("original_name") == "bank_directory"
+                    and e.get("arguments", {}).get("operation") == "open_tool"
+                    and e["arguments"].get("system_id") == owner
+                    and e["arguments"].get("tool_name") == target
+                    and "response_order" in e
+                    and e["response_order"] < event["request_order"]
+                    and not e.get("error")
+                    for e in self.mcp_events
+                ):
+                    raise DirectoryError(
+                        "TOOL_SCHEMA_NOT_OPENED", "Получите результат открытия схемы"
+                    )
+                canonical = self._canonical_trace_calls[call.id]
+                result = self._call(
+                    target, values, system=owner, attempt=(canonical, event)
+                )
+            else:
+                raise DirectoryError(
+                    "UNKNOWN_TOOL", "Доступны только bank_directory и bank_call"
+                )
+        except DirectoryError as error:
+            self.tool_call_errors.append(
+                {"call_id": call.id, "surface": name, "code": error.code}
+            )
+            message = ToolMessage(
+                id=call.id,
+                role="tool",
+                requestor="assistant",
+                error=True,
+                execution_rejected=True,
+                content=str(error),
+            )
+            self._results[call.id] = message
+            event.update(
+                response=message.content,
+                error=True,
+                execution_rejected=True,
+                diagnostic_code=error.code,
+                returned_at=datetime.now(timezone.utc).isoformat(),
+            )
+            if name != "bank_directory":
+                canonical = self._canonical_trace_calls[call.id]
+                canonical.execution_order = len(self.log)
+                event["execution_order"] = canonical.execution_order
+                self.log.append((canonical, message))
+                if len(self.log) >= self.max_calls:
+                    self.finish(SessionStatus.BUDGET_EXHAUSTED)
+            result = to_call_result(message)
+        if direct:
+            self.result_sent(attempt)
+        return result
+
+    def discovery_metrics(self):
+        counts = {}
+        for error in self.tool_call_errors:
+            counts[error["code"]] = counts.get(error["code"], 0) + 1
+        return {
+            "calls": self.discovery_calls,
+            "max_calls": self.max_discovery_calls,
+            "tool_call_errors": counts,
+        }
 
     def _allowed(self, name: str, system: Optional[str]) -> bool:
         return (
@@ -359,6 +505,8 @@ class PlatformSession:
     # ------------------------------------------------------------- MCP
     def build_server(self, system: Optional[str] = None) -> Server:
         """Низкоуровневый MCP-сервер, отдающий инструменты этой сессии."""
+        if self.directory is not None and system is not None:
+            raise ValueError("Directory mode exposes only the shared gateway")
         if system is not None and system not in self.system_tools:
             raise ValueError(f"Unknown banking system: {system}")
         purpose = (
@@ -403,7 +551,28 @@ class PlatformSession:
             arguments = reference_arguments(
                 action, action.arguments, bindings, received
             )
-            result = self.call(action.name, arguments)
+            if self.directory is not None:
+                from tau2.domains.banking_ru.mcp_systems import TOOL_OWNERS
+
+                owner = TOOL_OWNERS[action.name]
+                self.call(
+                    "bank_directory",
+                    {
+                        "operation": "open_tool",
+                        "system_id": owner,
+                        "tool_name": action.name,
+                    },
+                )
+                result = self.call(
+                    "bank_call",
+                    {
+                        "system_id": owner,
+                        "tool_name": action.name,
+                        "arguments": arguments,
+                    },
+                )
+            else:
+                result = self.call(action.name, arguments)
             if not result.is_error:
                 received[action.action_id] = result.content[0].text
 
@@ -468,6 +637,8 @@ class PlatformSession:
                 "mcp_layout": self.mcp_layout,
                 "mcp_events": self.mcp_events,
                 "transport_complete": self.transport_complete,
+                "discovery": self.discovery_metrics(),
+                "tool_call_errors": deepcopy(self.tool_call_errors),
                 **getattr(self.env, "run_metadata", {}),
             },
         )

@@ -48,6 +48,8 @@ GROUPS = {
                 "test_langfuse_export.py",
                 "test_mcp_bridge.py",
                 "test_mcp_systems.py",
+                "test_bank_directory.py",
+                "test_directory_session.py",
                 "test_service.py",
                 "test_session.py",
             )

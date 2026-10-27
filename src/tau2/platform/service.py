@@ -14,7 +14,7 @@ from typing import Optional
 from fastapi import FastAPI, HTTPException
 from loguru import logger
 from mcp.server.transport_security import TransportSecuritySettings
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 from starlette.routing import Mount
 
 from tau2.config import PLATFORM_DATA_DIR, platform_budgets
@@ -32,6 +32,7 @@ class PlatformSettings(BaseModel):
     split: str = "base"
     max_calls: int | None = None
     max_errors: int | None = None
+    max_discovery_calls: int | None = Field(default=None, ge=1)
     reveal_checks: bool = False
     results_dir: Path = PLATFORM_DATA_DIR
     mcp_layout: Optional[MCPLayout] = None
@@ -66,6 +67,7 @@ class SessionInfo(BaseModel):
     mcp_layout: MCPLayout
     max_calls: int
     max_errors: int
+    max_discovery_calls: int | None = None
 
 
 class SessionState(BaseModel):
@@ -74,6 +76,7 @@ class SessionState(BaseModel):
     status: SessionStatus
     calls: int
     errors: int
+    discovery: dict | None = None
 
 
 class SessionResult(BaseModel):
@@ -85,6 +88,7 @@ class SessionResult(BaseModel):
     grading_status: str | None = None
     reward_breakdown: Optional[dict[str, float]] = None
     env_assertions: Optional[list[dict]] = None
+    discovery: dict | None = None
 
 
 class _LiveSession:
@@ -235,7 +239,7 @@ def build_app(settings: PlatformSettings) -> FastAPI:
     async def list_tasks() -> list[TaskCard]:
         return [TaskCard(task_id=t.id, ticket=t.ticket or "") for t in tasks.values()]
 
-    @app.post("/sessions", status_code=201)
+    @app.post("/sessions", status_code=201, response_model_exclude_unset=True)
     async def create_session(body: SessionCreate) -> SessionInfo:
         task = tasks.get(body.task_id)
         if task is None:
@@ -252,6 +256,7 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             env_constructor,
             max_calls=settings.max_calls,
             max_errors=settings.max_errors,
+            max_discovery_calls=settings.max_discovery_calls,
             participant=body.participant,
             on_finish=persist,
             mcp_layout=layout,
@@ -273,9 +278,14 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             mcp_layout=layout,
             max_calls=settings.max_calls,
             max_errors=settings.max_errors,
+            **(
+                {"max_discovery_calls": settings.max_discovery_calls}
+                if layout == "directory"
+                else {}
+            ),
         )
 
-    @app.get("/sessions/{token}")
+    @app.get("/sessions/{token}", response_model_exclude_unset=True)
     async def session_state(token: str) -> SessionState:
         s = _get(token).session
         return SessionState(
@@ -284,6 +294,7 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             status=s.status,
             calls=len(s.log),
             errors=s.errors,
+            **({"discovery": s.discovery_metrics()} if s.directory is not None else {}),
         )
 
     @app.get("/sessions/{token}/result", response_model_exclude_unset=True)
@@ -321,6 +332,7 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             ),
             reward_breakdown=breakdown,
             env_assertions=checks,
+            **({"discovery": s.discovery_metrics()} if s.directory is not None else {}),
         )
 
     @app.delete("/sessions/{token}")

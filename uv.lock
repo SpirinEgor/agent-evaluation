@@ -2931,6 +2931,7 @@ all = [
     { name = "google-genai" },
     { name = "gymnasium" },
     { name = "jiwer" },
+    { name = "jsonschema" },
     { name = "livekit-agents" },
     { name = "livekit-plugins-deepgram" },
     { name = "livekit-plugins-openai" },
@@ -2971,6 +2972,7 @@ knowledge = [
     { name = "rank-bm25" },
 ]
 platform = [
+    { name = "jsonschema" },
     { name = "mcp" },
 ]
 voice = [
@@ -3010,6 +3012,7 @@ requires-dist = [
     { name = "gymnasium", marker = "extra == 'gym'", specifier = ">=1.2.2" },
     { name = "httpx", specifier = ">=0.24.0" },
     { name = "jiwer", marker = "extra == 'voice'", specifier = ">=3.0.0" },
+    { name = "jsonschema", marker = "extra == 'platform'", specifier = ">=4.20,<5" },
     { name = "litellm", specifier = ">=1.80.15,<1.82.7" },
     { name = "livekit-agents", marker = "extra == 'voice'", specifier = ">=1.5.0" },
     { name = "livekit-plugins-deepgram", marker = "extra == 'voice'", specifier = ">=1.5.0" },

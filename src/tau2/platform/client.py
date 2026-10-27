@@ -29,10 +29,11 @@ class OpenedSession:
     max_errors: int
     mcp_urls: dict[str, str] = field(default_factory=dict)
     mcp_layout: MCPLayout = "single"
+    max_discovery_calls: Optional[int] = None
 
     def server_for(self, tool_name: str) -> str:
         """Resolve canonical tool ownership without stripping name prefixes."""
-        if self.mcp_layout == "single":
+        if self.mcp_layout in {"single", "directory"}:
             return SINGLE_SERVER
         return TOOL_OWNERS[tool_name]
 
@@ -81,6 +82,7 @@ class PlatformClient:
             mcp_layout=data.get("mcp_layout", "single"),
             max_calls=data["max_calls"],
             max_errors=data["max_errors"],
+            max_discovery_calls=data.get("max_discovery_calls"),
         )
 
     @asynccontextmanager
@@ -145,12 +147,47 @@ class PlatformClient:
         try:
             async with self.connect_systems(opened) as servers:
                 for action in actions:
-                    await servers[opened.server_for(action.name)].call_tool(
-                        action.name, dict(action.arguments)
+                    server = servers[opened.server_for(action.name)]
+                    if opened.mcp_layout == "directory":
+                        owner = TOOL_OWNERS[action.name]
+                        await server.call_tool(
+                            "bank_directory",
+                            {
+                                "operation": "open_tool",
+                                "system_id": owner,
+                                "tool_name": action.name,
+                            },
+                        )
+                        await server.call_tool(
+                            "bank_call",
+                            {
+                                "system_id": owner,
+                                "tool_name": action.name,
+                                "arguments": dict(action.arguments),
+                            },
+                        )
+                    else:
+                        await server.call_tool(action.name, dict(action.arguments))
+                server = servers[opened.server_for(DONE_TOOL_NAME)]
+                if opened.mcp_layout == "directory":
+                    await server.call_tool(
+                        "bank_directory",
+                        {
+                            "operation": "open_tool",
+                            "system_id": "support",
+                            "tool_name": DONE_TOOL_NAME,
+                        },
                     )
-                await servers[opened.server_for(DONE_TOOL_NAME)].call_tool(
-                    DONE_TOOL_NAME, {}
-                )
+                    await server.call_tool(
+                        "bank_call",
+                        {
+                            "system_id": "support",
+                            "tool_name": DONE_TOOL_NAME,
+                            "arguments": {},
+                        },
+                    )
+                else:
+                    await server.call_tool(DONE_TOOL_NAME, {})
             return await self.result(opened.token)
         finally:
             await self.close(opened.token)

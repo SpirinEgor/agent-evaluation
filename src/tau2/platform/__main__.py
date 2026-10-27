@@ -17,7 +17,8 @@ def parse_args(argv: list[str]) -> tuple[PlatformSettings, str, int]:
     parser.add_argument("--port", type=int, default=PLATFORM_PORT)
     parser.add_argument("--max-calls", type=int)
     parser.add_argument("--max-errors", type=int)
-    parser.add_argument("--mcp-layout", choices=["single", "systems"])
+    parser.add_argument("--max-discovery-calls", type=int)
+    parser.add_argument("--mcp-layout", choices=["single", "systems", "directory"])
     parser.add_argument("--reveal-checks", action="store_true")
     parser.add_argument("--results-dir", type=Path, default=PLATFORM_DATA_DIR)
     args = parser.parse_args(argv)
@@ -26,6 +27,7 @@ def parse_args(argv: list[str]) -> tuple[PlatformSettings, str, int]:
         split=args.split,
         max_calls=args.max_calls,
         max_errors=args.max_errors,
+        max_discovery_calls=args.max_discovery_calls,
         mcp_layout=args.mcp_layout,
         reveal_checks=args.reveal_checks,
         results_dir=args.results_dir,

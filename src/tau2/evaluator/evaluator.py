@@ -172,7 +172,13 @@ def evaluate_simulation(
             done = [
                 e
                 for e in events
-                if e.get("original_name") == "done"
+                if (
+                    e.get("original_name") == "done"
+                    or (
+                        e.get("original_name") == "bank_call"
+                        and e.get("canonical_name") == "done"
+                    )
+                )
                 and not e.get("error", True)
                 and not e.get("trace_call", True)
             ]
