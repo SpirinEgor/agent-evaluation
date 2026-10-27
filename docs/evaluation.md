@@ -9,13 +9,16 @@ required of the agent, this page is for you.
 
 For development of our `banking_ru` domain, the accepted scoring contract is
 `DB × ACTION`: final bank state and valid business execution. See
-[the banking development guide](banking-ru.md) for the normative rules,
-concrete task examples. COMMUNICATE and NL_ASSERTION
+[the banking development guide](banking-ru.md) for the normative rules and concrete task examples. COMMUNICATE and NL_ASSERTION
 are not part of the banking score.
 
-The implementation still uses the previous three-component contract. Migrating
-requires moving trajectory guards from ENV into ACTION and removing only
-verified duplicate state checks; deleting ENV from reward_basis alone is unsafe.
+The [banking evaluation guide](banking-ru/evaluation.md) records actual task profiles,
+migration status and known differences from the agreed concept. Required current
+sources must be received before dependent actions in the target contract; no
+specific search path is required. Rejected calls with no disclosure or forbidden
+effect are neutral in that target contract, but current access checks still
+require migration. Terminal obligations outside semantic DB hashing belong to DB.
+Removing legacy ENV guards requires transfer and coverage evidence.
 ENV_ASSERTION remains supported by the shared framework for other domains.
 The descriptions below cover general upstream mechanisms, not a requirement
 to enable every component for banking_ru. reward_basis is task-specific.
@@ -35,10 +38,10 @@ to enable every component for banking_ru. reward_basis is task-specific.
   check.
 - The agent is required to match `actions` *only* when `RewardType.ACTION`
   is in `reward_basis` (used in a small subset of `banking_knowledge`
-  tasks and in our banking extensions). When that
-  flag is set, the listed actions are treated as the assumed-unique
-  correct trajectory — which is a strong assumption and is why most
-  τ-bench tasks deliberately do not use it.
+  tasks and in our banking extensions). ACTION checks the required actions
+  and any declared alternatives, order, evidence and safety rules. The exact
+  checks depend on the task and its action scope; not every reference action
+  must be required.
 - This was a deliberate design choice (see [issue #224][issue-224] and
   [RFC #129][issue-129] for the discussion). We surface this here so it
   is harder to miss.
@@ -49,12 +52,12 @@ to enable every component for banking_ru. reward_basis is task-specific.
 ## The task schema, in plain English
 
 A task's `evaluation_criteria` (see
-[`src/tau2/data_model/tasks.py`](../src/tau2/data_model/tasks.py)) has five
-fields:
+[`src/tau2/data_model/tasks.py`](../src/tau2/data_model/tasks.py)) includes these core
+fields, alongside additional task-specific criteria:
 
 | Field | What it is | When it gates the reward |
 |-------|-----------|--------------------------|
-| `actions` | A list of `Action`s recording **one** reference trajectory of tool calls that solves the task. Always replayed on a fresh "gold" environment to derive the target DB end state. Other trajectories may produce an equivalent end state and also pass. | Only when `RewardType.ACTION` is in `reward_basis` (then each entry must also appear among the agent's tool calls — i.e., this list is treated as the only acceptable trajectory). |
+| `actions` | A list of `Action`s recording **one** reference trajectory of tool calls that solves the task. Always replayed on a fresh "gold" environment to derive the target DB end state. Other trajectories may produce an equivalent end state and also pass. | ACTION can require the entries marked `required_for_reward`, subject to declared alternatives and the task's action scope. |
 | `env_assertions` | A list of assertions to run against the predicted environment after the simulation. | Only when `RewardType.ENV_ASSERTION` is in `reward_basis`. |
 | `communicate_info` | A list of strings the agent must say to the user (substring match). | Only when `RewardType.COMMUNICATE` is in `reward_basis`. |
 | `nl_assertions` | Natural-language assertions judged by an LLM. | Only when `RewardType.NL_ASSERTION` is in `reward_basis`. (Experimental / WIP.) |
@@ -68,7 +71,7 @@ The reward components are evaluated by:
 | `ENV_ASSERTION` | `EnvironmentEvaluator` | Do all `env_assertions` pass on the predicted environment? |
 | `COMMUNICATE` | `CommunicateEvaluator` | Does every string in `communicate_info` appear in the agent's messages? |
 | `NL_ASSERTION` | `NLAssertionsEvaluator` | Does an LLM judge return true for every entry in `nl_assertions`? (WIP) |
-| `ACTION` | `ActionEvaluator` | For every entry in `actions`, did the agent produce a matching tool call (per `Action.compare_with_tool_call`)? Use this only when you are confident `actions` enumerates the only acceptable trajectory. |
+| `ACTION` | `ActionEvaluator` | Checks required actions and, when configured, their arguments, order, received evidence, access and other trajectory constraints. Exact behavior depends on the task and action scope. |
 
 The final reward is the product. So if `reward_basis = [DB, COMMUNICATE]`,
 the reward is `db_reward * communicate_reward`. `actions` is consumed
@@ -89,9 +92,8 @@ on a fresh env" than to spell out by hand.
 
 But because this list is also rendered to the agent in some debug views
 and reads like a checklist, it is easy to misread as a list of *required*
-agent actions. In practice, the only thing that matters for scoring is
-whether the predicted DB end state matches the target DB end state and
-whether the required strings were communicated. An agent that takes a
+agent actions. For a task scored only on DB and COMMUNICATE, scoring depends on
+the predicted DB end state and the required strings. An agent that takes a
 different (correct) path through the tools — or no tool calls at all when
 the right answer is to refuse — can still receive full reward.
 
@@ -160,8 +162,9 @@ equally correct.
 Even when `ACTION` is not in `reward_basis`, the `ActionEvaluator` can
 still run for diagnostic purposes:
 
-- The CLI runner uses `EvaluationType.ALL_WITH_NL_ASSERTIONS` by default,
-  so `action_checks` are populated on `RewardInfo` for every simulation,
+- The runner defaults to `EvaluationType.ALL`, which evaluates ACTION for
+  diagnostics even when it is not in the reward basis; when evaluation runs,
+  `action_checks` can be populated on `RewardInfo`,
   and `partial_action_reward` summarizes how many of the listed reference
   actions were matched. These are surfaced by `tau2 view` (look for
   `Partial Action Reward: m/n`) and by the metrics functions in
@@ -169,12 +172,11 @@ still run for diagnostic purposes:
   signal against *one* reference trajectory, not a correctness verdict —
   an agent can score `0/n` on `partial_action_reward` and still be fully
   correct if it solved the task via a different sequence of tool calls.
-- For a "did the agent reproduce this specific reference trajectory?"
-  score, use `EvaluationType.ALL_IGNORE_BASIS` (or
-  `ALL_WITH_NL_ASSERTIONS_IGNORE_BASIS`). These multiply ENV, ACTION,
-  COMMUNICATE (and optionally NL) into a single number regardless of
-  `reward_basis`. Same caveat: this measures similarity to one reference
-  path, not whether the agent's behavior was correct. See
+- For diagnostics, `EvaluationType.ALL_IGNORE_BASIS` (or
+  `ALL_WITH_NL_ASSERTIONS_IGNORE_BASIS`) multiplies ENV, ACTION and
+  COMMUNICATE (and optionally NL) regardless of `reward_basis`. This is
+  not the task's official score and ACTION can include more than reference
+  matching, depending on the configured criteria. See
   [`src/tau2/evaluator/evaluator.py`](../src/tau2/evaluator/evaluator.py).
 - The `partial_action_reward` property on `RewardInfo` further breaks
   down the action match rate by `ToolType.READ` vs `ToolType.WRITE`,
@@ -186,8 +188,8 @@ changed by these diagnostic options.
 
 ## When does `RewardType.ACTION` get used?
 
-In the bundled tasks, `ACTION` only appears in `reward_basis` for a
-small subset of `banking_knowledge` tasks (about 9 out of ~100), where
+In the upstream bundled tasks, `ACTION` appears in `reward_basis` for a
+small subset of `banking_knowledge` tasks, where
 the *path* through specific knowledge-retrieval tools is the thing
 being evaluated. Exact usage is version-dependent; inspect each task's
 `reward_basis`. Our banking ACTION additionally checks safety and dependencies
@@ -195,11 +197,9 @@ without requiring a single literal reference trajectory.
 
 If you build your own domain or task and want the agent's tool calls to
 be a hard requirement (not just a side-effect on the DB), you can put
-`RewardType.ACTION` in your task's `reward_basis`. Be aware that doing
-so promotes `actions` from "one reference trajectory" to "the only
-acceptable trajectory", so it should be reserved for tasks where you
-have actually enumerated all valid solutions (or where there genuinely
-is only one).
+`RewardType.ACTION` in your task's `reward_basis`. Specify only genuinely required actions and their meaningful arguments.
+Check that declared alternatives are accepted and that trajectory safety
+rules do not reject a valid solution.
 
 ## Pointers
 

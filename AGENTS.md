@@ -1,277 +1,108 @@
-# AGENTS.md
+# Карта проекта для агента-разработчика
 
-> Instructions for AI coding agents working on the τ-bench codebase.
+Основная работа в этом репозитории — развитие **Banking.ru (`banking_ru`)**:
+корректных, решаемых и сложных соревновательных задач банковской поддержки.
+Репозиторий основан на τ-bench; поддержку остальных доменов сохраняем.
 
-## Контракт банковского домена — решение 25 октября 2026
+## С чего начать
 
-Общий концепт банковского бенчмарка и основная инструкция разработчика:
-[Banking.ru: общий концепт бенчмарка и разработка задач](docs/banking-ru.md).
-Перед изменением домена или задач читать этот документ: в нём описаны вход
-агента (тикет и краткий startup AGENTS.md), базы знаний и политик, MCP систем,
-клиентские уточнения, самостоятельное завершение через done, механика DB/ACTION
-и правила валидации. Там же находятся прямые ссылки на сложные задания.
-Банковская оценка состоит только из `DB × ACTION`: конечное состояние и
-допустимость траектории. Банковский ENV исключается после переноса уникальных
-проверок в ACTION и проверки покрытия дублей DB. Поддержка ENV других доменов
-в общем движке сохраняется. COMMUNICATE и NL_ASSERTION в банковский балл не входят.
+Перед изменениями прочитай [концепт и правила Banking.ru](docs/banking-ru.md).
+Это основной источник действующих банковских решений; он разделяет целевую
+схему и реализованное поведение. При расхождении старых банковских инструкций
+с концептом от 27 октября 2026 ориентируйся на концепт и явно отмечай расхождение.
+Обновление документации само по себе не разрешает миграцию кода или данных.
 
-Это принятое требование, а не заявление о готовности: текущие данные и код ещё
-используют прежний трёхкомпонентный контракт. Не отключать защиты простым
-удалением ENV из reward_basis. Исторические результаты не переписывать;
-проверка миграции адресная, без автоматического расширения модельных запусков.
+| Что нужно понять | Где читать |
+|---|---|
+| Цели, вход агента, MCP, знания и оценка | [Концепт Banking.ru](docs/banking-ru.md) |
+| Компоненты, загрузка данных, сессия и путь до оценки | [Архитектура Banking.ru](docs/banking-ru/architecture.md) |
+| Изменение задач, инфраструктуры и модельные эксперименты | [Процесс разработки и проверки](docs/banking-ru/development.md) |
+| Установка, набор данных, manifest и клиентские ответы | [README домена](data/tau2/domains/banking_ru/README.md) |
+| Поля задач и критериев | [Формат задачи](docs/banking-ru/task-format.md), [исполняемая схема](src/tau2/data_model/tasks.py) |
+| Реализация DB и ACTION, диагностика и пробелы миграции | [Банковская оценка](docs/banking-ru/evaluation.md) |
+| Трассы попыток и MCP Langfuse для разработчика | [Трассировка](docs/banking-ru/development.md#langfuse-трассы-завершённых-попыток) |
+| Внешние задачи, проверки и идеи сложности | [Каталог референсов](docs/banking-ru/references.md) |
+| Работа с доменами, оценщиком и тестами | [Домены](src/tau2/domains/AGENTS.md), [оценщик](src/tau2/evaluator/AGENTS.md), [тесты](tests/AGENTS.md) |
+| Самостоятельные тестовые данные | [README fixtures](tests/fixtures/banking_ru/README.md) |
+| Общая установка и вклад в τ-bench | [README](README.md), [CONTRIBUTING](CONTRIBUTING.md) |
 
-## Приоритет оценки бизнес-процесса — решение 21 октября 2026
+## Структура проекта
 
-Итоговая оценка отражает только выполнение банковского поручения и нарушения бизнес-процесса: деньги, продукты, полномочия, согласие, конфиденциальность, реальные состояния и обязательные зависимости. Само отсутствие чтения конкретной статьи, неверное имя или параметр API, несуществующий путь и отклонённый запрос без банковских последствий не дают ноль после корректного восстановления. Эти события сохраняются в журнале отдельно от бизнес-балла. Права и фактическое разглашение проверяются по полному исходному журналу. Успешное запрещённое действие не оправдывается последующим откатом. done остаётся протоколом завершения; при бизнес-профиле его отсутствие само по себе не обнуляет уже выполненные цели.
-
-Отдельное прекращение после пяти ошибок отключается (max_errors=0); максимум100 банковских вызовов сохраняется. Незавершённый по прежнему лимиту ошибок прогон не доказывает ошибку банковской логики. Это решение имеет приоритет над прежними требованиями оценивать технические ошибки и обязательные чтения. Применение профиля к данным не подтверждает проверку остальных задач; адресная валидация обязательна.
-
-## Project Overview
-
-τ-bench is a simulation framework for evaluating conversational customer service agents. It supports text and voice interactions in half-duplex (turn-based) and full-duplex (simultaneous/streaming) communication modes. Domains include `mock`, `airline`, `retail`, `telecom`, and `banking_knowledge`.
-
-## Setup
-
-```bash
-uv sync                        # core only (airline, retail, telecom, mock)
-uv sync --extra voice          # + voice/audio-native features
-uv sync --extra knowledge      # + banking_knowledge domain (retrieval pipeline)
-uv sync --extra gym            # + gymnasium RL interface
-uv sync --extra dev            # + pytest, ruff, pre-commit (required for committing)
-uv sync --extra experiments    # + plotting libs for src/experiments/
-uv sync --all-extras           # everything
-uv run tau2 check-data         # verify installation
+```text
+AGENTS.md                         — эта карта для разработчика
+ docs/                            — концепт и документация
+ data/tau2/domains/banking_ru/
+   tasks.json                     — упорядоченный индекс задач
+   tasks/bank_*.json               — отдельные задания и критерии
+   db.json, intake_answers.json    — исходные данные и ответы клиента
+   manifest.json                  — хеши исходных данных и корпуса
+   corpus/                        — общие политики, знания и агентский startup
+ src/tau2/
+   domains/banking_ru/             — банковская среда, инструменты и процессы
+   platform/                      — MCP, сессии, журнал и запуск
+   data_model/                    — модели задач, сообщений и результатов
+   evaluator/                     — DB, ACTION и общие механизмы оценки
+   environment/                   — базовые интерфейсы среды и инструментов
+   agent/, user/, orchestrator/    — агенты и взаимодействие участников
+   runner/, metrics/              — выполнение симуляций и сводные показатели
+   config.py, registry.py         — настройки и регистрация компонентов
+ scripts/banking_ru/               — общие проверки и модельный harness
+ tests/                           — проверки домена, платформы и оценщика
+ artifacts/                       — локальные результаты, игнорируются Git
 ```
 
-**Note:** `langfuse` and `redis` are not declared dependencies but may be needed if you enable `USE_LANGFUSE=True` or `LLM_CACHE_ENABLED=True` with `redis` cache type in `config.py`. Install them manually if needed (`uv pip install langfuse redis`).
+Другие домены, голосовые режимы и эксперименты находятся в общей структуре
+τ-bench; их устройство раскрывается в профильной документации по необходимости.
+Агентский [startup](data/tau2/domains/banking_ru/corpus/AGENTS.md) предназначен
+проверяемой модели. Эту карту, код оценщика, эталоны и отчёты ей не передавай.
 
-Environment variables: copy `.env.example` to `.env` and set API keys. Uses [LiteLLM](https://github.com/BerriAI/litellm) for LLM provider abstraction.
+## Порядок работы
 
-Required keys depend on the task:
-- `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` — for LLM-based agents and user simulators
-- `ELEVENLABS_API_KEY` — voice synthesis
-- `DEEPGRAM_API_KEY` — voice transcription
+Git-цикл: локальный `main` → ветка изменения → проверки и локальный коммит →
+слияние в локальный `main` → удаление своей слитой ветки. Один агент, одна папка,
+без worktree по умолчанию. Полный порядок и исключения — в
+[процессе разработки](docs/banking-ru/development.md#git-от-начала-работы-до-слияния).
+Push и PR в этот цикл не входят; существующие незакоммиченные правки сохраняй.
 
-## Common Commands
+1. Определи цель, границы изменения и ожидаемый проверяемый результат.
+2. Изучи соответствующие разделы концепта, локальные инструкции и текущий код.
+3. Внеси минимально необходимое изменение в существующие файлы; перед созданием
+   нового документа, скрипта или теста проверь, нет ли подходящего места.
+4. Выполни адресные проверки; сообщи, что изменено, чем подтверждено и что
+   осталось непроверенным. Зелёный эталон не доказывает полноту валидации.
+5. В той же работе обнови затронутую действующую документацию: концепт,
+   архитектуру, формат задач, оценку, команды и эту карту — по фактическому влиянию.
+   При смене профиля задачи сверяй критерии всех затронутых задач и исправляй
+   списки профилей, количества и статус миграции. Источник фактического состояния —
+   файлы задач и код, а не прежний текст docs. Проверь ссылки; укажи дату сверки.
 
-| Command | What it does | Required install |
-|---------|-------------|-----------------|
-| `make test` | Run core tests (skips voice, streaming, gym, banking_knowledge) | `uv sync --extra dev` |
-| `make test-voice` | Run voice + streaming tests | `uv sync --extra voice --extra dev` |
-| `make test-knowledge` | Run banking_knowledge tests | `uv sync --extra knowledge --extra dev` |
-| `make test-gym` | Run gymnasium tests | `uv sync --extra gym --extra dev` |
-| `make test-all` | Run all tests | `uv sync --all-extras` |
-| `make lint` | Lint with ruff | `uv sync --extra dev` |
-| `make format` | Format with ruff | `uv sync --extra dev` |
-| `make lint-fix` | Lint and auto-fix | `uv sync --extra dev` |
-| `make check-all` | Run lint + format (same as pre-commit hook) | `uv sync --extra dev` |
-| `make clean` | Remove venv, caches, build artifacts | — |
-| `make env-cli` | Interactive environment CLI for testing domain tools | — |
+Среда всех банковских задач общая; не добавляй исключения доступности по ID.
+Целевой контракт — DB × ACTION. Текущий статус миграции смотри в
+[банковской оценке](docs/banking-ru/evaluation.md#какие-профили-сейчас-исполняются)
+и сверяй с критериями задач. Не отключай существующие защиты автоматически.
+Новые правила обязательного чтения и учёта отклонённых запросов описаны в концепте;
+сверяй фактическую реализацию перед выводами об оценке.
 
-`make test` is the safe default -- it works with just `uv sync --extra dev` and does not require voice, knowledge, or gym packages. Always run `make check-all` before committing. A pre-commit hook enforces this.
+Отдельные `solution.md` / Solution Contract не создаём. Действующие правила
+обновляй в основном документе, доказательства сохраняй в отчёте проверенной версии.
+Исторические результаты не переписывай. Не коммить секреты, токены и локальные логи.
 
-## Running Evaluations
+## Команды и границы проверок
 
-```bash
-# Text half-duplex (standard)
-tau2 run --domain airline --agent-llm gpt-4.1 --user-llm gpt-4.1 --num-trials 1 --num-tasks 5
+Установка: `uv sync --frozen --extra dev --extra platform`; нужен `rg` в PATH.
 
-# Voice full-duplex (audio native)
-tau2 run --domain retail --audio-native --num-tasks 1 --verbose-logs
+| Команда | Назначение |
+|---|---|
+| `make test-banking-task TASK=2` | Эталон и бездействие только Bank 2 |
+| `make check-banking-contracts` | Проверка общих контрактов без изменения данных |
+| `make test-banking-evaluator` | Группа проверок оценщика |
+| `make test-banking-infra` | Группа инфраструктуры, MCP и изоляции |
+| `uv run pytest <файл>::<тест> -q` | Адресная проверка изменённой гарантии |
+| `make check-all` | Линт и форматирование перед коммитом; форматтер меняет файлы |
 
-# Knowledge domain (requires --retrieval-config)
-tau2 run --domain banking_knowledge --retrieval-config qwen_embeddings --agent-llm gpt-4.1 --user-llm gpt-4.1 --num-tasks 5
-```
-
-Results go to `data/simulations/`. Use `tau2 view` to browse them.
-
-## Architecture
-
-```
-src/tau2/
-├── agent/           # Agent implementations (half-duplex and full-duplex)
-├── api_service/     # FastAPI-based API service
-├── config.py        # Central configuration (single source of truth for defaults)
-├── cli.py           # CLI entry point (tau2 command)
-├── data_model/      # Pydantic data models (messages, trajectories, etc.)
-├── domains/         # Domain definitions (airline, mock, retail, telecom, banking_knowledge)
-├── environment/     # Environment, DB, server, toolkit base classes
-├── evaluator/       # Task evaluation logic
-├── gym/             # Gymnasium-compatible RL interface
-├── knowledge/       # Knowledge retrieval pipeline (embedders, retrievers, postprocessors, sandbox)
-├── metrics/         # Metrics computation
-├── orchestrator/    # Simulation orchestrators (half-duplex, full-duplex)
-├── registry.py      # Global registry for agents, domains, tasks, users
-├── runner/          # Simulation runner (batch execution, checkpointing, build helpers)
-├── scripts/         # CLI command implementations
-├── user/            # User simulator implementations
-├── utils/           # Shared utilities
-└── voice/           # Voice synthesis, transcription, audio-native providers
-    └── audio_native/  # Real-time voice providers (openai, gemini, nova, xai, deepgram, qwen, livekit)
-```
-
-Other top-level directories:
-- `data/` — Domain data (JSON, TOML, policies), simulation outputs
-- `tests/` — All tests (pytest)
-- `scripts/` — Standalone utility scripts
-- `src/experiments/` — Research/experimental code (self-contained)
-- `docs/` — User-facing documentation
-
-## Key Patterns
-
-### Registry System
-
-All agents, domains, tasks, and user simulators are registered in `src/tau2/registry.py`. To add a new component, register it there:
-
-```python
-registry.register_agent_factory(create_my_agent, "my_agent")
-registry.register_domain(get_environment, "my_domain")
-registry.register_tasks(get_tasks, "my_domain", get_task_splits=get_tasks_split)
-```
-
-### Agent Architecture
-
-Two base classes, determined by communication mode:
-
-| Mode | Base class | Key method | Used by |
-|------|-----------|------------|---------|
-| Half-duplex (turn-based) | `HalfDuplexAgent` | `generate_next_message()` | `LLMAgent` |
-| Full-duplex (streaming) | `FullDuplexAgent` | `get_next_chunk()` | `DiscreteTimeAudioNativeAgent` |
-
-Both share the constructor signature: `__init__(self, tools: list[Tool], domain_policy: str)`.
-For LLM-based agents, mix in `LLMConfigMixin` to add `llm` and `llm_args` parameters.
-
-### Domain Structure
-
-Each domain (`src/tau2/domains/<name>/`) contains:
-- `data_model.py` — DB subclass with domain data models
-- `tools.py` — `ToolKitBase` subclass with domain tools
-- `environment.py` — `get_environment()`, `get_tasks()`, `get_tasks_split()`
-- `user_tools.py` (optional) — user-facing tools
-- `utils.py` — data paths and helpers
-
-Domain data lives in `data/tau2/domains/<name>/` (tasks.json, policy.md, db.json/toml, etc.).
-
-**Note:** The `banking_knowledge` domain extends the standard pattern with additional files (`retrieval.py`, `retrieval_mixins.py`, `retrieval_toolkits.py`, `db_query.py`), dynamic tools and policy that vary by `--retrieval-config`, and a separate `knowledge/` retrieval pipeline module. Its data directory also includes `documents/`, `prompts/`, and `tasks/` subdirectories. See `src/tau2/knowledge/README.md` for details.
-
-### Orchestrators
-
-- `Orchestrator` — half-duplex, turn-based, synchronous tool execution
-- `FullDuplexOrchestrator` — full-duplex, tick-based, simultaneous agent/user activity
-
-## Testing
-
-Tests are split into tiers matching the optional dependency groups. Each tier has its own Make target and required install extras:
-
-```bash
-# Core tests — works with just `uv sync --extra dev`
-make test
-
-# Voice + streaming tests — requires `uv sync --extra voice --extra dev`
-make test-voice
-
-# Banking knowledge tests — requires `uv sync --extra knowledge --extra dev`
-make test-knowledge
-
-# Gymnasium tests — requires `uv sync --extra gym --extra dev`
-make test-gym
-
-# All tests — requires `uv sync --all-extras`
-make test-all
-
-# Domain-specific (core domains work with `make test`)
-pytest tests/test_domains/test_<domain_name>
-
-# Specific test file
-pytest tests/test_agent.py
-
-# Skip full-duplex integration tests (require live APIs)
-pytest -m "not full_duplex_integration"
-```
-
-Test layout mirrors source:
-- `tests/test_domains/` — per-domain tool and user-tool tests (except `test_banking_knowledge/` which requires the `knowledge` extra)
-- `tests/test_streaming/` — streaming/full-duplex tests (requires `voice` extra)
-- `tests/test_voice/` — audio-native provider tests (requires `voice` extra; individual providers gated by `{PROVIDER}_TEST_ENABLED=1`)
-- `tests/test_gym/` — gymnasium RL interface tests (requires `gym` extra)
-
-## Code Style
-
-- **Formatter/linter**: Ruff (configured in `pyproject.toml`)
-- **Line length**: 88 characters
-- **Python**: >=3.12, <3.14
-- **Type hints**: Encouraged, especially for public APIs
-- **Docstrings**: Required for public APIs and complex functions
-- **Import sorting**: Handled by ruff
-- **Models**: Use Pydantic `BaseModel` for data classes
-
-Ruff rules: `E4`, `E7`, `E9`, `F`, `I` (with `E501` and `F541` ignored).
-
-## Commit Conventions
-
-```
-feat: add memory system to agent base class
-fix: resolve environment tool timeout issues
-docs: update domain contribution guidelines
-test: add integration tests for retail domain
-```
-
-## Things to Watch Out For
-
-- **`.env` file**: Never commit this. Contains API keys. Use `.env.example` as reference.
-- **`data/` directory**: Contains domain data that the framework depends on. Be careful modifying JSON/TOML data files.
-- **`config.py`**: Single source of truth for default configuration values. Import constants from here rather than defining local duplicates.
-- **`registry.py`**: All new agents, domains, and user simulators must be registered here to be usable via CLI.
-- **Audio native providers**: Each has its own WebSocket protocol and event format. Always verify against provider documentation. See `.cursor/rules/audio-native-provider.md` for the full implementation guide.
-- **Task splits**: The `base` split is the default for evaluation. The `train`/`test` splits are for RL experiments.
-- **Pre-commit hook**: Runs `make check-all` (ruff lint + format). Fix any issues before committing.
-- **Notebooks**: Excluded from ruff (`*.ipynb` in pyproject.toml exclude).
-- **`banking_knowledge` domain**: Uses `--retrieval-config` to specify how the agent accesses the knowledge base. If omitted, defaults to `alltools` (BM25 + dense + shell; see `src/tau2/knowledge/README.md`). For offline-only, use e.g. `bm25`. Other offline configs: `no_knowledge`, `full_kb`, `golden_retrieval`, `bm25_grep`, `grep_only`. `openai_embeddings*` and default `alltools` require `OPENAI_API_KEY`. `qwen_embeddings*` and `alltools-qwen` require `OPENROUTER_API_KEY` (included in `.env.example`). `*_reranker` configs additionally require `OPENAI_API_KEY` for the LLM reranker. `terminal_use*`, `alltools`, and `alltools-qwen` require `sandbox-runtime`: install via `npm install -g @anthropic-ai/sandbox-runtime@0.0.23` **AND** the system tools it shells out to (`apt install ripgrep bubblewrap socat` on Linux, `brew install ripgrep` on macOS) — `SandboxManager` raises `SandboxRuntimeError` at construction time if any are missing. Embedding cache lives in `data/.embeddings_cache` (gitignored). See `src/tau2/knowledge/README.md` for full details.
-
-## Banking.ru release
-
-The supported dataset is `data/tau2/domains/banking_ru` (61 tasks). Follow its README.
-Preserve the identical shared agent environment and the completion_only contract.
-Keep DB × ACTION, received-result dependencies, authentication,
-ownership and outgoing tool-argument confidentiality. Do not require final customer prose.
-Do not commit local model logs, session tokens, snapshots, secrets or lock files.
-
-
-## Banking benchmark: full-access launch policy (2026-10-14)
-
-Always run benchmark Codex with full access:
-`codex exec --dangerously-bypass-approvals-and-sandbox ...`.
-This selects `sandbox_mode="danger-full-access"` and `approval_policy="never"`.
-Do not use automatic approval review or a restricted Codex sandbox for these runs.
-Apply this launch policy identically to all banking tasks; record the effective
-command and access settings with each attempt.
-
-The benchmark environment owns the restrictions: expose only the session's bank
-MCP, its allowlisted corpus and fresh scenario state. Preserve ownership,
-authentication, tool budgets, forbidden-attempt logging and DB × ACTION.
-Keep shell/web/apps/plugins/local skills and automatic project instructions disabled.
-Do not expose Wiki, evaluator sources, references, solutions, Solution Contracts,
-previous trajectories or unrelated tools to the tested model.
-
-Full access removes Codex's host filesystem protections. Tool visibility alone
-is insufficient if a built-in such as apply_patch can still access host files.
-Before live runs, verify the actual model-visible tools and enforce isolation in
-an external execution environment (without host/Wiki/evaluator mounts), or in
-an equivalently verified tool boundary. An unresolved host access channel blocks
-live launch; do not describe an unverified boundary as isolated. This policy does
-not authorize additional attempts, a full regression, or changes to task data/grading.
-
-
-### Verified full-access container transport (2026-10-14)
-
-The supported banking harness now creates a fresh Docker container for each
-Codex process via `scripts/banking_ru/codex_container.py`. Full access applies
-inside that container. Never add host bind/volume mounts, Docker socket,
-privileged mode, host PID/IPC/network namespace or host checkout to it.
-Pin the image ID for an experiment (`--container-image sha256:...`). Only the
-bank startup and a temporary CLI authentication credential copy are delivered;
-auth lives in container tmpfs and is removed with the container. No evaluator,
-Wiki, data files, Solution Contracts, previous histories or host skills are copied.
-Bank MCP remains a separate fresh process/session with its own corpus boundary.
-The actual apply_patch confinement and model request must be verified before
-model runs; CLI/HTTP-stub and native patch probes do not call a model.
+Выбирай проверки по изменению. Полная регрессия и модельные попытки требуют
+отдельно разрешённого объёма; не запускай их по умолчанию. Для проверки Markdown
+достаточно ссылок и согласованности текста. Python и стиль задаёт `pyproject.toml`.
+Модельные прогоны выполняй только через поддерживаемый harness и подтверждённую
+контейнерную границу; команды и preflight описаны в
+[процессе разработки](docs/banking-ru/development.md#маршрут-3-модельный-эксперимент).

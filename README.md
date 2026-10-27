@@ -21,6 +21,10 @@ Voice full-duplex · Knowledge retrieval · 75+ task fixes<br>
 
 > **How do you say $\tau^3$-bench?** We just say "tau three," but you do you!
 
+> **Banking.ru development:** start with [AGENTS.md](AGENTS.md) and the
+> [banking documentation](docs/banking-ru.md). The upstream overview below also
+> covers other domains; `banking_ru` is our separate banking benchmark.
+
 ## What's New in $\tau^3$-bench
 
 > **📢 July 2026 — v1.0.1 grading update:** This release fixes a couple of `banking_knowledge` task errors. Scores on that domain change as a result — **results produced with tau2-bench < 1.0.1 are not comparable with >= 1.0.1**, and affected leaderboard submissions have been re-graded. Old results files can be re-scored with `tau2 evaluate-trajs --fresh-tasks`; to reproduce pre-fix behavior, pin the [`pre-v1.0.1`](https://github.com/sierra-research/tau2-bench/releases/tag/pre-v1.0.1) tag. Details in the [changelog](CHANGELOG.md) and [release notes](RELEASE_NOTES.md). Other domains are unaffected.
@@ -46,7 +50,7 @@ Each domain specifies:
 - A set of **tasks** to evaluate the agent's performance
 - Optionally: a set of **user tools** for the user simulator
 
-**Available domains**: `mock` · `airline` · `retail` · `telecom` · `banking_knowledge`
+**Available domains**: `mock` · `airline` · `retail` · `telecom` · `banking_knowledge` · `banking_ru`
 
 | Mode | Description |
 |------|-------------|
@@ -218,10 +222,17 @@ If you use a specific component of $\tau^3$-bench, please cite the corresponding
 
 ## Russian banking support benchmark
 
-The 61-task banking release, installation requirements, offline checks, and MCP usage
-are described in [the banking guide](data/tau2/domains/banking_ru/README.md).
+Our Banking.ru domain (`banking_ru`) is developed on top of τ-bench and is
+separate from upstream `banking_knowledge`. Start with the [developer map](AGENTS.md)
+and [banking concept](docs/banking-ru.md).
 
+- [Dataset, installation and current MCP usage](data/tau2/domains/banking_ru/README.md)
+- [Architecture](docs/banking-ru/architecture.md) and [task format](docs/banking-ru/task-format.md)
+- [Evaluation and actual migration status](docs/banking-ru/evaluation.md)
+- [Development, Git workflow, targeted checks and Langfuse](docs/banking-ru/development.md)
+- [External task references](docs/banking-ru/references.md)
 
-Banking task authors: start with [Banking.ru development and task references](docs/banking-ru.md).
-The accepted banking score is `DB × ACTION`; the guide records the pending
-implementation migration and preserves shared ENV support for other domains.
+The target banking score is DB × ACTION. Current task criteria remain authoritative
+for the implemented profile; new catalog and storage designs are not yet implemented.
+Shared ENV support for other domains is preserved. General upstream commands above
+do not authorize a full banking regression or additional model attempts.

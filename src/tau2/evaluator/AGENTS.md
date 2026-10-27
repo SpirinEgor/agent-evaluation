@@ -1,16 +1,26 @@
 # AGENTS.md — src/tau2/evaluator/
 
-## Banking.ru override — 25 October 2026
+## Banking.ru: концепт и реализация — 27 октября 2026
 
-The accepted banking contract is `DB × ACTION`; see the
-[banking development guide](../../../docs/banking-ru.md).
-Banking ENV trajectory guards must move into ACTION and redundant state checks
-must be verified before removal. Current runtime still has the old three-part
-contract: this documentation does not certify a completed migration.
-Preserve raw-trace ownership and confidentiality checks, valid alternatives,
-and the business-process policy. Do not require final customer prose or a
-particular document-reading path. Shared ENV support for other domains remains.
-The generic evaluator descriptions below do not override this banking decision.
+Перед изменением банковской оценки прочитай [концепт](../../../docs/banking-ru.md),
+[механику и статус миграции](../../../docs/banking-ru/evaluation.md) и
+[процесс разработки](../../../docs/banking-ru/development.md).
+Целевой балл — DB × ACTION; текущие профили определяются критериями задач.
+Не отключай ENV-защиты немигрированных задач без переноса и проверки покрытия.
+Поддержку других доменов сохраняй.
+
+DB проверяет конечное состояние, включая объявленные поля вне семантического
+хеша. ACTION проверяет необходимые действия, существенные аргументы, полученные
+актуальные источники до зависимых действий и совершённые нарушения процесса.
+Обязательный источник не означает обязательную поисковую фразу или обход каталога.
+Полный исходный журнал сохраняется для прав и фактического разглашения.
+В целевом контракте отклонённая попытка без раскрытия данных и запрещённого
+эффекта не снижает балл; текущая проверка доступа ещё требует миграции.
+Не представляй это решение как уже реализованное поведение.
+
+В бизнес-профиле отсутствие done само по себе не обнуляет достигнутые цели;
+финальная проза не требуется. Общие правила ниже не переопределяют эти
+банковские решения. Документацию обновляй вместе с изменением оценки.
 
 ## Overview
 
@@ -65,9 +75,9 @@ The `evaluate_simulation()` function in `evaluator.py` is the main entry point. 
 
 4. **Handle missing criteria gracefully**: If `task.evaluation_criteria` is `None` or a specific criterion is absent, return `reward=1.0` (not 0). Missing criteria means "not evaluated", not "failed".
 
-5. **Premature termination = 0 reward**: If `simulation.termination_reason` is not `AGENT_STOP` or `USER_STOP`, the simulation gets reward 0 before any evaluators run.
+5. **Termination depends on profile**: The ordinary path returns 0 for termination outside `AGENT_STOP`/`USER_STOP`. Banking `business_process_only` bypasses this automatic zero; evaluate actual goals and violations and keep the technical outcome separate.
 
-6. **`evaluation_criteria.actions` is *one* reference trajectory, not a per-action requirement**: `EnvironmentEvaluator` replays `actions` on a fresh env to derive the target DB hash, then compares against the predicted DB hash. Other agent trajectories producing an equivalent end state also pass. The agent is only required to match those specific calls when `RewardType.ACTION` is in `reward_basis` (rare; not used by airline/retail/telecom). See `docs/evaluation.md`.
+6. **`evaluation_criteria.actions` is *one* reference trajectory, not a per-action requirement**: `EnvironmentEvaluator` replays `actions` on a fresh env to derive the target DB hash, then compares against the predicted DB hash. Other agent trajectories producing an equivalent end state also pass. ACTION matches declared required actions (`required_for_reward=True`) when that component is enabled; optional reference steps may still supply separately required evidence. See [the shared evaluation guide](../../../docs/evaluation.md).
 
 7. **Environment evaluator needs `environment_constructor` and `env_kwargs`**: Unlike other evaluators, `EnvironmentEvaluator.calculate_reward()` takes an `environment_constructor` callable to create fresh environments for gold vs predicted comparison. It also accepts `env_kwargs: dict` for domain-specific parameters (e.g., `retrieval_variant` for `banking_knowledge`). These kwargs are threaded from `evaluate_simulation()` through to both the predicted and gold environment constructors. Always pass `env_kwargs` when calling `calculate_reward()` to ensure domains with custom constructor parameters work correctly.
 

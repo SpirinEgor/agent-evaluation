@@ -49,7 +49,9 @@ Tests are organized into tiers that match the project's optional dependency grou
 | Gym (`make test-gym`) | `test_gym/` | `uv sync --extra gym --extra dev` |
 | All (`make test-all`) | Everything above | `uv sync --all-extras` |
 
-`make test` is the safe default for contributors who only work on core domains (airline, retail, telecom, mock). It requires no optional packages beyond pytest and ruff.
+`make test` is a broad repository run. For banking work, use the targeted commands
+below and the banking development guide; the generic command is not a default
+authorization for a full regression and can require platform dependencies.
 
 ## Key Conventions
 
@@ -107,11 +109,20 @@ Retrieval e2e tests use skip markers to gate tests that require external depende
 
 ## Banking.ru tests
 
-The [banking development guide](../docs/banking-ru.md) defines the
-accepted `DB × ACTION` contract and its migration status. Do not remove existing
-ENV guards until their unique checks are preserved in ACTION and state duplicates
-are verified against DB. Reference, allowed alternatives, noop and substantial
-wrong routes must retain their expected whole-grade outcomes.
-Run targeted offline checks for the changed guarantees. Historical fixtures must
-be self-contained; maintained tests must not depend on ignored `artifacts/`.
-Full regression and model runs are not implied by a documentation change.
+Read the [concept](../docs/banking-ru.md), [evaluation guide](../docs/banking-ru/evaluation.md)
+and [development workflow](../docs/banking-ru/development.md) before banking changes.
+Use targeted offline controls for changed guarantees: reference, allowed alternatives,
+noop and substantial violations with component-level reasons from the whole grader.
+Preserve both trajectory modes where affected. Existing legacy ENV guards stay
+until their unique checks are transferred and state duplicates verified.
+
+The target contract requires received current sources before dependent actions,
+without a prescribed search path. Rejected no-effect, no-disclosure calls are
+neutral in that contract, but current ownership checks still need migration.
+Do not relabel existing results or silently disable checks to match the target.
+Business-profile completion does not require final prose or automatic zero for missing done.
+
+Fixtures must be self-contained; maintained tests cannot read ignored artifacts.
+The explicit inventory is [run_basic_tests.py](../scripts/banking_ru/run_basic_tests.py).
+Full regression and model runs require a separately allowed scope. A docs-only
+change needs link and consistency checks, not a full suite.
