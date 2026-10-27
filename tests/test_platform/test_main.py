@@ -14,6 +14,7 @@ def test_parse_args_defaults_and_overrides():
         8010,
     )
     assert settings.reveal_checks is False
+    assert settings.results_dir.name == "platform"
     settings, host, port = parse_args(
         ["--split", "test", "--port", "9000", "--reveal-checks", "--max-calls", "30"]
     )

@@ -96,7 +96,7 @@ test-banking-basic:
 	uv run pytest tests/test_domains/test_banking_ru/test_whole_full_catalog_cases.py -q
 
 test-banking-package:
-	uv run pytest tests/test_domains/test_banking_ru/test_release_package.py tests/test_platform/test_package.py -q
+	uv run pytest tests/test_domains/test_banking_ru/test_release_package.py tests/test_platform/test_main.py -q
 
 test-banking-tools:
 	uv run pytest tests/test_domains/test_banking_ru/test_tool_contract_catalog.py -q

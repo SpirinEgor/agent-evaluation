@@ -13,6 +13,9 @@ runner/
 ├── helpers.py         # Task loading, run metadata, utilities
 ├── checkpoint.py      # Save/resume logic for batch runs
 ├── progress.py        # Retry logic and status monitoring
+├── work.py            # Work units and task queue
+├── controller.py      # Coordinates distributed workers
+├── worker.py          # Executes work leased from the controller
 └── README.md          # This file
 ```
 
@@ -89,9 +92,5 @@ results = run_domain(config)
 
 ## Relationship to `tau2.run`
 
-The `tau2.run` module is the original monolithic implementation. The `tau2.runner` package is its modular replacement. Both coexist:
-
-- **`tau2.run`**: Still works for all existing callers (CLI, tests, scripts). Not deprecated yet.
-- **`tau2.runner`**: The recommended API for new code. Cleaner separation of concerns.
-
-Over time, `tau2.run` will be thinned out to re-export from `tau2.runner`.
+The `tau2.run` module is a compatibility facade that delegates to
+`tau2.runner`; it continues to provide existing entry points.
