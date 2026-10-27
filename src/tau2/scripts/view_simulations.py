@@ -719,8 +719,13 @@ def save_task_issue(
 
     # Load existing tasks
     try:
-        with open(tasks_file, "r") as f:
-            tasks_data = json.load(f)
+        if domain == "banking_ru":
+            from tau2.domains.banking_ru.task_store import load_tasks
+
+            tasks_data = load_tasks(tasks_file)
+        else:
+            with open(tasks_file, "r") as f:
+                tasks_data = json.load(f)
     except Exception as e:
         ConsoleDisplay.console.print(f"[red]Error loading tasks: {e}[/]")
         return False
@@ -743,8 +748,13 @@ def save_task_issue(
 
     # Save updated tasks
     try:
-        with open(tasks_file, "w") as f:
-            json.dump(tasks_data, f, indent=4)
+        if domain == "banking_ru":
+            from tau2.domains.banking_ru.task_store import write_tasks
+
+            write_tasks(tasks_file, tasks_data)
+        else:
+            with open(tasks_file, "w") as f:
+                json.dump(tasks_data, f, indent=4)
         ConsoleDisplay.console.print(
             f"[green]Added issue to task {task.id} in tasks.json[/]"
         )

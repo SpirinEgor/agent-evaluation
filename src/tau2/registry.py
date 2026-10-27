@@ -34,9 +34,6 @@ from tau2.domains.banking_ru.environment import (
 from tau2.domains.banking_ru.environment import (
     get_tasks as banking_ru_domain_get_tasks,
 )
-from tau2.domains.banking_ru.environment import (
-    get_tasks_split as banking_ru_domain_get_tasks_split,
-)
 from tau2.domains.mock.environment import get_environment as mock_domain_get_environment
 from tau2.domains.mock.environment import get_tasks as mock_domain_get_tasks
 from tau2.domains.retail.environment import (
@@ -333,7 +330,6 @@ try:
     registry.register_tasks(
         banking_ru_domain_get_tasks,
         "banking_ru",
-        get_task_splits=banking_ru_domain_get_tasks_split,
     )
 
     registry.register_domain(retail_domain_get_environment, "retail")

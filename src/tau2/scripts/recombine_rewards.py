@@ -148,8 +148,13 @@ def recombine_results(experiment_dir: str, domain: str | None = None) -> None:
             print(f"  Warning: Tasks file not found: {tasks_file}, skipping")
             continue
 
-        with open(tasks_file, "r") as f:
-            tasks_data = json.load(f)
+        if domain_name == "banking_ru":
+            from tau2.domains.banking_ru.task_store import load_tasks
+
+            tasks_data = load_tasks(tasks_file)
+        else:
+            with open(tasks_file, "r") as f:
+                tasks_data = json.load(f)
 
         # Build task lookup by ID
         tasks_by_id = {task["id"]: task for task in tasks_data}

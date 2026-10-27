@@ -63,19 +63,12 @@ def test_referential_integrity(db: BankingDB):
         assert customer.tariff_id in db.tariffs
 
 
-def test_task_split_covers_all_tasks():
-    from tau2.domains.banking_ru.environment import get_tasks_split
+def test_banking_tasks_have_no_registered_splits():
+    from tau2.registry import registry
+    from tau2.runner.helpers import load_task_splits, load_tasks
 
-    splits = get_tasks_split()
-    assert "base" in splits, "Сплит base обязателен: он используется по умолчанию"
-    all_ids = {task.id for task in get_tasks(task_split_name=None)}
-    assert set(splits["base"]) == all_ids
-    assert set(splits["train"]) <= all_ids, "train ссылается на несуществующие задачи"
-    assert len(splits["train"]) == 10, "train — фиксированные 10 открытых задач"
-    assert set(splits["test"]) <= all_ids, "test ссылается на несуществующие задачи"
-    assert not set(splits["test"]) & set(splits["train"]), (
-        "train и test не пересекаются: test — закрытый набор"
-    )
-    assert set(splits["train"]) | set(splits["test"]) == all_ids, (
-        "каждая задача принадлежит ровно одному из сплитов train/test"
-    )
+    assert registry.get_task_splits_loader("banking_ru") is None
+    assert load_task_splits("banking_ru") is None
+    assert [task.id for task in load_tasks("banking_ru")] == [
+        task.id for task in get_tasks()
+    ]

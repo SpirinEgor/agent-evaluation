@@ -7,6 +7,12 @@ import json
 from build_access_contract import discovery_catalog
 from build_confidentiality_contract import DATA, TASK_FILE, render_contract
 
+from tau2.domains.banking_ru.task_store import (
+    is_task_index,
+    read_task_text,
+    render_task_patch,
+)
+
 
 def with_contract(tasks: list[dict], db: dict) -> list[dict]:
     """Preserve oracle arguments/state; remove only incidental search spelling."""
@@ -55,7 +61,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--task-id")
     args = parser.parse_args()
-    original = TASK_FILE.read_text(encoding="utf-8")
+    original = read_task_text(TASK_FILE)
     tasks = json.loads(original)
     selected = (
         tasks if args.task_id is None else [t for t in tasks if t["id"] == args.task_id]
@@ -68,6 +74,9 @@ def main() -> int:
             print("Discovery contract is stale; regenerate and apply its patch.")
             return 1
         print(f"Discovery contract is current for {len(selected)} tasks.")
+        return 0
+    if is_task_index(TASK_FILE):
+        print(render_task_patch(TASK_FILE, json.loads(original), tasks), end="")
         return 0
     rendered = render_contract(
         original,

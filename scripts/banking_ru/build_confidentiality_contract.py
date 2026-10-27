@@ -10,6 +10,12 @@ import json
 import re
 from pathlib import Path
 
+from tau2.domains.banking_ru.task_store import (
+    is_task_index,
+    read_task_text,
+    render_task_patch,
+)
+
 DATA = Path(__file__).resolve().parents[2] / "data/tau2/domains/banking_ru"
 TASK_FILE = DATA / "tasks.json"
 PREFIXES = ("common_otp_", "common_card_")
@@ -217,7 +223,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--task-id", help="Emit a bounded patch for one task")
     args = parser.parse_args()
-    original = TASK_FILE.read_text(encoding="utf-8")
+    original = read_task_text(TASK_FILE)
     tasks = json.loads(original)
     db = json.loads((DATA / "db.json").read_text(encoding="utf-8"))
     selected = (
@@ -234,6 +240,9 @@ def main() -> int:
             print("Confidentiality contract is stale; regenerate and apply its patch.")
             return 1
         print(f"Confidentiality contract is current for {len(selected)} tasks.")
+        return 0
+    if is_task_index(TASK_FILE):
+        print(render_task_patch(TASK_FILE, json.loads(original), tasks), end="")
         return 0
     rendered = render_contract(original, updated, {task["id"] for task in selected})
     diff = list(difflib.unified_diff(original.splitlines(), rendered.splitlines(), n=3))

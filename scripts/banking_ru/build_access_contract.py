@@ -12,6 +12,12 @@ from pathlib import Path
 
 from build_confidentiality_contract import DATA, TASK_FILE, render_contract
 
+from tau2.domains.banking_ru.task_store import (
+    is_task_index,
+    read_task_text,
+    render_task_patch,
+)
+
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_FILE = ROOT / "src/tau2/domains/banking_ru/tools.py"
 ARGUMENT_COLLECTIONS = {
@@ -329,7 +335,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--task-id", help="Emit a bounded patch for one task")
     args = parser.parse_args()
-    original = TASK_FILE.read_text(encoding="utf-8")
+    original = read_task_text(TASK_FILE)
     tasks = json.loads(original)
     db = json.loads((DATA / "db.json").read_text(encoding="utf-8"))
     selected = (
@@ -347,6 +353,9 @@ def main() -> int:
         print(
             f"Access contract is current for {len(selected)} tasks and {len(protected_arguments())} protected tools."
         )
+        return 0
+    if is_task_index(TASK_FILE):
+        print(render_task_patch(TASK_FILE, json.loads(original), tasks), end="")
         return 0
     rendered = render_contract(
         original,
