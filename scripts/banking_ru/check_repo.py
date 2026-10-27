@@ -136,8 +136,8 @@ def check_task_index(root):
             raise ValueError("Current tasks.json must be an ordered task_files index")
         loader = runpy.run_path(str(root / "src/tau2/domains/banking_ru/task_store.py"))
         tasks = loader["load_tasks"](index_path)
-        listed = {root / DATA / name for name in index["task_files"]}
-        extra = set((root / DATA / "tasks").glob("*.json")) - listed
+        listed = set(loader["task_inputs"](index_path))
+        extra = set((root / DATA / "tasks").rglob("*.json")) - listed
         for path in sorted(extra):
             errors.append(f"Task file unlisted in index: {path}")
         if not tasks:

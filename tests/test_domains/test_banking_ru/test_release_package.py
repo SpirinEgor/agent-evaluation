@@ -17,7 +17,12 @@ from tau2.registry import registry
 
 def test_shipped_task_set_and_completion_contract(tmp_path):
     index = json.loads((BANKING_RU_DATA_DIR / "tasks.json").read_text())
-    assert index == {"task_files": [f"tasks/bank_{n:03d}.json" for n in range(1, 62)]}
+    assert index == {
+        "task_files": [
+            "tasks/bank_002/scenario.json" if n == 2 else f"tasks/bank_{n:03d}.json"
+            for n in range(1, 62)
+        ]
+    }
     # A released snapshot must carry both the index and its relative targets.
     shutil.copyfile(BANKING_RU_DATA_DIR / "tasks.json", tmp_path / "tasks.json")
     shutil.copytree(BANKING_RU_DATA_DIR / "tasks", tmp_path / "tasks")
@@ -77,3 +82,23 @@ def test_corpus_and_tools_are_shipped_and_available():
     assert str(BANKING_RU_DATA_DIR.resolve()).startswith(
         str(Path(__file__).resolve().parents[3])
     )
+
+
+def test_bank2_split_files_are_not_exposed_through_agent_corpus():
+    from scripts.banking_ru.run_codex_harness import build_prompt
+    from tau2.platform.session import PlatformSession
+
+    task = next(task for task in get_tasks() if task.id == "Bank 2")
+    folder = BANKING_RU_DATA_DIR / "tasks/bank_002"
+    assert task.ticket == (folder / "ticket.md").read_bytes().decode("utf-8")
+    session = PlatformSession(task, get_environment, mcp_layout="systems")
+    prompt = build_prompt(policy=session.policy, ticket=task.ticket)
+    assert task.ticket in prompt
+    for name in ("scenario.json", "evaluation.json"):
+        assert (folder / name).read_text() not in prompt
+        for path in (f"/tasks/bank_002/{name}", str(folder / name)):
+            assert session.call(
+                "file_read", {"path": path}, system="knowledge"
+            ).is_error
+    assert session.env.tools.corpus.find("evaluation.json")["paths"] == []
+    assert session.env.tools.corpus.find("scenario.json")["paths"] == []

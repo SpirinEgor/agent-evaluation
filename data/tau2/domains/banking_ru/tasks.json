@@ -1,7 +1,7 @@
 {
   "task_files": [
     "tasks/bank_001.json",
-    "tasks/bank_002.json",
+    "tasks/bank_002/scenario.json",
     "tasks/bank_003.json",
     "tasks/bank_004.json",
     "tasks/bank_005.json",

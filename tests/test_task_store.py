@@ -79,3 +79,113 @@ def test_invalid_index_fails_closed(tmp_path, failure):
     index.write_text(json.dumps(content))
     with pytest.raises((ValueError, FileNotFoundError)):
         load_tasks(index)
+
+
+def split_indexed(tmp_path):
+    index, tasks = indexed(tmp_path)
+    task = tasks[0]
+    task.update(
+        description={"purpose": "Author-only"},
+        initial_state=None,
+        evaluation_criteria={"reward_basis": ["DB", "ACTION"]},
+        scenario_version="v1",
+    )
+    folder = tmp_path / "tasks/bank_002"
+    folder.mkdir()
+    scenario = {
+        k: v for k, v in task.items() if k not in {"ticket", "evaluation_criteria"}
+    }
+    (folder / "scenario.json").write_text(json.dumps(scenario))
+    (folder / "ticket.md").write_text(task["ticket"])
+    (folder / "evaluation.json").write_text(json.dumps(task["evaluation_criteria"]))
+    (tmp_path / "tasks/bank_002.json").unlink()
+    index.write_text(
+        json.dumps(
+            {"task_files": ["tasks/bank_002/scenario.json", "tasks/bank_001.json"]}
+        )
+    )
+    return index, tasks, folder
+
+
+def test_three_files_reassemble_and_preserve_unchanged_bytes(tmp_path):
+    from tau2.domains.banking_ru.task_store import task_inputs
+
+    index, tasks, folder = split_indexed(tmp_path)
+    assert load_tasks(index) == tasks
+    inputs = task_inputs(index)
+    assert set(inputs) == {
+        index,
+        folder / "scenario.json",
+        folder / "ticket.md",
+        folder / "evaluation.json",
+        tmp_path / "tasks/bank_001.json",
+    }
+    before = {p: p.read_bytes() for p in inputs}
+    assert task_outputs(index, tasks) == before
+    write_tasks(index, tasks)
+    assert {p: p.read_bytes() for p in inputs} == before
+
+
+@pytest.mark.parametrize("part", ["ticket", "scenario", "evaluation"])
+def test_three_file_writer_updates_only_changed_part(tmp_path, part):
+    index, tasks, folder = split_indexed(tmp_path)
+    if part == "ticket":
+        tasks[0]["ticket"] += "\n"
+        write_tasks(index, tasks)
+    before = {p: p.read_bytes() for p in tmp_path.rglob("*") if p.is_file()}
+    if part == "ticket":
+        tasks[0]["ticket"] = "Изменённый тикет\n"
+    elif part == "scenario":
+        tasks[0]["scenario_version"] = "v2"
+    else:
+        tasks[0]["evaluation_criteria"]["reward_basis"] = ["DB"]
+    target = folder / ("ticket.md" if part == "ticket" else part + ".json")
+    patch = render_task_patch(index, load_tasks(index), tasks)
+    assert str(target) in patch
+    assert patch.count("*** Update File:") == 1
+    write_tasks(index, tasks)
+    assert load_tasks(index) == tasks
+    assert not (tmp_path / "tasks/bank_002.json").exists()
+    for path, raw in before.items():
+        if path != target:
+            assert path.read_bytes() == raw
+
+
+@pytest.mark.parametrize(
+    "defect", ["missing", "escape", "duplicate_ticket", "wrong_id", "bad_evaluation"]
+)
+def test_three_files_reject_invalid_inputs(tmp_path, defect):
+    index, _, folder = split_indexed(tmp_path)
+    if defect == "missing":
+        (folder / "ticket.md").unlink()
+    elif defect == "escape":
+        target = folder / "evaluation.json"
+        target.unlink()
+        outside = tmp_path.parent / (tmp_path.name + "-outside.json")
+        outside.write_text("{}")
+        target.symlink_to(outside)
+    elif defect == "duplicate_ticket":
+        path = folder / "scenario.json"
+        value = json.loads(path.read_text())
+        value["ticket"] = "Hidden duplicate"
+        path.write_text(json.dumps(value))
+    elif defect == "wrong_id":
+        path = folder / "scenario.json"
+        value = json.loads(path.read_text())
+        value["id"] = "Bank 3"
+        path.write_text(json.dumps(value))
+    else:
+        (folder / "evaluation.json").write_text("[]")
+    with pytest.raises((ValueError, FileNotFoundError)):
+        load_tasks(index)
+
+
+@pytest.mark.parametrize("replacement", ["Первое\n", "Другой тикет"])
+def test_ticket_patch_rejects_unrepresentable_eof(tmp_path, replacement):
+    from copy import deepcopy
+
+    index, before, _ = split_indexed(tmp_path)
+    after = deepcopy(before)
+    after[0]["ticket"] = replacement
+    with pytest.raises(ValueError, match="write_tasks"):
+        render_task_patch(index, before, after)

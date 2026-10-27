@@ -22,7 +22,7 @@ def _index_paths(path: Path, value: dict) -> list[Path]:
     paths = []
     for name in value["task_files"]:
         if not isinstance(name, str) or not re.fullmatch(
-            r"tasks/bank_[0-9]{3}\.json", name
+            r"tasks/bank_[0-9]{3}(?:\.json|/scenario\.json)", name
         ):
             raise ValueError(f"Invalid task reference: {name!r}")
         member = path.parent / name
@@ -54,6 +54,40 @@ def _filename(task: dict) -> str:
     return f"tasks/bank_{int(match[1]):03d}.json"
 
 
+def _member_inputs(member: Path, root: Path) -> list[Path]:
+    paths = (
+        [member, member.with_name("ticket.md"), member.with_name("evaluation.json")]
+        if member.name == "scenario.json"
+        else [member]
+    )
+    for target in paths:
+        if not target.resolve().is_relative_to(root.resolve()):
+            raise ValueError(f"Task reference leaves its data directory: {target}")
+    return paths
+
+
+def _load_member(member: Path, root: Path) -> dict:
+    inputs = _member_inputs(member, root)
+    task = json.loads(member.read_bytes())
+    if len(inputs) == 3:
+        if (
+            not isinstance(task, dict)
+            or {"ticket", "evaluation_criteria"} & task.keys()
+        ):
+            raise ValueError(
+                f"Scenario must not duplicate ticket or evaluation: {member}"
+            )
+        evaluation = json.loads(inputs[2].read_bytes())
+        if not isinstance(evaluation, dict):
+            raise ValueError(f"Evaluation must be an object: {inputs[2]}")
+        task = {
+            **task,
+            "ticket": inputs[1].read_bytes().decode("utf-8"),
+            "evaluation_criteria": evaluation,
+        }
+    return task
+
+
 def load_tasks(path: Path) -> list[dict]:
     """Load all task objects, preserving the explicit index/aggregate order."""
     path = Path(path)
@@ -65,9 +99,10 @@ def load_tasks(path: Path) -> list[dict]:
         raise ValueError(f"Invalid task store: {path}")
     tasks = []
     for member in paths:
-        task = json.loads(member.read_bytes())
+        task = _load_member(member, path.parent)
         _validate([task])
-        if member != path.parent / _filename(task):
+        expected = path.parent / _filename(task)
+        if member not in (expected, expected.with_suffix("") / "scenario.json"):
             raise ValueError(f"Task ID does not match filename: {member}")
         tasks.append(task)
     return _validate(tasks)
@@ -78,7 +113,16 @@ def task_inputs(path: Path) -> list[Path]:
     path = Path(path)
     value = json.loads(path.read_bytes())
     load_tasks(path)  # Validate before handing paths to a writer.
-    return [path, *_index_paths(path, value)] if isinstance(value, dict) else [path]
+    if isinstance(value, list):
+        return [path]
+    return [
+        path,
+        *(
+            target
+            for member in _index_paths(path, value)
+            for target in _member_inputs(member, path.parent)
+        ),
+    ]
 
 
 def task_outputs(path: Path, tasks: list[dict]) -> dict[Path, bytes]:
@@ -97,18 +141,39 @@ def task_outputs(path: Path, tasks: list[dict]) -> dict[Path, bytes]:
     old_tasks = load_tasks(path)
     if {t["id"] for t in old_tasks} - {t["id"] for t in tasks}:
         raise ValueError("Removing indexed tasks requires an explicit migration")
-    names = [_filename(task) for task in tasks]
+    old_names = dict(zip((t["id"] for t in old_tasks), value["task_files"]))
+    names = [old_names.get(task["id"], _filename(task)) for task in tasks]
     index = {"task_files": names}
     outputs = {path: path.read_bytes() if value == index else _serialize(index)}
     for name, task in zip(names, tasks):
         member = path.parent / name
         if not member.resolve().is_relative_to(path.parent.resolve()):
             raise ValueError(f"Task reference leaves its data directory: {name}")
-        outputs[member] = (
-            member.read_bytes()
-            if member.exists() and json.loads(member.read_bytes()) == task
-            else _serialize(task)
-        )
+        if member.name == "scenario.json":
+            _member_inputs(member, path.parent)
+            if not isinstance(task.get("ticket"), str) or not isinstance(
+                task.get("evaluation_criteria"), dict
+            ):
+                raise ValueError(
+                    "Split tasks require a text ticket and evaluation object"
+                )
+            pieces = {
+                member: {
+                    k: v
+                    for k, v in task.items()
+                    if k not in {"ticket", "evaluation_criteria"}
+                },
+                member.with_name("evaluation.json"): task["evaluation_criteria"],
+            }
+            outputs[member.with_name("ticket.md")] = task["ticket"].encode("utf-8")
+        else:
+            pieces = {member: task}
+        for target, piece in pieces.items():
+            outputs[target] = (
+                target.read_bytes()
+                if target.exists() and json.loads(target.read_bytes()) == piece
+                else _serialize(piece)
+            )
     return outputs
 
 
@@ -140,6 +205,16 @@ def render_task_patch(path: Path, before: list[dict], after: list[dict]) -> str:
         original = target.read_bytes() if target.exists() else None
         if original == raw:
             continue
+        if target.name == "ticket.md" and (
+            original is None
+            or not original.endswith(b"\n")
+            or not raw.endswith(b"\n")
+            or b"\r" in original
+            or b"\r" in raw
+        ):
+            raise ValueError(
+                "Text patch cannot preserve ticket line endings; use write_tasks"
+            )
         if original is None:
             sections.append(
                 f"*** Add File: {target}\n"

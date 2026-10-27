@@ -11,10 +11,15 @@
 
 ## Файлы задач
 
-Каждая задача хранится отдельно: [`tasks/bank_001.json`](tasks/bank_001.json) …
+Задачи хранятся отдельно: [`tasks/bank_001.json`](tasks/bank_001.json) …
 [`tasks/bank_061.json`](tasks/bank_061.json). [`tasks.json`](tasks.json) — лёгкий
 индекс `{"task_files": ["tasks/bank_001.json", …]}`; порядок списка задаёт порядок
-набора. При копировании набора сохраняйте индекс вместе с папкой `tasks/`.
+набора. Исключение по формату хранения — Bank 2: индекс указывает на
+[`tasks/bank_002/scenario.json`](tasks/bank_002/scenario.json), рядом находятся
+[`ticket.md`](tasks/bank_002/ticket.md) и [`evaluation.json`](tasks/bank_002/evaluation.json).
+Это прежняя задача, разделённая без изменения содержания. Правила полей и сборки —
+в [формате задачи](../../../../docs/banking-ru/task-format.md).
+При копировании набора сохраняйте индекс вместе со всей папкой `tasks/`.
 Для чтения и сохранения используйте `tau2.domains.banking_ru.task_store`:
 `load_tasks`, `task_outputs` и `write_tasks`. Они также поддерживают прежний
 массив задач для исторических снимков; сохранённые версии снимков не переписываются.

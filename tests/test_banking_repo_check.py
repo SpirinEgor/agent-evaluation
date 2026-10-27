@@ -67,14 +67,17 @@ def test_profiles_follow_task_data_not_hardcoded_bank_numbers(guard, tmp_path):
     assert guard["check_profiles"](tasks, doc)
 
 
-def test_index_rejects_unlisted_task_files(guard, tmp_path):
+@pytest.mark.parametrize("extra", ["tasks/bank_002.json", "tasks/bank_001/extra.json"])
+def test_index_rejects_unlisted_task_files(guard, tmp_path, extra):
     data = tmp_path / "data/tau2/domains/banking_ru"
     (data / "tasks").mkdir(parents=True)
     (data / "tasks.json").write_text(
         json.dumps({"task_files": ["tasks/bank_001.json"]})
     )
-    for n in (1, 2):
-        (data / f"tasks/bank_{n:03d}.json").write_text(json.dumps({"id": f"Bank {n}"}))
+    (data / "tasks/bank_001.json").write_text(json.dumps({"id": "Bank 1"}))
+    unlisted = data / extra
+    unlisted.parent.mkdir(parents=True, exist_ok=True)
+    unlisted.write_text(json.dumps({"id": "Bank 2"}))
     loader = SCRIPT.parents[2] / "src/tau2/domains/banking_ru/task_store.py"
     target = tmp_path / "src/tau2/domains/banking_ru/task_store.py"
     target.parent.mkdir(parents=True)
