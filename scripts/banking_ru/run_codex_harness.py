@@ -2,9 +2,11 @@
 
 import argparse
 import asyncio
+import hashlib
 import importlib.util
 import json
 import re
+import sys
 import tempfile
 import time
 import uuid
@@ -254,12 +256,20 @@ async def invoke_codex(command: list[str], prompt: str, timeout_seconds: float) 
     }
 
 
+def verify_container_image(inspected: dict, expected_image_id: str) -> None:
+    """Bind execution to the immutable image verified by preflight."""
+    if inspected.get("Image") != expected_image_id:
+        raise ValueError("Container image differs from the verified image")
+
+
 async def invoke_isolated_codex(
     command: list[str],
     prompt: str,
     timeout_seconds: float,
     image: str = "banking-codex-isolated:0.162.0-alpha.17.2",
     policy: str = "",
+    *,
+    expected_image_id: str | None = None,
 ) -> dict:
     """Run full-access Codex in a fresh container without any host mounts."""
     spec = importlib.util.spec_from_file_location(
@@ -282,6 +292,8 @@ async def invoke_isolated_codex(
         inspected = await asyncio.to_thread(
             container.prepare_container, image, name, policy
         )
+        if expected_image_id is not None:
+            verify_container_image(inspected, expected_image_id)
         run = await invoke_codex(
             ["docker", "exec", "-i", name, *inner], prompt, timeout_seconds
         )
@@ -387,7 +399,7 @@ def collect_attempt_journal(
             matches = [
                 m
                 for m in mcp_events
-                if m.get("canonical_name") == row["tool"]
+                if m.get("original_name", m.get("canonical_name")) == row["tool"]
                 and m.get("arguments") == item["arguments"]
             ]
             if len(matches) == 1:
@@ -462,6 +474,41 @@ def collect_attempt_journal(
     )
 
 
+def attach_persisted_journal(record: dict, results_dir: Path) -> None:
+    """Bind CLI observations to the server-owned terminal session journal."""
+    token = record.get("token")
+    if not isinstance(token, str) or not re.fullmatch(r"[a-f0-9]{32}", token):
+        raise ValueError("Invalid platform session token")
+    path = results_dir / f"{token}.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    events = payload.get("info", {}).get("mcp_events")
+    if (
+        payload.get("id") != token
+        or payload.get("task_id") != record.get("task_id")
+        or not isinstance(events, list)
+        or not all(isinstance(event, dict) for event in events)
+    ):
+        raise ValueError("Persisted platform journal has wrong session provenance")
+    run = record["run"]
+    journal = collect_attempt_journal(
+        run["stdout"], run["stderr"], events, run.get("output_observations", [])
+    )
+    if bool(journal["external_refusals"]) != bool(
+        record.get("confirmed_external_refusal")
+    ):
+        raise ValueError("Refusal evidence changed while linking the platform journal")
+    record["attempt_journal"] = journal
+    record["platform_event_status"] = "linked"
+    record["platform_event_path"] = "platform/" + path.name
+    record["platform_event_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    record["event_observation"] = {
+        "argument_capture_status": journal["argument_capture_status"],
+        "argument_capture_complete": journal["argument_capture_complete"],
+        "boundary": journal["boundary"],
+        "unknown_cases_require_audit": True,
+    }
+
+
 async def run_one_attempt(
     *,
     client: PlatformClient,
@@ -472,6 +519,7 @@ async def run_one_attempt(
     work_root: Path,
     mcp_layout: str = "systems",
     container_image: str = "banking-codex-isolated:0.162.0-alpha.17.2",
+    expected_image_id: str | None = None,
 ) -> dict:
     """Open, run, classify and close one session exactly once."""
     opened = await client.open(
@@ -500,6 +548,11 @@ async def run_one_attempt(
                 timeout_seconds,
                 container_image,
                 opened.policy,
+                **(
+                    {"expected_image_id": expected_image_id}
+                    if expected_image_id is not None
+                    else {}
+                ),
             )
         state = await client.state(opened.token)
         finish = await finish_attempt(client, opened, state)
@@ -545,6 +598,7 @@ async def run_one_attempt(
         "result": finish["result"],
         "run": run,
         "attempt_journal": journal,
+        "platform_event_status": "not_loaded",
         "bank_reward": finish["result"].get("reward"),
         "confirmed_external_refusal": bool(journal["external_refusals"]),
         "final_reward": 0.0
@@ -580,71 +634,50 @@ def write_json(path: Path, value: object) -> None:
     )
 
 
-async def async_main(args: argparse.Namespace) -> int:
-    work_root = args.work_root.resolve()
-    work_root.mkdir(parents=True, exist_ok=True)
-    client = PlatformClient(args.base_url)
-    started_at = datetime.now(UTC).isoformat()
-    try:
-        records = await run_batch(
-            args.tasks,
-            args.concurrency,
-            lambda task_id: run_one_attempt(
-                client=client,
-                task_id=task_id,
-                model=args.model,
-                effort=args.effort,
-                timeout_seconds=args.timeout,
-                work_root=work_root,
-                mcp_layout=args.mcp_layout,
-                container_image=args.container_image,
-            ),
-        )
-    finally:
-        await client._http.aclose()
+def load_preflight():
+    """Load the shared authoring gates even when imported outside the scripts path."""
+    path = Path(__file__).with_name("banking_preflight.py")
+    spec = importlib.util.spec_from_file_location("banking_preflight", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
-    report = {
-        "started_at": started_at,
-        "model": args.model,
-        "reasoning_effort": args.effort,
-        "mcp_layout": args.mcp_layout,
-        "attempts_per_task": 1,
-        "concurrency": args.concurrency,
-        "timeout_seconds": args.timeout,
-        "records": records,
-    }
-    write_json(args.out, report)
-    for record in records:
-        write_json(args.artifact_dir / f"{record['task_id']}.json", record)
-    counts: dict[str, int] = {}
-    for record in records:
-        label = record["classification"]
-        counts[label] = counts.get(label, 0) + 1
-    print(json.dumps({"out": str(args.out), "counts": counts}, ensure_ascii=False))
+
+async def async_main(args: argparse.Namespace) -> int:
+    """Run a single attempt only from a sealed and validated local snapshot."""
+    if getattr(args, "preflight_dir", None) is None:
+        raise ValueError("A sealed preflight directory is required")
+    out = args.preflight_dir.resolve()
+    gates = load_preflight()
+    spec = gates.read(out / "spec.json")
+    await gates.probe(spec, out)
+    previous = gates.attempts(out)
+    print(
+        json.dumps(
+            {
+                "preflight_dir": str(out),
+                "decision": gates.decision(previous),
+                "attempts": previous,
+            },
+            ensure_ascii=False,
+        )
+    )
     return 0
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--base-url", required=True)
-    parser.add_argument("--tasks", nargs="+", required=True)
-    parser.add_argument("--model", default="gpt-5.6-luna")
-    parser.add_argument("--effort", default="low")
-    parser.add_argument(
-        "--mcp-layout", choices=["single", "systems"], default="systems"
-    )
-    parser.add_argument(
-        "--container-image", default="banking-codex-isolated:0.162.0-alpha.17.2"
-    )
-    parser.add_argument("--timeout", type=float, default=300)
-    parser.add_argument("--concurrency", type=int, default=4)
-    parser.add_argument("--work-root", type=Path, default=Path("/tmp"))
-    parser.add_argument("--out", type=Path, required=True)
-    parser.add_argument("--artifact-dir", type=Path, required=True)
+    parser.add_argument("--preflight-dir", type=Path, required=True)
     return parser.parse_args()
 
 
 def main() -> int:
+    # The supported entrypoint also exposes the preparation, inspection and
+    # audit phases; the probe path is gated identically in both entrypoints.
+    if len(sys.argv) > 1 and sys.argv[1] == "preflight":
+        sys.argv.pop(1)
+        load_preflight().main()
+        return 0
     return asyncio.run(async_main(parse_args()))
 
 

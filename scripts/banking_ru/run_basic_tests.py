@@ -12,7 +12,6 @@ TOOLS = str(BANK / "test_tool_contract_catalog.py")
 CORPUS = tuple(
     str(BANK / name)
     for name in (
-        "test_bounded_corpus_build.py",
         "test_db_banking_ru.py",
         "test_file_corpus_whole.py",
         "test_file_read_full_api.py",
@@ -30,13 +29,17 @@ GROUPS = {
         "tests/test_evaluator_access_contract.py",
         "tests/test_evaluator_raw_confidentiality.py",
         "tests/test_evaluator_business_process.py",
+        "tests/test_db_action_contract_engine.py",
+        "tests/test_db_state_checks.py",
+        "tests/test_reward_business_trace.py",
+        "tests/test_banking_business_trace.py",
     ),
     "infra": (
         *(
             "tests/test_platform/" + name
             for name in (
                 "test_bank32_solution_isolation.py",
-                "test_banking_prototype.py",
+                "test_banking_preflight.py",
                 "test_banking_startup_discovery.py",
                 "test_client.py",
                 "test_codex_container.py",
@@ -44,7 +47,6 @@ GROUPS = {
                 "test_main.py",
                 "test_mcp_bridge.py",
                 "test_mcp_systems.py",
-                "test_package.py",
                 "test_service.py",
                 "test_session.py",
             )
@@ -52,8 +54,8 @@ GROUPS = {
         *CORPUS,
     ),
 }
-# Frozen maintained inventory. Historical experiment modules remain directly
-# addressable; adding a file does not silently expand the basic test contract.
+# Frozen maintained inventory. Removed experiments remain in Git history;
+# adding a file does not silently expand the basic test contract.
 # See tests/fixtures/banking_ru/README.md for the boundary and retained guarantees.
 GROUPS["regressions"] = tuple(
     str(BANK / name)
@@ -69,8 +71,11 @@ GROUPS["regressions"] = tuple(
         "test_structured_escalation.py",
         "test_optional_operation_questions.py",
         "test_file_read_repair_contract.py",
-        "test_historical_fixture_integrity.py",
-        "test_bank2_parent_fixture.py",
+        "test_fixture_integrity.py",
+        "test_standalone_fixture.py",
+        "test_bank2_adjustment_authority.py",
+        "test_settlement_api.py",
+        "test_bank40_source_equivalence.py",
         "test_resolution_compatibility.py",
         "test_resolution_component_pages.py",
         "test_resolution_deductions.py",
@@ -78,12 +83,10 @@ GROUPS["regressions"] = tuple(
         "test_resolution_funding_pools.py",
         "test_resolution_percentage_deductions.py",
         "test_resolution_selection.py",
-        "test_selection_bitset_oracle.py",
-        "test_compatibility_certificate.py",
         "test_multisource_runtime.py",
-        "test_promotion_source_guard.py",
-        "test_bank2_bank7_generator_repair.py",
         "test_contract_infrastructure.py",
+        "test_banking_db_action_migration.py",
+        "test_banking_db_action_state_guards.py",
     )
 )
 

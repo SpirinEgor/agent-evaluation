@@ -1,10 +1,11 @@
-"""Fast, fail-closed banking prototype funnel. Only `probe` calls a model."""
+"""Banking preflight and evidence gates for the supported Codex harness."""
 
 import argparse
 import asyncio
 import gzip
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -68,7 +69,14 @@ def path_for(value):
 
 
 def inputs(spec):
-    paths = [path_for(p) for p in spec["inputs"]]
+    paths = [path_for(p) for p in spec["inputs"]] + [
+        ROOT / "src/tau2",
+        ROOT / "scripts/banking_ru",
+        ROOT / "tests",
+        ROOT / "pyproject.toml",
+        ROOT / "uv.lock",
+        Path(sys.executable).resolve(),
+    ]
     paths += [path_for(spec["data_dir"]), path_for(spec["solution_contract"])]
     boundary = spec["boundary"]
     paths += [path_for(boundary[k]) for k in ["receipt", "anchor_version"]]
@@ -96,19 +104,110 @@ def current(spec, out):
     return sealed["fingerprint"]
 
 
-def check_control(path, expected):
-    """Check actual HALF/FULL DB×ENV×ACTION, not a test process exit code."""
+def requires_review(value):
+    """Never turn an unresolved evaluator verdict into a validated result."""
+    if isinstance(value, dict):
+        return value.get("grading_status") == "needs_review" or any(
+            requires_review(item) for item in value.values()
+        )
+    if isinstance(value, list):
+        return any(requires_review(item) for item in value)
+    return False
+
+
+def check_control(
+    path,
+    expected,
+    *,
+    expected_basis=None,
+    expected_task_id=None,
+    expected_task_sha256=None,
+):
+    """Verify each control against the actual task reward basis in both modes."""
+    basis = list(expected_basis or ["DB", "ENV_ASSERTION", "ACTION"])
+    allowed = ({"DB", "ACTION"}, {"DB", "ENV_ASSERTION", "ACTION"})
+    if len(basis) != len(set(basis)) or set(basis) not in allowed:
+        raise ValueError("Unsupported task reward basis")
     report = read(path)
-    for mode in ["half", "full"]:
+    if expected_task_id is not None and (
+        report.get("task_id") != expected_task_id
+        or report.get("task_sha256") != expected_task_sha256
+    ):
+        raise ValueError(f"{path}: wrong task or task snapshot")
+    for mode in ("half", "full"):
         result = report[mode]
-        if set(result["reward_basis"]) != {"DB", "ENV_ASSERTION", "ACTION"}:
-            raise ValueError(f"{path}: incomplete reward basis in {mode}")
+        if requires_review(result):
+            raise ValueError(f"{path}: unresolved grading review in {mode}")
+        actual = result["reward_basis"]
+        if len(actual) != len(set(actual)) or set(actual) != set(basis):
+            raise ValueError(f"{path}: wrong reward basis in {mode}")
+        reward = result.get("reward")
+        if (
+            isinstance(reward, bool)
+            or not isinstance(reward, (int, float))
+            or not math.isfinite(reward)
+            or not 0 <= reward <= 1
+        ):
+            raise ValueError(f"{path}: invalid reward in {mode}")
         values = result["reward_breakdown"]
-        product = values["DB"] * values["ENV_ASSERTION"] * values["ACTION"]
+        if not isinstance(values, dict) or set(values) != set(basis):
+            raise ValueError(f"{path}: unexpected reward breakdown in {mode}")
+        try:
+            components = [values[key] for key in basis]
+            if any(
+                isinstance(v, bool)
+                or not isinstance(v, (int, float))
+                or not math.isfinite(v)
+                or not 0 <= v <= 1
+                for v in components
+            ):
+                raise ValueError("Invalid component")
+            product = math.prod(components)
+        except (KeyError, TypeError) as error:
+            raise ValueError(
+                f"{path}: incomplete reward breakdown in {mode}"
+            ) from error
         if result["reward"] != expected or product != expected:
             raise ValueError(
                 f"{path}: incorrect {mode} grade: {result['reward']}, {values}"
             )
+
+
+def task_reward_basis(spec):
+    """Use only the target task's declared reward contract from the sealed data."""
+    from tau2.domains.banking_ru.task_store import load_tasks
+
+    tasks = load_tasks(path_for(spec["data_dir"]) / "tasks.json")
+    selected = [task for task in tasks if task["id"] == spec["task_id"]]
+    if len(selected) != 1:
+        raise ValueError("Preflight requires exactly one target task")
+    criteria = selected[0]["evaluation_criteria"]
+    basis = criteria.get("reward_basis")
+    if not isinstance(basis, list):
+        raise ValueError("Target task must declare its reward basis")
+    return basis
+
+
+def task_snapshot_sha256(spec):
+    """Match the canonical task fingerprint recorded by PlatformSession."""
+    from tau2.data_model.tasks import Task
+    from tau2.domains.banking_ru.task_store import load_tasks
+
+    tasks = load_tasks(path_for(spec["data_dir"]) / "tasks.json")
+    selected = [task for task in tasks if task["id"] == spec["task_id"]]
+    if len(selected) != 1:
+        raise ValueError("Preflight requires exactly one target task")
+    task = Task.model_validate(selected[0]).model_dump(mode="json")
+    return hashlib.sha256(
+        json.dumps(task, sort_keys=True, ensure_ascii=False).encode()
+    ).hexdigest()
+
+
+def control_filename(control):
+    name = control.get("name")
+    if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z0-9_-]+", name):
+        raise ValueError("Invalid control name")
+    return name + ".json.gz"
 
 
 def leak_hits(surfaces, private_tokens):
@@ -129,15 +228,38 @@ def leak_hits(surfaces, private_tokens):
     ]
 
 
+def verify_live_surface(expected, policy, prompt, schemas, private_tokens):
+    """Fail before model invocation if the actual session differs from the checked one."""
+    actual_tools = [tool for response in schemas.values() for tool in response["tools"]]
+    by_name = lambda_tool_sort
+    if (
+        policy != expected["startup"]
+        or prompt != expected["prompt"]
+        or by_name(actual_tools) != by_name(expected["schemas"])
+        or leak_hits({"prompt": prompt, "schemas": json.dumps(schemas)}, private_tokens)
+    ):
+        raise ValueError("Live model surface differs from verified preflight")
+
+
+def lambda_tool_sort(tools):
+    return sorted(tools, key=lambda tool: tool["name"])
+
+
 def record_outcome(record):
     """Separate observed zeroes from confirmed substantive model failures."""
-    if record.get("confirmed_external_refusal"):
+    if (
+        record.get("confirmed_external_refusal")
+        or record.get("classification") == "needs_review"
+        or requires_review(record.get("result", {}))
+    ):
         return "unreviewed_zero"
     if record.get("technical_failure") or record.get("classification", "").startswith(
         "invalid_"
     ):
         return "technical_failure"
-    if record.get("state", {}).get("status") != "done":
+    if record.get("state", {}).get("status") != "done" and not record.get(
+        "result", {}
+    ).get("business_process_only", False):
         return "technical_failure"
     return "success" if record.get("final_reward") == 1 else "unreviewed_zero"
 
@@ -194,19 +316,35 @@ def boundary_check(spec):
     if not all(receipt.get(k) is True for k in flags):
         raise ValueError("Unverified model boundary")
     parent = path_for(b["receipt"]).parent
-    if read(parent / "image.json")["id"] != spec["model"]["image"]:
-        raise ValueError("Image differs from verified preflight")
+    image = spec["model"]["image"]
+    if (
+        not re.fullmatch(r"sha256:[a-f0-9]{64}", image)
+        or read(parent / "image.json")["id"] != image
+    ):
+        raise ValueError(
+            "Image differs from verified preflight or is not an immutable image ID"
+        )
     if (
         "--dangerously-bypass-approvals-and-sandbox"
         not in read(parent / "cli-request.json")["command"]
     ):
         raise ValueError("Preflight did not verify required full-access CLI")
     anchor = read(path_for(b["anchor_version"]))["files"]
-    names = [k for k in anchor if k.startswith("src/tau2/")] + [
+    source = ROOT / "src/tau2"
+    actual_source = {str(Path(name).relative_to(ROOT)) for name in hash_files([source])}
+    anchored_source = {name for name in anchor if name.startswith("src/tau2/")}
+    required = {
         "scripts/banking_ru/run_codex_harness.py",
         "scripts/banking_ru/codex_container.py",
-    ]
-    if not names or any(sha(ROOT / k) != anchor[k] for k in names):
+        "scripts/banking_ru/banking_preflight.py",
+    }
+    names = actual_source | required
+    if (
+        not actual_source
+        or actual_source != anchored_source
+        or not required <= anchor.keys()
+        or any(sha(ROOT / key) != anchor[key] for key in names)
+    ):
         raise ValueError(
             "Runtime/harness changed: a fresh physical preflight is required"
         )
@@ -218,6 +356,8 @@ def boundary_check(spec):
 
 
 def seal(spec, out):
+    for control in spec["controls"]:
+        control_filename(control)
     roles = {c["role"] for c in spec["controls"]}
     if not {"positive", "alternative", "noop", "negative"} <= roles:
         raise ValueError(
@@ -226,7 +366,8 @@ def seal(spec, out):
     if len({c["name"] for c in spec["controls"]}) != len(spec["controls"]):
         raise ValueError("Control names must be distinct")
     if any(
-        c["expected"] != int(c["role"] in {"positive", "alternative"})
+        type(c["expected"]) is not int
+        or c["expected"] != int(c["role"] in {"positive", "alternative"})
         for c in spec["controls"]
     ):
         raise ValueError("Invalid control expectation")
@@ -252,34 +393,96 @@ def seal(spec, out):
     )
 
 
-def validate(spec, out):
-    fp = current(spec, out)
-    substitutions = {
-        "python": sys.executable,
-        "repo": str(ROOT),
-        "out": str(out),
-        "data": str(path_for(spec["data_dir"])),
+def relative_tree_hash(root):
+    """Fingerprint a tree independently of the path where it is copied."""
+    root = Path(root).resolve()
+    return {
+        str(Path(name).relative_to(root)): digest
+        for name, digest in hash_files([root]).items()
     }
-    command = [arg.format(**substitutions) for arg in spec["validation_command"]]
-    env = os.environ.copy()
-    env.update(BANKING_PROTOTYPE_DATA_DIR=substitutions["data"], USE_LANGFUSE="false")
-    env[spec["evidence_env"]] = str(out / "controls")
+
+
+def validate(spec, out):
+    """Run controls against a clean, byte-identical copy of the sealed data."""
+    fp = current(spec, out)
+    source = path_for(spec["data_dir"]).resolve()
+    evidence_env = spec["evidence_env"]
+    if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", evidence_env) or evidence_env in {
+        "TAU2_DATA_DIR",
+        "PYTHONPATH",
+        "HOME",
+        "BANKING_PROTOTYPE_DATA_DIR",
+        "USE_LANGFUSE",
+    }:
+        raise ValueError("Invalid control evidence environment variable")
+    validation_run = out / "validation-runs" / str(time.time_ns())
+    if validation_run.resolve().is_relative_to(source):
+        raise ValueError("Validation output must be outside sealed data")
+    controls_dir = validation_run / "controls"
+    controls_dir.mkdir(parents=True, exist_ok=False)
     started = time.time()
-    receipt = {"fingerprint": fp, "passed": False, "command": command, "model_calls": 0}
+    receipt = {
+        "fingerprint": fp,
+        "passed": False,
+        "model_calls": 0,
+        "evidence_dir": str(validation_run),
+    }
     try:
-        with (out / "validation.log").open("w") as log:
-            subprocess.run(
-                command,
-                cwd=ROOT,
-                env=env,
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                timeout=spec.get("validation_timeout", 600),
-                check=True,
+        source_hash = relative_tree_hash(source)
+        with tempfile.TemporaryDirectory(
+            prefix="bank-control-", dir=validation_run
+        ) as temp:
+            data_root = Path(temp) / "data"
+            copied = data_root / "tau2/domains/banking_ru"
+            shutil.copytree(source, copied)
+            if relative_tree_hash(copied) != source_hash:
+                raise ValueError("Validation data differs from sealed data")
+            substitutions = {
+                "python": sys.executable,
+                "repo": str(ROOT),
+                "out": str(out),
+                "data": str(copied),
+            }
+            command = []
+            for arg in spec["validation_command"]:
+                for key, value in substitutions.items():
+                    arg = arg.replace("{" + key + "}", value)
+                command.append(arg)
+            if (
+                not command
+                or Path(command[0]).resolve() != Path(sys.executable).resolve()
+            ):
+                raise ValueError("Validation must use the current Python interpreter")
+            env = os.environ.copy()
+            env.update(
+                TAU2_DATA_DIR=str(data_root),
+                PYTHONPATH=str(ROOT / "src"),
+                BANKING_PROTOTYPE_DATA_DIR=str(copied),
+                USE_LANGFUSE="false",
             )
+            env[evidence_env] = str(controls_dir)
+            receipt["command"] = command
+            with (validation_run / "validation.log").open("w") as log:
+                subprocess.run(
+                    command,
+                    cwd=ROOT,
+                    env=env,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=spec.get("validation_timeout", 600),
+                    check=True,
+                )
+            if relative_tree_hash(copied) != source_hash:
+                raise ValueError("Validation modified its sealed data copy")
+        basis = task_reward_basis(spec)
+        task_sha256 = task_snapshot_sha256(spec)
         for control in spec["controls"]:
             check_control(
-                out / "controls" / (control["name"] + ".json.gz"), control["expected"]
+                controls_dir / control_filename(control),
+                control["expected"],
+                expected_basis=basis,
+                expected_task_id=spec["task_id"],
+                expected_task_sha256=task_sha256,
             )
         current(spec, out)
         receipt.update(passed=True, controls=spec["controls"])
@@ -288,6 +491,7 @@ def validate(spec, out):
         raise
     finally:
         receipt["elapsed_seconds"] = round(time.time() - started, 3)
+        write(validation_run / "receipt.json", receipt)
         write(out / "validation.json", receipt)
 
 
@@ -300,7 +504,11 @@ def surface_child(spec, out):
 
     task = next(t for t in get_tasks() if t.id == spec["task_id"])
     session = PlatformSession(
-        task, get_environment, max_calls=100, max_errors=20, mcp_layout="systems"
+        task,
+        get_environment,
+        max_calls=spec["model"]["max_calls"],
+        max_errors=spec["model"]["max_errors"],
+        mcp_layout="systems",
     )
     schemas = [t.model_dump(mode="json") for t in session.mcp_tools]
     startup = session.policy
@@ -311,7 +519,12 @@ def surface_child(spec, out):
         "startup": startup,
         "single_startup": single,
         "schemas": json.dumps(schemas),
-        "prompt": build_prompt(policy=startup, ticket=task.ticket),
+        "prompt": build_prompt(
+            policy=startup,
+            ticket=task.ticket,
+            max_calls=session.max_calls,
+            max_errors=session.max_errors,
+        ),
         **bodies,
     }
     hits = leak_hits(visible, spec.get("private_tokens", []))
@@ -369,7 +582,10 @@ def surface(spec, out):
     )
     with tempfile.TemporaryDirectory(prefix="bank-prototype-surface-") as temp:
         root = Path(temp) / "data"
-        shutil.copytree(path_for(spec["data_dir"]), root / "tau2/domains/banking_ru")
+        copied = root / "tau2/domains/banking_ru"
+        shutil.copytree(path_for(spec["data_dir"]), copied)
+        if relative_tree_hash(copied) != relative_tree_hash(path_for(spec["data_dir"])):
+            raise ValueError("Surface data differs from sealed data")
         env = os.environ.copy()
         env.update(
             TAU2_DATA_DIR=str(root), PYTHONPATH=str(ROOT / "src"), USE_LANGFUSE="false"
@@ -385,7 +601,11 @@ def surface(spec, out):
                 timeout=90,
             )
     result = read(out / "surface-result.json")
-    result.update(fingerprint=fp, boundary=boundary)
+    result.update(
+        fingerprint=fp,
+        boundary=boundary,
+        packet_sha256=sha(out / "surface-packet.json"),
+    )
     write(out / "surface.json", result)
     current(spec, out)
     if not result["passed"]:
@@ -397,9 +617,12 @@ async def probe(spec, out):
     fp = current(spec, out)
     for phase in ["validation", "surface"]:
         receipt = read(out / (phase + ".json"))
-        if not receipt["passed"] or receipt["fingerprint"] != fp:
+        if receipt.get("passed") is not True or receipt.get("fingerprint") != fp:
             raise ValueError(f"Missing/stale {phase} gate")
-    boundary_check(spec)
+    surface_receipt = read(out / "surface.json")
+    if surface_receipt.get("packet_sha256") != sha(out / "surface-packet.json"):
+        raise ValueError("Surface packet changed after verification")
+    boundary = boundary_check(spec)
     previous = attempts(out)
     allow_attempt(previous, spec["max_attempts"])
     folder = out / "attempts" / f"{len(previous) + 1:02}"
@@ -413,7 +636,11 @@ async def probe(spec, out):
             "new_server_session_container": True,
         },
     )
-    from run_codex_harness import build_prompt, run_one_attempt
+    from run_codex_harness import (
+        attach_persisted_journal,
+        build_prompt,
+        run_one_attempt,
+    )
 
     from tau2.platform.client import PlatformClient
 
@@ -421,9 +648,12 @@ async def probe(spec, out):
     try:
         with tempfile.TemporaryDirectory(prefix="bank-prototype-model-") as temp:
             root = Path(temp)
-            shutil.copytree(
-                path_for(spec["data_dir"]), root / "data/tau2/domains/banking_ru"
-            )
+            copied = root / "data/tau2/domains/banking_ru"
+            shutil.copytree(path_for(spec["data_dir"]), copied)
+            if relative_tree_hash(copied) != relative_tree_hash(
+                path_for(spec["data_dir"])
+            ):
+                raise ValueError("Model data differs from sealed data")
             work = root / "work"
             work.mkdir()
             with socket.socket() as sock:
@@ -480,17 +710,40 @@ async def probe(spec, out):
 
                     async def capture(*args, **kwargs):
                         opened = await original(*args, **kwargs)
-                        (folder / "prompt.txt").write_text(
-                            build_prompt(policy=opened.policy, ticket=opened.ticket)
-                        )
-                        (folder / "startup.txt").write_text(opened.policy)
-                        async with client.connect_systems(opened) as systems:
-                            schemas = {
-                                name: (await tool.list_tools()).model_dump(mode="json")
-                                for name, tool in systems.items()
-                            }
-                        write(folder / "schemas.json", schemas)
-                        return opened
+                        try:
+                            actual_prompt = build_prompt(
+                                policy=opened.policy,
+                                ticket=opened.ticket,
+                                mcp_urls=opened.mcp_urls,
+                                max_calls=opened.max_calls,
+                                max_errors=opened.max_errors,
+                            )
+                            expected = read(out / "surface-packet.json")
+                            schemas = {}
+                            async with client.connect_systems(opened) as systems:
+                                for name, tool in systems.items():
+                                    schemas[name] = (
+                                        await tool.list_tools()
+                                    ).model_dump(mode="json")
+                            verify_live_surface(
+                                expected,
+                                opened.policy,
+                                actual_prompt,
+                                schemas,
+                                spec.get("private_tokens", []),
+                            )
+                            (folder / "prompt.txt").write_text(actual_prompt)
+                            (folder / "startup.txt").write_text(opened.policy)
+                            write(folder / "schemas.json", schemas)
+                            current(spec, out)
+                            boundary_check(spec)
+                            return opened
+                        except Exception:
+                            try:
+                                await client.close(opened.token)
+                            except Exception:
+                                pass
+                            raise
 
                     client.open = capture
                     try:
@@ -503,7 +756,10 @@ async def probe(spec, out):
                             work_root=work,
                             mcp_layout="systems",
                             container_image=model["image"],
+                            expected_image_id=boundary["image"],
                         )
+                        if "run" in record:
+                            attach_persisted_journal(record, folder / "platform")
                     finally:
                         await client._http.aclose()
                 finally:
@@ -527,6 +783,7 @@ async def probe(spec, out):
             {"outcome": "technical_failure", "error": str(exc), "fingerprint": fp},
         )
         raise
+
 
 
 def review(spec, out, index, evidence):

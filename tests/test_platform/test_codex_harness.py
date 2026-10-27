@@ -717,3 +717,106 @@ def test_finish_attempt_preserves_protocol_state(initial_status, closed):
     assert result["state_before_cleanup"] == state
     assert state["status"] == initial_status
     assert calls == (["done", "close"] if closed else ["close"])
+
+
+def test_main_rejects_model_launch_without_validation_receipts(tmp_path, monkeypatch):
+    import argparse
+    import asyncio
+
+    harness = load_harness()
+    called = []
+    monkeypatch.setattr(harness, "PlatformClient", lambda *args: called.append(True))
+    args = argparse.Namespace(work_root=tmp_path, preflight_dir=None)
+    with pytest.raises(ValueError, match="preflight"):
+        asyncio.run(harness.async_main(args))
+    assert not called
+
+
+def test_wrong_container_image_is_rejected_before_launch():
+    harness = load_harness()
+    with pytest.raises(ValueError, match="image"):
+        harness.verify_container_image({"Image": "sha256:other"}, "sha256:verified")
+    harness.verify_container_image({"Image": "sha256:verified"}, "sha256:verified")
+
+
+def test_model_is_not_invoked_when_actual_image_differs(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    h = load_harness()
+    calls = []
+    fake = SimpleNamespace(
+        prepare_container=lambda *args: {"Image": "sha256:wrong"},
+        remove_container=lambda name: calls.append("removed"),
+    )
+    spec = SimpleNamespace(loader=SimpleNamespace(exec_module=lambda module: None))
+    monkeypatch.setattr(h.importlib.util, "spec_from_file_location", lambda *args: spec)
+    monkeypatch.setattr(h.importlib.util, "module_from_spec", lambda arg: fake)
+
+    async def no_model(*args):
+        calls.append("model")
+
+    monkeypatch.setattr(h, "invoke_codex", no_model)
+    with pytest.raises(ValueError, match="image"):
+        asyncio.run(
+            h.invoke_isolated_codex(
+                [], "prompt", 1, expected_image_id="sha256:verified"
+            )
+        )
+    assert calls == ["removed"]
+
+
+def test_journal_uses_persisted_platform_events(tmp_path):
+    h = load_harness()
+    token = "a" * 32
+    item = {
+        "type": "item.completed",
+        "item": {
+            "type": "mcp_tool_call",
+            "id": "cli-1",
+            "tool": "get_cards",
+            "arguments": {"customer_id": "own"},
+        },
+    }
+    record = {
+        "task_id": "Bank 2",
+        "token": token,
+        "run": {"stdout": json.dumps(item), "stderr": "", "output_observations": []},
+        "confirmed_external_refusal": False,
+    }
+    (tmp_path / f"{token}.json").write_text(
+        json.dumps(
+            {
+                "id": token,
+                "task_id": "Bank 2",
+                "info": {
+                    "mcp_events": [
+                        {
+                            "call_id": "mcp-3",
+                            "original_name": "get_cards",
+                            "canonical_name": "get_cards",
+                            "arguments": {"customer_id": "own"},
+                        }
+                    ]
+                },
+            }
+        )
+    )
+    h.attach_persisted_journal(record, tmp_path)
+    event = record["attempt_journal"]["attempts"][0]
+    assert event["delivered_to_mcp"] is True
+    assert event["mcp_call_id"] == "mcp-3"
+
+
+def test_journal_rejects_wrong_session_or_task(tmp_path):
+    h = load_harness()
+    token = "a" * 32
+    record = {"task_id": "Bank 2", "token": token, "run": {"stdout": "", "stderr": ""}}
+    (tmp_path / f"{token}.json").write_text(
+        json.dumps({"id": token, "task_id": "Bank 40", "info": {"mcp_events": []}})
+    )
+    with pytest.raises(ValueError, match="provenance"):
+        h.attach_persisted_journal(record, tmp_path)
+    record["token"] = "../outside"
+    with pytest.raises(ValueError, match="token"):
+        h.attach_persisted_journal(record, tmp_path)
