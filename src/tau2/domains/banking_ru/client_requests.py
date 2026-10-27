@@ -5,14 +5,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
+from tau2.domains.banking_ru.business_assertions import BankingBusinessAssertions
 from tau2.domains.banking_ru.closure_signature import closure_document, document_hash
 from tau2.domains.banking_ru.data_model import CashbackInvestigationItem, Customer
 from tau2.domains.banking_ru.file_pilot import FileBankingTools, FileResponse
-from tau2.domains.banking_ru.final_wave import FinalWaveAssertions
-from tau2.domains.banking_ru.first_five import FirstFiveAssertions
-from tau2.domains.banking_ru.next_ten import NextTenAssertions
-from tau2.domains.banking_ru.next_twenty import NextTwentyAssertions
-from tau2.domains.banking_ru.second_five import SecondFiveAssertions
 from tau2.environment.toolkit import ToolType, is_tool
 
 
@@ -199,11 +195,7 @@ REQUEST_ADAPTER = TypeAdapter(ClientRequest)
 
 
 class StructuredIdentityBankingTools(
-    FinalWaveAssertions,
-    NextTwentyAssertions,
-    NextTenAssertions,
-    SecondFiveAssertions,
-    FirstFiveAssertions,
+    BankingBusinessAssertions,
     FileBankingTools,
 ):
     """Client receipts are replayable but do not change the bank DB."""

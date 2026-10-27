@@ -10,9 +10,6 @@ BUILDERS = (
     "access",
     "identity",
     "discovery",
-    "pending_limit_messages",
-    "numeric_limit_messages",
-    "card_outcome_messages",
 )
 
 

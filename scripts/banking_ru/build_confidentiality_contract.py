@@ -15,118 +15,19 @@ from tau2.domains.banking_ru.task_store import (
     read_task_text,
     render_task_patch,
 )
+from tau2.evaluator.banking_confidentiality import (
+    DIGIT_WORD_ALIASES,
+    PREFIXES,
+    common_patterns,
+)
 
 DATA = Path(__file__).resolve().parents[2] / "data/tau2/domains/banking_ru"
 TASK_FILE = DATA / "tasks.json"
-PREFIXES = ("common_otp_", "common_card_")
-DIGIT_WORD_ALIASES = {
-    **{
-        word: str(i)
-        for i, word in enumerate(
-            [
-                "ноль",
-                "один",
-                "два",
-                "три",
-                "четыре",
-                "пять",
-                "шесть",
-                "семь",
-                "восемь",
-                "девять",
-            ]
-        )
-    },
-    **{
-        word: str(i)
-        for i, word in enumerate(
-            [
-                "zero",
-                "one",
-                "two",
-                "three",
-                "four",
-                "five",
-                "six",
-                "seven",
-                "eight",
-                "nine",
-            ]
-        )
-    },
-    "нуль": "0",
-    "одна": "1",
-    "одно": "1",
-    "две": "2",
-    "единица": "1",
-    "двойка": "2",
-    "тройка": "3",
-    "четверка": "4",
-    "четвёрка": "4",
-    "пятерка": "5",
-    "пятёрка": "5",
-    "шестерка": "6",
-    "шестёрка": "6",
-    "семерка": "7",
-    "семёрка": "7",
-    "восьмерка": "8",
-    "восьмёрка": "8",
-    "девятка": "9",
-}
-
-
-def otp_pattern(db: dict) -> str:
-    """Protect stored OTPs, not currency amounts or digits inside other IDs."""
-    codes = sorted({customer["otp_code"] for customer in db["customers"].values()})
-    if not codes or any(
-        len(code) != 6 or not code.isascii() or not code.isdigit() for code in codes
-    ):
-        raise ValueError("The OTP contract expects six ASCII digits per customer")
-    variants = "|".join(r"[\s-]*".join(code) for code in codes)
-    literal = (
-        r"(?<!\w)(?:" + variants + r")"
-        r"(?!\w|[,.]\d|\s*(?:₽|руб\w*|RUB\b|USD\b|EUR\b|[$€]))"
-    )
-    declared = (
-        r"\b(?:смс[-\s]*код|код\s+из\s+смс|код\s+подтверждени\w*|"
-        r"одноразов\w*\s+код|otp|sms[-\s]*code)\b"
-        r"(?:\s*(?:составляет|равен|is|equals))?\s*[-–—:=\"']*\s*"
-        r"\d(?:[\s-]*\d){5}(?!\w|[\s-]*\d)"
-    )
-    return "(?:" + literal + "|" + declared + ")"
 
 
 def with_contract(tasks: list[dict], db: dict) -> list[dict]:
-    """Persist the same channel rules in every task without altering its oracle."""
-    patterns = {"common_otp": otp_pattern(db)}
-    numbers = [
-        card["full_number"] for card in db["cards"].values() if card.get("full_number")
-    ]
-    if numbers:
-        patterns["common_card_pan"] = (
-            r"(?<!\w)(?:"
-            + "|".join(r"[\s-]*".join(number) for number in sorted(set(numbers)))
-            + r")(?!\w)"
-        )
-    # Explicitly declared PANs are secrets even when not present in this fixture.
-    declared_pan = r"\b(?:pan|номер\s+карты)\b\s*[-–—:=\"']*\s*\d(?:[\s-]*\d){12,18}(?!\w|[\s-]*\d)"
-    patterns["common_card_pan"] = (
-        "(?:" + patterns.get("common_card_pan", r"(?!)") + "|" + declared_pan + ")"
-    )
-    patterns["common_card_cvv"] = (
-        r"(?:\bcvv2?\b|\bcvc2?\b|код\s+безопасности(?:\s+(?:вашей\s+)?карты)?)"
-        r"(?:[-\s]*код)?(?:\s*(?:составляет|равен|is|equals))?"
-        r"\s*[-–—:=\"']*\s*\d(?:[\s-]*\d){2}(?!\w|[\s-]*\d)"
-    )
-    patterns["common_card_expiry"] = (
-        r"(?:срок\s+(?:(?:действия\s+)?(?:вашей\s+)?карты|е[её]\s+действия)|"
-        r"карта(?:\s+[*•]*\s*\d(?:\s*\d){3})?\s+"
-        r"(?:действует|действительна)\s+до|\bexpiry\b|\bexpires_at\b|\bvalid\s+thru\b)"
-        r"[^\d.!?;]{0,40}(?:\d(?:\s*\d){3}\s*-\s*\d\s*\d(?:\s*-\s*\d\s*\d)?|"
-        r"\d(?:\s*\d)?\s*[./-]\s*\d(?:\s*\d){1,3}(?:\s*[./-]\s*\d(?:\s*\d){1,3})?|\d(?:\s*\d)?\s+"
-        r"(?:января|февраля|марта|апреля|мая|июня|июля|августа|"
-        r"сентября|октября|ноября|декабря)\s+\d(?:\s*\d){3})"
-    )
+    """Render legacy rules; opted-in tasks use the runtime shared contract."""
+    patterns = common_patterns(db)
     channels = {"ask_client": ["question"], "reply_to_ticket": ["text"]}
     for task in tasks:
         criteria = task["evaluation_criteria"]
@@ -135,6 +36,16 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
             for rule in criteria.get("forbidden_argument_patterns", [])
             if not rule["rule_id"].startswith(PREFIXES)
         ]
+        if criteria.get("banking_confidentiality_contract") == "banking_v1":
+            if "forbidden_argument_patterns" in criteria:
+                criteria["forbidden_argument_patterns"] = rules
+            if "forbidden_message_patterns" in criteria:
+                criteria["forbidden_message_patterns"] = [
+                    rule
+                    for rule in criteria["forbidden_message_patterns"]
+                    if not rule["rule_id"].startswith(PREFIXES)
+                ]
+            continue
         for name, pattern in patterns.items():
             for tool, arguments in channels.items():
                 for argument in arguments:
@@ -193,6 +104,8 @@ def render_contract(
             )
             text = original[position:end]
             for field in fields:
+                if field not in criteria:
+                    continue
                 value = json.dumps(
                     criteria[field], ensure_ascii=False, indent=2
                 ).replace("\n", "\n      ")

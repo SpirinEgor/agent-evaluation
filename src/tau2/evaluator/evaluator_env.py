@@ -132,7 +132,11 @@ def _trajectory_constraints(
     constraints are graded once in ACTION; only reception dependencies stay here.
     """
     criteria = task.evaluation_criteria
-    if criteria is None or criteria.action_reward_scope != "presence_and_order":
+    if (
+        criteria is None
+        or criteria.banking_contract_version == "db_action_v1"
+        or criteria.action_reward_scope != "presence_and_order"
+    ):
         return None
     from tau2.evaluator.evaluator_action import (
         ActionEvaluator,
@@ -194,7 +198,11 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
             )
         expected_actions = task.evaluation_criteria.actions
         env_assertions = task.evaluation_criteria.env_assertions
-        if expected_actions is None and env_assertions is None:
+        if (
+            expected_actions is None
+            and env_assertions is None
+            and not task.evaluation_criteria.db_state_checks
+        ):
             return RewardInfo(
                 reward=1.0,
                 db_check=DBCheck(db_match=True, db_reward=1.0),
@@ -260,10 +268,28 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
             db_reward = 0.0
             db_match = False
 
+        state_failures = []
+        if (
+            task.evaluation_criteria.banking_contract_version == "db_action_v1"
+            and task.evaluation_criteria.db_state_checks
+        ):
+            from tau2.evaluator.db_state_checks import state_check_failures
+
+            db = predicted_environment.tools.db
+            snapshot = db.model_dump(mode="json") if db is not None else {}
+            state_failures = state_check_failures(
+                snapshot, task.evaluation_criteria.db_state_checks
+            )
+            if state_failures:
+                db_match, db_reward = False, 0.0
         db_check = DBCheck(db_match=db_match, db_reward=db_reward)
 
         # Run env assertions
-        env_assertions = task.evaluation_criteria.env_assertions or []
+        env_assertions = (
+            []
+            if task.evaluation_criteria.banking_contract_version == "db_action_v1"
+            else task.evaluation_criteria.env_assertions or []
+        )
         env_assertion_checks = []
         env_assertion_reward = 1.0
         for env_assertion in env_assertions:
@@ -297,7 +323,15 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
             env_assertions=env_assertion_checks,
             reward_basis=task.evaluation_criteria.reward_basis,
             reward_breakdown=reward_breakdown,
-            info=constraints.info if constraints is not None else None,
+            info=(
+                {**(constraints.info or {}), "db_state_checks": state_failures}
+                if state_failures and constraints is not None
+                else {"db_state_checks": state_failures}
+                if state_failures
+                else constraints.info
+                if constraints is not None
+                else None
+            ),
         )
 
 
@@ -398,7 +432,11 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
             )
         expected_actions = task.evaluation_criteria.actions
         env_assertions = task.evaluation_criteria.env_assertions
-        if expected_actions is None and env_assertions is None:
+        if (
+            expected_actions is None
+            and env_assertions is None
+            and not task.evaluation_criteria.db_state_checks
+        ):
             return RewardInfo(
                 reward=1.0,
                 db_check=DBCheck(db_match=True, db_reward=1.0),
@@ -460,10 +498,28 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
             db_reward = 0.0
             db_match = False
 
+        state_failures = []
+        if (
+            task.evaluation_criteria.banking_contract_version == "db_action_v1"
+            and task.evaluation_criteria.db_state_checks
+        ):
+            from tau2.evaluator.db_state_checks import state_check_failures
+
+            db = predicted_environment.tools.db
+            snapshot = db.model_dump(mode="json") if db is not None else {}
+            state_failures = state_check_failures(
+                snapshot, task.evaluation_criteria.db_state_checks
+            )
+            if state_failures:
+                db_match, db_reward = False, 0.0
         db_check = DBCheck(db_match=db_match, db_reward=db_reward)
 
         # Run env assertions
-        env_assertions = task.evaluation_criteria.env_assertions or []
+        env_assertions = (
+            []
+            if task.evaluation_criteria.banking_contract_version == "db_action_v1"
+            else task.evaluation_criteria.env_assertions or []
+        )
         env_assertion_checks = []
         env_assertion_reward = 1.0
         for env_assertion in env_assertions:
@@ -497,5 +553,13 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
             env_assertions=env_assertion_checks,
             reward_basis=task.evaluation_criteria.reward_basis,
             reward_breakdown=reward_breakdown,
-            info=constraints.info if constraints is not None else None,
+            info=(
+                {**(constraints.info or {}), "db_state_checks": state_failures}
+                if state_failures and constraints is not None
+                else {"db_state_checks": state_failures}
+                if state_failures
+                else constraints.info
+                if constraints is not None
+                else None
+            ),
         )

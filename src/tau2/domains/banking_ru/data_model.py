@@ -733,7 +733,7 @@ class ClientAnswer(BaseModel):
 
     keywords: list[str] = Field(
         default_factory=list,
-        description="Ключевые слова старых фикстур; структурированные запросы их не используют"
+        description="Ключевые слова старых фикстур; структурированные запросы их не используют",
     )
     answer: str = Field(description="Что отвечает клиент")
     restructuring_documents: Optional[RestructuringDocumentAvailability] = None
@@ -1119,7 +1119,7 @@ class BankingDB(DB):
     )
     #: Ответ агента по обращению. Исключён из дампа, а значит и из хеша БД:
     #: свободный текст в хеше обнулял бы задачу при верном по смыслу ответе.
-    #: Проверяется отдельно — assert_answer_contains.
+    #: Хранится для журнала исходящих ответов; обязательного финального ответа нет.
     ticket_replies: dict[str, str] = Field(default_factory=dict, exclude=True)
     #: Журнал вызовов инструментов. Тоже вне дампа и хеша: он нужен проверкам,
     #: а не сверке состояния. Позволяет наказывать за само действие, а не

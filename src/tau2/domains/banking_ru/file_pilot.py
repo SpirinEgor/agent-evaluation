@@ -1,7 +1,6 @@
 """Shared banking toolkit/environment with immutable file knowledge access."""
 
 import hashlib
-import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Optional
@@ -87,25 +86,6 @@ class FileBankingTools(DiscoveryBankingTools, BankingTools):
             hit["path"] == path
             for hit in self.corpus.search(pattern, root=path, limit=200)["matches"]
         )
-
-    def assert_bank_1_reply(self, customer_id: str) -> bool:
-        """Check Bank 1's reply, including bounded categorical refusal examples.
-
-        This finite grammar is not a universal judge of natural language.
-        The reference profile registers a claim through the anti-fraud route;
-        disclosing a code does not itself justify refusing its acceptance.
-        """
-        if not super().assert_bank_1_reply(customer_id):
-            return False
-        text = self.db.ticket_replies[customer_id].lower().replace("ё", "е")
-        for sentence in re.split(r"[.!?;\n]", text):
-            if "код" in sentence and re.search(r"заявлен|несоглас|оспари", sentence):
-                if re.search(
-                    r"принять\s+нельзя|нельзя\s+принять|не\s+принима\w*|не\s+мож\w*\s+принять",
-                    sentence,
-                ):
-                    return False
-        return True
 
 
 def get_file_environment(

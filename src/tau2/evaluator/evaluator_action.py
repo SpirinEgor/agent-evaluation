@@ -26,8 +26,8 @@ from tau2.data_model.tasks import (
     ToolDiscoveryPolicy,
 )
 from tau2.environment.toolkit import ToolType
+from tau2.evaluator.banking_confidentiality import resolve_confidentiality
 from tau2.evaluator.evaluator_base import EvaluatorBase
-from tau2.evaluator.numeric_claims import numeric_claim_failures
 from tau2.evaluator.trace_evidence import (
     ObservedCall as _ObservedCall,
 )
@@ -1313,22 +1313,6 @@ def _check_actions(
     return action_checks
 
 
-def _message_claim_findings(trace, contract, ticket=""):
-    """Dispatch only an explicitly declared banking contract, after the run."""
-    if contract is None:
-        return []
-    from tau2.domains.banking_ru.operation_claims import (
-        banking_claim_facts,
-        extract_banking_claims,
-    )
-    from tau2.evaluator.message_claims import verify_claims
-
-    return verify_claims(
-        extract_banking_claims(trace, contract, ticket=ticket),
-        banking_claim_facts(trace),
-    )
-
-
 def _semantic_actions(criteria):
     """Optional DB routes are constraint anchors, never mandatory ACTION steps."""
     return [
@@ -1439,6 +1423,7 @@ class ActionEvaluator(EvaluatorBase[Message]):
         task: Task,
         full_trajectory: list[Message],
         tool_types: Optional[dict[str, ToolType]] = None,
+        confidentiality_db: dict | None = None,
     ) -> RewardInfo:
         """
         Calculate the reward based on whether the agent performed the required actions.
@@ -1448,6 +1433,7 @@ class ActionEvaluator(EvaluatorBase[Message]):
             full_trajectory: List of messages from the simulation.
             tool_types: Optional mapping of tool names to their types (read/write/think/generic).
         """
+        task = resolve_confidentiality(task, confidentiality_db)
         if task.evaluation_criteria is None:
             return RewardInfo(
                 reward=1.0,
@@ -1480,8 +1466,8 @@ class ActionEvaluator(EvaluatorBase[Message]):
             and not evidence_items
             and not argument_items
             and not bindings
-            and not task.evaluation_criteria.numeric_message_claims
-            and task.evaluation_criteria.message_claim_contract is None
+            and task.evaluation_criteria.reward_business_contract is None
+            and task.evaluation_criteria.banking_business_contract is None
         ):
             return RewardInfo(
                 reward=1.0,
@@ -1499,13 +1485,6 @@ class ActionEvaluator(EvaluatorBase[Message]):
         # Calculate reward: 1 if all expectations are met, 0 otherwise
         all_expectations_met = all(result.action_match for result in action_checks)
         trace = evidence_from_messages(full_trajectory)
-        findings = _message_claim_findings(
-            trace,
-            None
-            if task.evaluation_criteria.completion_mode == "completion_only"
-            else task.evaluation_criteria.message_claim_contract,
-            task.ticket or "",
-        )
         observed = trace.observed
         business_observed = _business_observed(task.evaluation_criteria, observed)
         access_failures = _tool_access_failures(
@@ -1522,16 +1501,6 @@ class ActionEvaluator(EvaluatorBase[Message]):
             observed, forbidden_patterns
         )
         message_failures = _message_pattern_failures(trace, task.evaluation_criteria)
-        message_failures.extend(
-            numeric_claim_failures(
-                observed,
-                trace.messages,
-                trace.positions,
-                []
-                if task.evaluation_criteria.completion_mode == "completion_only"
-                else task.evaluation_criteria.numeric_message_claims,
-            )
-        )
         evidence_failures = _result_evidence_failures(
             business_observed,
             _semantic_actions(task.evaluation_criteria),
@@ -1553,6 +1522,20 @@ class ActionEvaluator(EvaluatorBase[Message]):
                 business_observed, task.evaluation_criteria.cashback_state_policy
             )
         )
+        if task.evaluation_criteria.banking_contract_version == "db_action_v1":
+            from tau2.evaluator.banking_business_trace import banking_business_failures
+            from tau2.evaluator.reward_business_trace import reward_business_failures
+
+            binding_failures.extend(
+                reward_business_failures(
+                    trace, task.evaluation_criteria.reward_business_contract
+                )
+            )
+            binding_failures.extend(
+                banking_business_failures(
+                    trace, task.evaluation_criteria.banking_business_contract
+                )
+            )
         reward = (
             1.0
             if all_expectations_met
@@ -1564,15 +1547,10 @@ class ActionEvaluator(EvaluatorBase[Message]):
             and not evidence_failures
             and not argument_failures
             and not binding_failures
-            and not any(f.disposition == "violation" for f in findings)
             else 0.0
         )
 
         info = {}
-        if findings:
-            info["message_claims"] = [f.model_dump(mode="json") for f in findings]
-        if any(f.disposition == "needs_review" for f in findings):
-            info["grading_status"] = "needs_review"
         if access_failures:
             info["tool_access_policy"] = access_failures
         if order_failures:
@@ -1653,6 +1631,7 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
         task: Task,
         full_trajectory: list[Tick],
         tool_types: Optional[dict[str, ToolType]] = None,
+        confidentiality_db: dict | None = None,
     ) -> RewardInfo:
         """
         Calculate the reward based on whether the agent performed the required actions.
@@ -1662,6 +1641,7 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             full_trajectory: List of Tick objects from full-duplex simulation.
             tool_types: Optional mapping of tool names to their types (read/write/think/generic).
         """
+        task = resolve_confidentiality(task, confidentiality_db)
         if task.evaluation_criteria is None:
             return RewardInfo(
                 reward=1.0,
@@ -1694,8 +1674,8 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             and not evidence_items
             and not argument_items
             and not bindings
-            and not task.evaluation_criteria.numeric_message_claims
-            and task.evaluation_criteria.message_claim_contract is None
+            and task.evaluation_criteria.reward_business_contract is None
+            and task.evaluation_criteria.banking_business_contract is None
         ):
             return RewardInfo(
                 reward=1.0,
@@ -1713,13 +1693,6 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
         # Calculate reward: 1 if all expectations are met, 0 otherwise
         all_expectations_met = all(result.action_match for result in action_checks)
         trace = evidence_from_ticks(full_trajectory)
-        findings = _message_claim_findings(
-            trace,
-            None
-            if task.evaluation_criteria.completion_mode == "completion_only"
-            else task.evaluation_criteria.message_claim_contract,
-            task.ticket or "",
-        )
         observed = trace.observed
         business_observed = _business_observed(task.evaluation_criteria, observed)
         access_failures = _tool_access_failures(
@@ -1736,16 +1709,6 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             observed, forbidden_patterns
         )
         message_failures = _message_pattern_failures(trace, task.evaluation_criteria)
-        message_failures.extend(
-            numeric_claim_failures(
-                observed,
-                trace.messages,
-                trace.positions,
-                []
-                if task.evaluation_criteria.completion_mode == "completion_only"
-                else task.evaluation_criteria.numeric_message_claims,
-            )
-        )
         evidence_failures = _result_evidence_failures(
             business_observed,
             _semantic_actions(task.evaluation_criteria),
@@ -1767,6 +1730,20 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
                 business_observed, task.evaluation_criteria.cashback_state_policy
             )
         )
+        if task.evaluation_criteria.banking_contract_version == "db_action_v1":
+            from tau2.evaluator.banking_business_trace import banking_business_failures
+            from tau2.evaluator.reward_business_trace import reward_business_failures
+
+            binding_failures.extend(
+                reward_business_failures(
+                    trace, task.evaluation_criteria.reward_business_contract
+                )
+            )
+            binding_failures.extend(
+                banking_business_failures(
+                    trace, task.evaluation_criteria.banking_business_contract
+                )
+            )
         reward = (
             1.0
             if all_expectations_met
@@ -1778,15 +1755,10 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             and not evidence_failures
             and not argument_failures
             and not binding_failures
-            and not any(f.disposition == "violation" for f in findings)
             else 0.0
         )
 
         info = {}
-        if findings:
-            info["message_claims"] = [f.model_dump(mode="json") for f in findings]
-        if any(f.disposition == "needs_review" for f in findings):
-            info["grading_status"] = "needs_review"
         if access_failures:
             info["tool_access_policy"] = access_failures
         if order_failures:

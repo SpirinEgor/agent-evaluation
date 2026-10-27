@@ -204,6 +204,7 @@ def evaluate_simulation(
 
     # Get tool types from the environment for action evaluation
     tool_types: Optional[dict[str, ToolType]] = None
+    env = None
     try:
         env = registry.get_env_constructor(domain)(solo_mode=solo_mode, **env_kwargs)
         if env.tools is not None:
@@ -217,6 +218,20 @@ def evaluate_simulation(
     except Exception:
         # If we can't get tool types, continue without them
         pass
+
+    confidentiality_db = None
+    if task.evaluation_criteria.banking_confidentiality_contract is not None:
+        if domain != "banking_ru" or env is None or env.tools is None:
+            raise ValueError("Shared confidentiality requires banking database context")
+        initial = task.initial_state
+        if initial is not None:
+            env.set_state(
+                initialization_data=initial.initialization_data,
+                initialization_actions=initial.initialization_actions,
+                message_history=list(initial.message_history or []),
+                strict=strict_replay,
+            )
+        confidentiality_db = env.tools.db.model_dump(mode="json")
 
     if evaluation_type == EvaluationType.ENV:
         reward_info = EnvEvaluator.calculate_reward(
@@ -242,6 +257,7 @@ def evaluate_simulation(
             task=task,
             full_trajectory=trajectory,
             tool_types=tool_types,
+            confidentiality_db=confidentiality_db,
         )
     elif evaluation_type in {EvaluationType.ALL, EvaluationType.ALL_WITH_NL_ASSERTIONS}:
         env_reward_info = EnvEvaluator.calculate_reward(
@@ -256,6 +272,7 @@ def evaluate_simulation(
             task=task,
             full_trajectory=trajectory,
             tool_types=tool_types,
+            confidentiality_db=confidentiality_db,
         )
         communicate_reward_info = CommEvaluator.calculate_reward(
             task=task,
@@ -338,6 +355,7 @@ def evaluate_simulation(
             task=task,
             full_trajectory=trajectory,
             tool_types=tool_types,
+            confidentiality_db=confidentiality_db,
         )
         communicate_reward_info = CommEvaluator.calculate_reward(
             task=task,

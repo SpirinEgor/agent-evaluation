@@ -7,7 +7,7 @@ import uuid
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing_extensions import Annotated
 
 from tau2.data_model.message import Message, ToolCall, ToolRequestor
@@ -805,93 +805,62 @@ class ToolAccessPolicy(BaseModel):
         return self
 
 
-class NumericMessageClaim(BaseModel):
-    """Check a declared numerical claim against received tool-state updates."""
+NonemptyContractID = Annotated[str, Field(min_length=1)]
+PositiveContractAmount = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
-    rule_id: str = Field(min_length=1)
-    pattern: str = Field(min_length=1)
-    witness_capture: Optional[str] = Field(
-        default=None,
-        min_length=1,
-        description="Optional named capture marking the completed-operation predicate before a later optional amount suffix.",
+
+class RewardBusinessContract(BaseModel):
+    """Scope of a reward repair; authority and consent come from received results."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer_id: NonemptyContractID
+    case_id: NonemptyContractID
+    period: NonemptyContractID
+    bank_date: NonemptyContractID
+    transaction_ids: list[NonemptyContractID] = Field(min_length=1)
+    initial_case_items: dict[NonemptyContractID, PositiveContractAmount] = Field(
+        default_factory=dict
     )
-    initial_values: dict[str, float] = Field(default_factory=dict)
-    resource_aliases: dict[str, list[str]] = Field(default_factory=dict)
-    resource_pattern: Optional[str] = None
-    value_aliases: dict[str, float] = Field(default_factory=dict)
-    update_tool: str = Field(min_length=1)
-    update_arguments: dict[str, Any] = Field(default_factory=dict)
-    resource_argument: str = Field(min_length=1)
-    value_argument: str = Field(min_length=1)
-    result_resource_field: str = Field(min_length=1)
-    result_value_field: str = Field(min_length=1)
-    require_update: bool = False
-    tool_arguments: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class DocumentDeliveryContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    customer_id: NonemptyContractID
+    case_id: NonemptyContractID
+    document_id: NonemptyContractID
+    contact_ids: list[NonemptyContractID] = Field(min_length=1)
+
+
+class BankingBusinessContract(BaseModel):
+    """Selected business boundaries checked on successful tool history."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fee_refunds: dict[NonemptyContractID, PositiveContractAmount] = Field(
+        default_factory=dict
+    )
+    document_delivery: DocumentDeliveryContract | None = None
+    allowed_mutations: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
-    def validate_claim(self):
-        import math
-
-        try:
-            expression = re.compile(self.pattern)
-            resource = (
-                re.compile(self.resource_pattern) if self.resource_pattern else None
-            )
-        except re.error as error:
-            raise ValueError(f"Invalid numeric claim pattern: {error}") from error
-        if "value" not in expression.groupindex or (
-            resource is not None and "resource" not in resource.groupindex
-        ):
-            raise ValueError("Numeric claims need value/resource named captures")
-        if (
-            self.witness_capture is not None
-            and self.witness_capture not in expression.groupindex
-        ):
-            raise ValueError("Numeric claim witness capture must exist in its pattern")
-        if any(
-            not math.isfinite(value) or value < 0
-            for value in [*self.initial_values.values(), *self.value_aliases.values()]
-        ):
-            raise ValueError("Numeric claim values must be finite and nonnegative")
-        if any(
-            not ids or not set(ids) <= self.initial_values.keys()
-            for ids in self.resource_aliases.values()
-        ):
-            raise ValueError(
-                "Numeric claim aliases must name declared initial resources"
-            )
+    def validate_nonempty_contract(self):
+        if not (self.fee_refunds or self.document_delivery or self.allowed_mutations):
+            raise ValueError("Business contract must declare a guarded operation")
         return self
 
 
-class MessageClaimContract(BaseModel):
-    """Versioned finite banking grammar and declared outgoing tool fields."""
+class DBStateCheck(BaseModel):
+    """Exact terminal-state predicate, independent of normalized DB hashing."""
 
-    version: str
-    families: list[str]
-    tool_arguments: dict[str, list[str]]
+    model_config = ConfigDict(extra="forbid")
 
-    @model_validator(mode="after")
-    def supported_catalog(self):
-        supported = {"card_block", "dispute", "transfer", "deposit_close"}
-        if self.version != "banking-claims-v1":
-            raise ValueError("Unsupported banking claim contract version")
-        if (
-            not self.families
-            or not set(self.families) <= supported
-            or len(set(self.families)) != len(self.families)
-        ):
-            raise ValueError("Unsupported or duplicate banking claim families")
-        if any(
-            not name
-            or not fields
-            or any(not field for field in fields)
-            or len(fields) != len(set(fields))
-            for name, fields in self.tool_arguments.items()
-        ):
-            raise ValueError(
-                "Outgoing channels must declare nonempty unique field names"
-            )
-        return self
+    check_id: NonemptyContractID
+    collection: NonemptyContractID
+    where: dict[str, Any] = Field(default_factory=dict)
+    field: NonemptyContractID
+    equals: Any
 
 
 class EvaluationCriteria(BaseModel):
@@ -912,6 +881,39 @@ class EvaluationCriteria(BaseModel):
     )
     completion_mode: Literal["legacy_reply", "completion_only"] = "legacy_reply"
     cashback_state_policy: dict | None = None
+    db_state_checks: list[DBStateCheck] = Field(default_factory=list)
+    reward_business_contract: RewardBusinessContract | None = None
+    banking_business_contract: BankingBusinessContract | None = None
+    banking_contract_version: Literal["db_action_v1"] | None = Field(
+        default=None,
+        description="Explicit staged banking DB × ACTION migration; legacy criteria retain ENV diagnostics.",
+    )
+    banking_confidentiality_contract: Literal["banking_v1"] | None = Field(
+        default=None,
+        description="Resolve shared banking privacy rules from the initialized scenario DB; legacy tasks keep their stored patterns.",
+    )
+
+    @model_validator(mode="after")
+    def validate_banking_contract_version(self):
+        if (
+            self.db_state_checks
+            or self.reward_business_contract
+            or self.banking_business_contract
+        ) and self.banking_contract_version is None:
+            raise ValueError("DB state checks require an explicit migrated contract")
+        if self.banking_contract_version is not None and (
+            len(self.reward_basis) != 2
+            or set(self.reward_basis) != {RewardType.DB, RewardType.ACTION}
+            or not self.business_process_only
+            or self.action_reward_scope != "full_contract"
+            or not self.require_successful_actions
+            or self.env_assertions
+        ):
+            raise ValueError(
+                "db_action_v1 requires exactly DB/ACTION, full_contract, "
+                "successful actions and no ENV assertions"
+            )
+        return self
 
     action_reward_scope: Literal["full_contract", "presence_and_order"] = Field(
         default="full_contract",
@@ -932,9 +934,9 @@ class EvaluationCriteria(BaseModel):
             )
         return self
 
-    message_claim_contract: MessageClaimContract | None = Field(
+    message_claim_contract: Any = Field(
         default=None,
-        description="Optional finite outgoing operation assertion contract.",
+        description="Legacy compatibility field; only None is supported.",
     )
 
     actions: Annotated[
@@ -954,9 +956,8 @@ class EvaluationCriteria(BaseModel):
     process_source_targets: dict[str, list[str]] = Field(
         default_factory=dict,
         description=(
-            "Explicit grading dependencies by process-policy virtual path. "
-            "Overrides the policy builder's default targets; does not change "
-            "the agent-visible environment."
+            "Legacy authoring metadata for the removed policy builder. "
+            "Preserved for existing tasks; not used by the evaluator."
         ),
     )
 
@@ -1091,10 +1092,20 @@ class EvaluationCriteria(BaseModel):
         ),
     )
 
-    numeric_message_claims: list[NumericMessageClaim] = Field(
+    numeric_message_claims: list[Any] = Field(
         default_factory=list,
-        description="Declared numeric outgoing claims checked against successful agent update results received before the claim.",
+        description="Legacy compatibility field; only an empty list is supported.",
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_removed_message_claims(cls, value):
+        if isinstance(value, dict) and (
+            value.get("message_claim_contract") is not None
+            or value.get("numeric_message_claims")
+        ):
+            raise ValueError("message claim contracts are no longer supported")
+        return value
 
     @model_validator(mode="after")
     def validate_tool_access_authentication(self):
@@ -1553,67 +1564,3 @@ def make_task(
         evaluation_criteria=evaluation_criteria,
         initial_state=initial_state,
     )
-
-
-def validate_message_claim_contracts_for_publication(
-    tasks: list[Task], domain: str
-) -> None:
-    """Reject publication of banking tasks without the required four-family contract.
-
-    Loading/evaluating old tasks remains compatible. Publication callers must
-    explicitly invoke this gate; it does not migrate data or reinterpret history.
-    """
-    if domain != "banking_ru":
-        return
-    required = {"card_block", "dispute", "transfer", "deposit_close"}
-    for task in tasks:
-        criteria = task.evaluation_criteria
-        if criteria is not None and criteria.completion_mode == "completion_only":
-            if (
-                any("reply" in a.func_name for a in criteria.env_assertions or [])
-                or criteria.communicate_info
-                or criteria.nl_assertions
-                or criteria.message_claim_contract is not None
-                or criteria.numeric_message_claims
-                or any(
-                    a.required_for_reward and a.name == "reply_to_ticket"
-                    for a in criteria.actions or []
-                )
-            ):
-                raise ValueError(
-                    f"completion_only publication contains legacy reply requirements for {task.id}"
-                )
-            if not {RewardType.DB, RewardType.ENV_ASSERTION, RewardType.ACTION} <= set(
-                criteria.reward_basis
-            ):
-                raise ValueError(
-                    f"completion_only publication requires three reward components for {task.id}"
-                )
-            continue
-        contract = (
-            task.evaluation_criteria.message_claim_contract
-            if task.evaluation_criteria
-            else None
-        )
-        if (
-            contract is None
-            or contract.version != "banking-claims-v1"
-            or not required <= set(contract.families)
-        ):
-            raise ValueError(
-                f"Banking publication requires message_claim_contract for {task.id}"
-            )
-        channels = {"ask_client": "question", "reply_to_ticket": "text"}
-        if any(
-            field not in contract.tool_arguments.get(tool, [])
-            for tool, field in channels.items()
-        ):
-            raise ValueError(
-                f"Banking publication requires outgoing channel declarations for {task.id}"
-            )
-        if not {RewardType.DB, RewardType.ENV_ASSERTION, RewardType.ACTION} <= set(
-            task.evaluation_criteria.reward_basis
-        ):
-            raise ValueError(
-                f"Banking publication requires DB/ENV_ASSERTION/ACTION reward_basis for {task.id}"
-            )

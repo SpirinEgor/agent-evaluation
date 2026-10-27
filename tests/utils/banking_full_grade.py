@@ -4,7 +4,6 @@ Import this module as tests.utils.banking_full_grade. Explicit ticks retain form
 are supported and must not be rewritten into immediate responses.
 """
 
-from contextvars import ContextVar
 from dataclasses import dataclass
 
 from tau2.data_model.message import AssistantMessage, Tick, ToolMessage
@@ -16,9 +15,6 @@ from tau2.platform.session import PlatformSession, SessionStatus
 
 if __name__ != "tests.utils.banking_full_grade":
     raise ImportError("Use canonical tests.utils.banking_full_grade import")
-
-receipt_observer = ContextVar("banking_full_grade_receipt_observer", default=None)
-
 
 @dataclass(frozen=True)
 class FullGradeResult:
@@ -33,14 +29,31 @@ def grade_full_session(
     """Run all original full evaluators once; observers cannot replace the result."""
     if session.status is not SessionStatus.DONE:
         raise ValueError("Full grade requires an actual DONE session")
-    bases = session.task.evaluation_criteria.reward_basis
-    if len(bases) != 3 or set(bases) != {
-        RewardType.DB,
-        RewardType.ENV_ASSERTION,
-        RewardType.ACTION,
-    }:
+    criteria = session.task.evaluation_criteria
+    if criteria.banking_contract_version is not None:
+        # Tasks are mutable in trajectory tests. Revalidate before accepting a
+        # copied profile so a stale third basis cannot fabricate a skipped ENV.
+        try:
+            criteria.validate_banking_contract_version()
+        except ValueError as error:
+            raise ValueError(
+                f"Full grade invalid migrated contract: {error}"
+            ) from error
+    bases = criteria.reward_basis
+    legacy = {RewardType.DB, RewardType.ENV_ASSERTION, RewardType.ACTION}
+    migrated = {RewardType.DB, RewardType.ACTION}
+    if len(bases) != len(set(bases)) or set(bases) not in (legacy, migrated):
         raise ValueError(
-            "Full grade requires exactly DB × ENV_ASSERTION × ACTION; no model bases"
+            "Full grade requires declared DB × [ENV_ASSERTION ×] ACTION; no model bases"
+        )
+    if set(bases) == migrated and (
+        getattr(criteria, "banking_contract_version", None) != "db_action_v1"
+        or criteria.env_assertions
+        or criteria.action_reward_scope != "full_contract"
+        or not criteria.require_successful_actions
+    ):
+        raise ValueError(
+            "Two-basis full grade requires explicit full contract and zero residual ENV"
         )
     for call, result in session.log:
         if (
@@ -120,8 +133,4 @@ def grade_full_session(
         "strict_replay": True,
         "trajectory_scope": "actual_session_calls_results_sequential_or_declared_ticks",
     }
-    result = FullGradeResult(reward, simulation, invocation)
-    observer = receipt_observer.get()
-    if observer is not None:
-        observer(session, result)
-    return result
+    return FullGradeResult(reward, simulation, invocation)
