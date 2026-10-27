@@ -1,22 +1,31 @@
 """Offline installation checks for the shipped banking release."""
 
+import hashlib
+import json
 import shutil
 from pathlib import Path
 
 from tau2.domains.banking_ru.environment import (
     get_environment,
     get_tasks,
-    get_tasks_split,
 )
 from tau2.domains.banking_ru.mcp_systems import TOOL_OWNERS
+from tau2.domains.banking_ru.task_store import load_tasks
 from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.registry import registry
 
 
-def test_shipped_task_set_and_completion_contract():
+def test_shipped_task_set_and_completion_contract(tmp_path):
+    index = json.loads((BANKING_RU_DATA_DIR / "tasks.json").read_text())
+    assert index == {"task_files": [f"tasks/bank_{n:03d}.json" for n in range(1, 62)]}
+    # A released snapshot must carry both the index and its relative targets.
+    shutil.copyfile(BANKING_RU_DATA_DIR / "tasks.json", tmp_path / "tasks.json")
+    shutil.copytree(BANKING_RU_DATA_DIR / "tasks", tmp_path / "tasks")
+    raw_tasks = load_tasks(tmp_path / "tasks.json")
+    assert raw_tasks == load_tasks(BANKING_RU_DATA_DIR / "tasks.json")
+    assert [t["id"] for t in raw_tasks] == [f"Bank {n}" for n in range(1, 62)]
     tasks = get_tasks("base")
     assert {t.id for t in tasks} == {f"Bank {n}" for n in range(1, 62)}
-    assert set(get_tasks_split()["base"]) == {t.id for t in tasks}
     for task in tasks:
         criteria = task.evaluation_criteria
         assert criteria.completion_mode == "completion_only"
@@ -55,6 +64,16 @@ def test_corpus_and_tools_are_shipped_and_available():
         "verify_identity",
     } <= tools_a.keys()
     assert a.policy == b.policy
+    assert (
+        a.run_metadata["startup"]["sha256"]
+        == hashlib.sha256(a.policy.encode()).hexdigest()
+    )
+    assert (
+        a.run_metadata["startup"]["document_sha256"]
+        == hashlib.sha256(
+            (BANKING_RU_DATA_DIR / "corpus/AGENTS.md").read_bytes()
+        ).hexdigest()
+    )
     assert str(BANKING_RU_DATA_DIR.resolve()).startswith(
         str(Path(__file__).resolve().parents[3])
     )

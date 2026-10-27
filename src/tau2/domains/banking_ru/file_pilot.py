@@ -8,6 +8,7 @@ from typing import Optional
 
 from pydantic import RootModel
 
+from tau2.domains.banking_ru.corpus_manifest import document_body
 from tau2.domains.banking_ru.data_model import BankingDB
 from tau2.domains.banking_ru.discovery_workflow import DiscoveryBankingTools
 from tau2.domains.banking_ru.file_corpus import FileCorpus
@@ -147,7 +148,7 @@ def get_file_environment(
         toolkit = StructuredIdentityBankingTools
     env = Environment(
         domain_name=domain_name,
-        policy=corpus.read("/AGENTS.md")["content"],
+        policy=document_body(corpus.read("/AGENTS.md")["content"].encode()),
         tools=toolkit(db, corpus),
         solo_mode=solo_mode,
     )
@@ -157,7 +158,8 @@ def get_file_environment(
         "startup": {
             "path": "/AGENTS.md",
             "content": env.policy,
-            "sha256": corpus.documents["/AGENTS.md"]["sha256"],
+            "sha256": hashlib.sha256(env.policy.encode()).hexdigest(),
+            "document_sha256": corpus.documents["/AGENTS.md"]["sha256"],
         },
         "corpus": {
             "sha256": corpus.sha256,

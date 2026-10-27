@@ -136,13 +136,3 @@ def partition_tools(tools: list[t.Tool]) -> dict[str, list[t.Tool]]:
     for tool in tools:
         groups[TOOL_OWNERS[tool.name]].append(tool)
     return groups
-
-
-def startup_policy() -> str:
-    """Return the shared entrypoint without system maps or document targets."""
-    return (
-        "# AGENTS.md\n\n"
-        "Вы — агент банковской поддержки. Решите обращение клиента через подключённые MCP банковских систем.\n"
-        "Политики и справочные материалы доступны через MCP. Самостоятельно найдите применимые документы. Имена специальных операций и клиентских действий указаны в документах; их схемы открываются через инструменты discovery.\n"
-        "После выполнения работы и получения результатов вызовите done. Итоговый ответ клиенту не отправляйте. Структурированные запросы клиенту разрешены.\n"
-    )

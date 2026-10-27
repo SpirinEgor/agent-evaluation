@@ -26,7 +26,6 @@ from tau2.domains.banking_ru.mcp_systems import (
     SYSTEMS,
     MCPLayout,
     partition_tools,
-    startup_policy,
 )
 from tau2.environment.environment import Environment
 from tau2.environment.reference_bindings import reference_arguments
@@ -115,19 +114,6 @@ class PlatformSession:
         if mcp_layout == "systems" and not self.system_tools:
             raise ValueError("System MCP layout is supported only for banking_ru")
         self.policy = self.env.get_policy()
-        if self.system_tools:
-            # Give both comparison arms exactly the same visible startup.
-            self.policy = startup_policy()
-        if hasattr(self.env, "run_metadata") and self.system_tools:
-            self.env.run_metadata["corpus_startup"] = self.env.run_metadata.get(
-                "startup"
-            )
-            self.env.run_metadata["startup"] = {
-                "path": "/AGENTS.md",
-                "origin": "platform-system-map",
-                "content": self.policy,
-                "sha256": hashlib.sha256(self.policy.encode()).hexdigest(),
-            }
 
     # ------------------------------------------------------------- вызовы
     def call(

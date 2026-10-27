@@ -8,7 +8,6 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
-from tau2.domains.banking_ru.mcp_systems import startup_policy
 from test_platform.conftest import run_with_app
 
 
@@ -53,7 +52,7 @@ def test_create_session_returns_inputs_and_never_criteria(app):
     canonical = next(task for task in get_tasks("base") if task.id == "Bank 46")
     environment = get_environment(task_id=canonical.id, solo_mode=True)
     assert info["ticket"] == canonical.ticket
-    assert info["policy"] == startup_policy()
+    assert info["policy"] == environment.policy
     assert len(environment.policy.splitlines()) <= 7
     assert "assert_" not in json.dumps(info)
 

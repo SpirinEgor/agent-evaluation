@@ -46,6 +46,9 @@ def test_system_catalog_is_the_unchanged_bank1_catalog(tmp_path):
                 "ask_client",
                 "reply_to_ticket",
                 "escalate_to_human",
+                "unlock_discoverable_agent_tool",
+                "call_discoverable_agent_tool",
+                "give_discoverable_user_tool",
                 "done",
             }
             assert {t.name for t in catalogs["knowledge"]} == {
@@ -53,6 +56,7 @@ def test_system_catalog_is_the_unchanged_bank1_catalog(tmp_path):
                 "file_find",
                 "file_search",
                 "file_read",
+                "corpus_command",
             }
             await servers["support"].call_tool("done", {})
         urls = opened.mcp_urls
@@ -64,7 +68,7 @@ def test_system_catalog_is_the_unchanged_bank1_catalog(tmp_path):
     catalogs = run_with_app(app, go)
     flattened = [t for tools in catalogs.values() for t in tools]
     expected = PlatformSession(get_tasks()[0], get_environment).mcp_tools
-    assert len(flattened) == len({t.name for t in flattened}) == 66
+    assert len(flattened) == len({t.name for t in flattened}) == len(expected)
     assert {t.name: t.model_dump() for t in flattened} == {
         t.name: t.model_dump() for t in expected
     }
