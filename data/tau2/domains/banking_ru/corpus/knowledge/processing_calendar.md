@@ -1,3 +1,13 @@
+---
+id: bank-processing-calendar
+title: Дата сценария и обработка переводов
+document_type: bank-operating-procedure
+trust: bank-policy
+revision_id: 2026-10-14-investigation
+effective_from: '2026-08-28'
+basis: Учебный календарь и полученные поля процессинга; не универсальная норма закона
+---
+
 # Дата сценария и обработка переводов
 
 Документ: операционный календарь учебного банка. Редакция: 2026-10-14.

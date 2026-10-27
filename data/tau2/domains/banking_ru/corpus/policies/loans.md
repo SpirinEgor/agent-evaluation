@@ -1,3 +1,17 @@
+---
+id: bank-policy-loans
+revision_id: 2026-10-08-business-v2
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Погашение кредита, льготные меры и изменение обязательств
+scope: loans
+owner: управление сопровождения розничных кредитов
+revision_date: '2026-10-08'
+version: '2.0'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Погашение кредита, льготные меры и изменение обязательств
 
 **Документ:** РО-08. **Владелец:** управление сопровождения розничных кредитов.

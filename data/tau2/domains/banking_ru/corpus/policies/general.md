@@ -1,3 +1,17 @@
+---
+id: bank-policy
+revision_id: 2026-10-13-business-v2.1
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Регламент обработки обращений розничных клиентов
+scope: general
+owner: управление клиентского сервиса
+revision_date: '2026-10-13'
+version: '2.1'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Регламент обработки обращений розничных клиентов
 
 **Документ:** РО-01. **Владелец:** управление клиентского сервиса.

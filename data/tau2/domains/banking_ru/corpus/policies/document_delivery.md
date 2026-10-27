@@ -1,3 +1,13 @@
+---
+id: bank-policy-document_delivery
+revision_id: 2026-10-14-case-documents-v1
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Доставка клиентских документов
+scope: document_delivery
+---
+
 # Официальные документы и разрешённая доставка
 
 **Документ:** РО-13. **Владелец:** управление документооборота.

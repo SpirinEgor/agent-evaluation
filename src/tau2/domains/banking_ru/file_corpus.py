@@ -1,11 +1,12 @@
-"""Immutable, allowlisted Markdown snapshot with grep-like read-only RPC."""
+"""Immutable corpus-rooted document snapshot with grep-like read-only RPC."""
 
 import fnmatch
 import hashlib
-import json
 import subprocess
 from copy import deepcopy
 from pathlib import Path, PurePosixPath
+
+from tau2.domains.banking_ru.corpus_manifest import document_body, load_manifest
 
 
 class FileCorpus:
@@ -14,15 +15,20 @@ class FileCorpus:
     def __init__(self, root: Path):
         raw = (root / "manifest.json").read_bytes()
         self.sha256 = hashlib.sha256(raw).hexdigest()
-        self.manifest = json.loads(raw)
+        self.manifest = load_manifest(root, verify=True)
         if self.manifest["version"] != 1:
             raise ValueError("Unsupported corpus manifest version")
         self.documents = {}
         self._read_paths: set[str] = set()
         for path, descriptor in self.manifest["documents"].items():
             self.validate_path(path)
-            source = root / "corpus" / path.lstrip("/")
-            if any(p.is_symlink() for p in (source, *source.parents)):
+            corpus_root = root.resolve() / "corpus"
+            source = corpus_root / path.lstrip("/")
+            if any(
+                p.is_symlink()
+                for p in (source, *source.parents)
+                if p.is_relative_to(corpus_root)
+            ):
                 raise ValueError("Corpus symlinks are not allowed")
             content = source.read_bytes()
             if len(content) > 65536:
@@ -63,9 +69,7 @@ class FileCorpus:
 
     def _contains_source(self, aggregate: dict, source: dict) -> bool:
         """Require an actual source body and its declared immutable revision."""
-        body = source["content"]
-        if body.startswith("---\n"):
-            body = body.split("---", 2)[-1].strip()
+        body = document_body(source["content"].encode()).strip()
         revision = source["metadata"].get("revision_id")
         return bool(
             body
@@ -84,13 +88,6 @@ class FileCorpus:
             raise ValueError("Corpus file not found")
         doc = self.documents[path]
         self._read_paths.add(path)
-        if self.manifest.get("presentation") == "legacy_helpdesk":
-            # Same complete immutable article; publication metadata stays internal.
-            return {
-                "id": doc["metadata"]["id"],
-                "title": doc["metadata"].get("title", doc["metadata"]["id"]),
-                "content": doc["content"],
-            }
         receipt = {
             "id": doc["metadata"]["id"],
             "path": path,
@@ -230,7 +227,4 @@ class FileCorpus:
                     "line_truncated": len(text) > 800,
                 }
             )
-        if self.manifest.get("presentation") == "legacy_helpdesk":
-            for hit in hits:
-                hit["id"] = self.documents[hit["path"]]["metadata"]["id"]
         return {"matches": hits[:limit], "truncated": len(hits) > limit}

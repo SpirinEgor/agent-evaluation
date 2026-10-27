@@ -732,7 +732,8 @@ class ClientAnswer(BaseModel):
     """
 
     keywords: list[str] = Field(
-        description="Слова, по которым вопрос агента считается заданным по делу"
+        default_factory=list,
+        description="Ключевые слова старых фикстур; структурированные запросы их не используют"
     )
     answer: str = Field(description="Что отвечает клиент")
     restructuring_documents: Optional[RestructuringDocumentAvailability] = None

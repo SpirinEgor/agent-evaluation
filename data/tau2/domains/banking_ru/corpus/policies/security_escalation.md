@@ -1,3 +1,17 @@
+---
+id: bank-policy-security_escalation
+revision_id: 2026-10-13-structured-escalation
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Ограничения безопасности и передача профильному специалисту
+scope: security_escalation
+owner: управление безопасности дистанционного обслуживания
+revision_date: '2026-10-13'
+version: '2.1'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Ограничения безопасности и передача профильному специалисту
 
 **Документ:** РО-11. **Владелец:** управление безопасности дистанционного обслуживания.

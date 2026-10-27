@@ -1,3 +1,17 @@
+---
+id: bank-policy-identity
+revision_id: 2026-10-08-business-v2
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Идентификация клиента и подтверждение распоряжений
+scope: identity
+owner: управление безопасности дистанционных каналов
+revision_date: '2026-10-08'
+version: '2.0'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Идентификация клиента и подтверждение распоряжений
 
 **Документ:** РО-02. **Владелец:** управление безопасности дистанционных каналов.

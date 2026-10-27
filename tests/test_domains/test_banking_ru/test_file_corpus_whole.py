@@ -34,6 +34,7 @@ def test_read_returns_exact_whole_text_without_ranges(tmp_path):
     assert result["content"] == content
     assert result["total_lines"] == 7
     assert result["complete"] is True
+    assert result["metadata"]["revision_id"] == "r1"
     assert result["sha256"] == hashlib.sha256(content.encode()).hexdigest()
     assert result["snapshot_sha256"] == corpus.sha256
     assert (

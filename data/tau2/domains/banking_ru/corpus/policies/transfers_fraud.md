@@ -1,3 +1,17 @@
+---
+id: bank-policy-transfers_fraud
+revision_id: 2026-10-13-temporal-scope-hardening
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Розыск переводов и обращения о мошенничестве
+scope: transfers_fraud
+owner: операционный центр платежей и служба противодействия мошенничеству
+revision_date: '2026-10-13'
+version: '2.1'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Розыск переводов и обращения о мошенничестве
 
 **Документ:** РО-05. **Владелец:** операционный центр платежей и служба противодействия мошенничеству.

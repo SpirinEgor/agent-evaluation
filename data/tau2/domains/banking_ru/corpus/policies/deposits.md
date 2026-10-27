@@ -1,3 +1,17 @@
+---
+id: bank-policy-deposits
+revision_id: 2026-10-08-business-v2
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Открытие, расчёт дохода и возврат вкладов
+scope: deposits
+owner: управление сберегательных продуктов
+revision_date: '2026-10-08'
+version: '2.0'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Открытие, расчёт дохода и возврат вкладов
 
 **Документ:** РО-07. **Владелец:** управление сберегательных продуктов.

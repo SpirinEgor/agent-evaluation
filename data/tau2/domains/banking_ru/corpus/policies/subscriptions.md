@@ -1,3 +1,17 @@
+---
+id: bank-policy-subscriptions
+revision_id: 2026-10-13-profile-scoped-cancellation
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Рекуррентные платежи, подписки и банковские автоплатежи
+scope: subscriptions
+owner: управление платёжных сервисов и карточные претензии
+revision_date: '2026-10-13'
+version: '3.1'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Рекуррентные платежи, подписки и банковские автоплатежи
 
 **Документ:** РО-06. **Владелец:** управление платёжных сервисов совместно с карточными претензиями.

@@ -1,3 +1,13 @@
+---
+id: bank-policy-refund_execution
+revision_id: 2026-10-14-refund-state-v1
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Актуальность основания и согласия возврата
+scope: refund_execution
+---
+
 # Исполнение согласованной корректировки комиссии
 
 **Документ:** РО-15. **Редакция:** 2.0 от 14 октября 2026 года.

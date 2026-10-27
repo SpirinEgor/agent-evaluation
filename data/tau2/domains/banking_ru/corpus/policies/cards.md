@@ -1,3 +1,17 @@
+---
+id: bank-policy-cards
+revision_id: 2026-10-08-business-v2
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Обслуживание карт, лимитов и доставки
+scope: cards
+owner: управление карточных продуктов
+revision_date: '2026-10-08'
+version: '2.0'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Обслуживание карт, лимитов и доставки
 
 **Документ:** РО-03. **Владелец:** управление карточных продуктов.

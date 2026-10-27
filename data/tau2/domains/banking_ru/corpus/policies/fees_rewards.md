@@ -1,3 +1,17 @@
+---
+id: bank-policy-fees_rewards
+revision_id: 2026-10-14-investigation
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Тарифные начисления, корректировки и вознаграждения
+scope: fees_rewards
+owner: управление тарифов и программ лояльности
+revision_date: '2026-10-13'
+version: '2.1'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Тарифные начисления, корректировки и вознаграждения
 
 **Документ:** РО-09. **Владелец:** управление тарифов и программ лояльности.

@@ -5,7 +5,12 @@ import hashlib
 import json
 from pathlib import Path
 
-import yaml
+from tau2.domains.banking_ru.corpus_manifest import (
+    document_body,
+    document_metadata,
+    manifest_outputs,
+)
+from tau2.domains.banking_ru.task_store import read_json, task_outputs
 
 
 def serialized(value):
@@ -14,9 +19,9 @@ def serialized(value):
 
 def sync(data_dir, check=False):
     """Synchronize only supplied files, computing all outputs before writing."""
-    manifest = json.loads((data_dir / "manifest.json").read_text())
-    db = json.loads((data_dir / "db.json").read_text())
-    tasks = json.loads((data_dir / "tasks.json").read_text())
+    manifest = read_json(data_dir / "manifest.json")
+    db = read_json(data_dir / "db.json")
+    tasks = read_json(data_dir / "tasks.json")
     corpus = {}
     for path, descriptor in manifest["documents"].items():
         raw = (data_dir / "corpus" / path.lstrip("/")).read_bytes()
@@ -25,12 +30,9 @@ def sync(data_dir, check=False):
         content = raw.decode()
         corpus[path] = content
         descriptor["sha256"] = hashlib.sha256(raw).hexdigest()
-        body = content
+        body = document_body(raw)
         if content.startswith("---\n"):
-            _, front, body = content.split("---", 2)
-            descriptor["metadata"] = json.loads(
-                json.dumps(yaml.safe_load(front), default=str)
-            )
+            descriptor["metadata"] = document_metadata(raw)
         id = descriptor["metadata"].get("id")
         if id in db.get("articles", {}):
             db["articles"][id]["body"] = body.strip()
@@ -41,10 +43,22 @@ def sync(data_dir, check=False):
         manifest["intake_answers_sha256"] = hashlib.sha256(
             answers.read_bytes()
         ).hexdigest()
-    manifest_raw = serialized(manifest)
+    outputs = manifest_outputs(data_dir, manifest, {data_dir / "db.json": db_raw})
+    manifest_raw = outputs[data_dir / "manifest.json"]
+    for path, descriptor in manifest["documents"].items():
+        local = data_dir / "corpus" / path.lstrip("/")
+        if local in outputs:
+            corpus[path] = outputs[local].decode()
+            descriptor["sha256"] = hashlib.sha256(outputs[local]).hexdigest()
     snapshot = hashlib.sha256(manifest_raw).hexdigest()
     for task in tasks:
-        for evidence in task["evaluation_criteria"].get("result_evidence", []):
+        receipts = task["evaluation_criteria"].get("result_evidence", [])
+        sources = [
+            source
+            for receipt in receipts
+            for source in [receipt, *receipt.get("alternatives", [])]
+        ]
+        for evidence in sources:
             expected = evidence.get("expected_fields", {})
             path = expected.get("path")
             if path not in corpus:
@@ -58,18 +72,19 @@ def sync(data_dir, check=False):
                 if field in expected:
                     expected[field] = value
     outputs = {
-        "db.json": db_raw,
-        "manifest.json": manifest_raw,
-        "tasks.json": serialized(tasks),
+        **outputs,
+        **task_outputs(data_dir / "tasks.json", tasks),
     }
     stale = [
-        name for name, raw in outputs.items() if (data_dir / name).read_bytes() != raw
+        str(path.relative_to(data_dir))
+        for path, raw in outputs.items()
+        if not path.exists() or path.read_bytes() != raw
     ]
     if check and stale:
         raise ValueError("Stale source receipts: " + ", ".join(stale))
     if not check:
         for name in stale:
-            (data_dir / name).write_bytes(outputs[name])
+            (data_dir / name).write_bytes(outputs[data_dir / name])
     return stale
 
 

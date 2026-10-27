@@ -1,3 +1,17 @@
+---
+id: bank-policy-accounts
+revision_id: 2026-10-08-business-v2
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Счета, прекращение договора и выдача документов
+scope: accounts
+owner: управление операционного обслуживания
+revision_date: '2026-10-08'
+version: '2.0'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Счета, прекращение договора и выдача документов
 
 **Документ:** РО-10. **Владелец:** управление операционного обслуживания.

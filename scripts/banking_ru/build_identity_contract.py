@@ -12,6 +12,12 @@ import re
 
 from build_confidentiality_contract import DATA, TASK_FILE, render_contract
 
+from tau2.domains.banking_ru.task_store import (
+    is_task_index,
+    read_task_text,
+    render_task_patch,
+)
+
 PREFIX = "common_identity_secret_"
 CLIENT_PATTERN = (
     r"Клиент:\s*«(?:Кодовое слово|Дата рождения)\s*—\s*(?P<value>[^»\r\n]+)»\.?"
@@ -27,6 +33,8 @@ BIRTH_DATE_ALIASES = [
 
 def with_client_sources(db: dict) -> dict:
     """Keep explicit birth-date questions from losing to generic identity keywords."""
+    if "client_answers" not in db:
+        return db
     for customer_id, customer in db["customers"].items():
         sources = [
             a
@@ -44,6 +52,8 @@ def render_client_sources(original: str, updated: dict) -> str:
     """Replace only client_answers, retaining all unrelated state and formatting."""
     match = re.search(r'"client_answers":\s*', original)
     if match is None:
+        if "client_answers" not in updated and json.loads(original) == updated:
+            return original
         raise ValueError("Missing client answers")
     _, end = json.JSONDecoder().raw_decode(original, match.end())
     value = json.dumps(updated["client_answers"], ensure_ascii=False, indent=2).replace(
@@ -129,7 +139,7 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--task-id")
     args = parser.parse_args()
-    original = TASK_FILE.read_text(encoding="utf-8")
+    original = read_task_text(TASK_FILE)
     db_file = DATA / "db.json"
     original_db = db_file.read_text(encoding="utf-8")
     db = with_client_sources(json.loads(original_db))
@@ -153,6 +163,27 @@ def main() -> int:
         fields=("actions", "result_argument_bindings"),
     )
     db_rendered = render_client_sources(original_db, db)
+    if is_task_index(TASK_FILE):
+        task_patch = render_task_patch(TASK_FILE, json.loads(original), tasks)
+        db_diff = list(
+            difflib.unified_diff(
+                original_db.splitlines(), db_rendered.splitlines(), n=3
+            )
+        )
+        sections = task_patch.removeprefix("*** Begin Patch\n").removesuffix(
+            "*** End Patch\n"
+        )
+        if db_diff:
+            sections += (
+                f"*** Update File: {db_file}\n"
+                + "\n".join(
+                    "@@" if line.startswith("@@") else line for line in db_diff[2:]
+                )
+                + "\n"
+            )
+        if sections:
+            print("*** Begin Patch\n" + sections + "*** End Patch")
+        return 0
     changes = [(TASK_FILE, original, rendered), (db_file, original_db, db_rendered)]
     if any(before != after for _, before, after in changes):
         print("*** Begin Patch")

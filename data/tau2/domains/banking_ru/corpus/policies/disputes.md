@@ -1,3 +1,17 @@
+---
+id: bank-policy-disputes
+revision_id: 2026-10-12-single-subscription-regulation
+document_type: policy
+trust: bank-policy
+effective_from: '2026-08-28'
+title: Приём претензий и сопровождение спорных операций
+scope: disputes
+owner: претензионный центр карточных операций
+revision_date: '2026-10-12'
+version: '2.0'
+basis: mandatory-rf-norms-and-own-sop
+---
+
 # Приём претензий и сопровождение спорных операций
 
 **Документ:** РО-04. **Владелец:** претензионный центр карточных операций.

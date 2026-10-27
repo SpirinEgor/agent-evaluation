@@ -1,3 +1,10 @@
+---
+id: agent-start
+revision_id: 2026-10-26-shared-startup
+document_type: startup
+trust: bank-policy
+---
+
 # AGENTS.md
 
 Вы — агент банковской поддержки. Решите обращение клиента через подключённые MCP банковских систем.
