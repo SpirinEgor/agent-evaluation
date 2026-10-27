@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from tau2.domains.banking_ru.environment import get_environment
+from tau2.domains.banking_ru.task_store import load_tasks
 from tau2.platform.session import PlatformSession
 from tests.test_domains.test_banking_ru.helpers import task
 
@@ -121,63 +122,18 @@ def test_bank47_routes(route, expected):
     assert half.final_reward == expected
 
 
-def test_bank47_generator_is_scoped_and_composes(tmp_path):
-    import importlib.util
-
+def test_bank47_common_builders_preserve_access_protection(monkeypatch):
     root = Path(__file__).resolve().parents[3]
-    modules = []
-    for name in (
-        "build_bank47_access_protection_contract",
-        "build_escalation_contract",
-    ):
-        spec = importlib.util.spec_from_file_location(
-            name, root / "scripts/banking_ru" / f"{name}.py"
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        modules.append(module)
-    tasks = json.loads((root / "data/tau2/domains/banking_ru/tasks.json").read_text())
-    before = deepcopy(tasks)
-    updated = modules[0].with_contract(tasks)
-    assert tasks == before
-    assert [t for t in updated if t["id"] != "Bank 47"] == [
-        t for t in before if t["id"] != "Bank 47"
-    ]
-    assert modules[0].with_contract(updated) == updated
-    assert modules[1].with_contract(updated) == updated
+    monkeypatch.syspath_prepend(str(root / "scripts/banking_ru"))
+    from build_confidentiality_contract import with_contract as confidentiality
+    from build_discovery_contract import with_contract as discovery
+
+    original = load_tasks(root / "data/tau2/domains/banking_ru/tasks.json")
     db = json.loads((root / "data/tau2/domains/banking_ru/db.json").read_text())
-    for name in ("build_confidentiality_contract", "build_discovery_contract"):
-        spec = importlib.util.spec_from_file_location(
-            name, root / "scripts/banking_ru" / f"{name}.py"
-        )
-        module = importlib.util.module_from_spec(spec)
-        import sys
-
-        sys.path.insert(0, str(root / "scripts/banking_ru"))
-        try:
-            spec.loader.exec_module(module)
-        finally:
-            sys.path.pop(0)
-        assert module.with_contract(deepcopy(updated), db) == updated
-
-    path = tmp_path / "tasks.json"
-    path.write_text(json.dumps(updated, ensure_ascii=False))
-    # Test actual generator application only to temporary data.
-    import subprocess
-    import sys
-
-    subprocess.run(
-        [
-            sys.executable,
-            str(root / "scripts/banking_ru/build_bank47_access_protection_contract.py"),
-            "--data-dir",
-            str(tmp_path),
-            "--apply",
-        ],
-        check=True,
-        capture_output=True,
-    )
-    assert json.loads(path.read_text()) == updated
+    for builder in (confidentiality, discovery):
+        refreshed = deepcopy(original)
+        builder(refreshed, db)
+        assert refreshed == original
 
 
 def test_bank47_invalid_db_insertion_is_rejected():

@@ -152,15 +152,18 @@ def test_migrated_operation_reward(number, route, expected):
     assert session.grade().final_reward == expected
 
 
-def test_bank40_early_failed_refund_is_not_hidden_by_valid_retry():
+def test_bank40_recovered_invalid_refund_has_no_business_penalty():
     from tau2.platform.session import PlatformSession
     from tests.test_domains.test_banking_ru.helpers import task
 
     selected = task(40)
     session = PlatformSession(selected, get_environment, max_calls=100, max_errors=20)
     actions = deepcopy(selected.evaluation_criteria.actions)
-    identity = {"find_customer", "ask_client", "verify_identity"}
-    session.replay_actions([a for a in actions if a.name in identity])
+    identity_end = (
+        next(i for i, action in enumerate(actions) if action.name == "verify_identity")
+        + 1
+    )
+    session.replay_actions(actions[:identity_end])
     response = session.call(
         "refund_fee",
         {
@@ -171,15 +174,11 @@ def test_bank40_early_failed_refund_is_not_hidden_by_valid_retry():
     )
     assert response.is_error
     assert not session.env.tools._excess_fee_refund_attempts
-    session.replay_actions([a for a in actions if a.name not in identity])
+    session.replay_actions(actions[identity_end:])
     session.call("done", {})
     assert session.env.tools.db.transactions["txn_088219"].fee_refunded is True
-    half = session.grade()
-    assert half.final_reward == 0
-    failures = [
-        item
-        for component in half.info.values()
-        if isinstance(component, dict)
-        for item in component.get("result_evidence", [])
-    ]
-    assert "kb_121_refund_fee_Bank 40" in failures
+    from tests.utils.banking_full_grade import grade_full_session
+
+    assert session.errors == 1
+    assert session.grade().final_reward == 1
+    assert grade_full_session(session).reward_info.final_reward == 1

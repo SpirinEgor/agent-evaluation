@@ -61,5 +61,5 @@ def test_bank_date_uses_scenario_state():
     assert succeed(env, "get_bank_date") == {"date": "2026-09-02"}
 
 
-# Historical creation semantics; Bank2 v2 amends an existing claim instead.
-pytestmark = pytest.mark.usefixtures("bank2_composite_v1_scenarios")
+# Standalone test data for the investigation API.
+pytestmark = pytest.mark.usefixtures("investigation_api_scenarios")

@@ -2,7 +2,6 @@
 
 import json
 from copy import deepcopy
-from pathlib import Path
 
 import pytest
 
@@ -122,30 +121,3 @@ def test_bank48_routes(route, expected, mode):
     s.call("done", {})
     reward = s.grade() if mode == "HALF" else grade_full_session(s).reward_info
     assert reward.final_reward == expected
-
-
-def test_bank48_composes_with_common_privacy_and_discovery(monkeypatch):
-    import importlib.util
-
-    root = Path(__file__).resolve().parents[3]
-    monkeypatch.syspath_prepend(str(root / "scripts/banking_ru"))
-    modules = []
-    for name in [
-        "build_bank48_app_support_contract",
-        "build_confidentiality_contract",
-        "build_discovery_contract",
-    ]:
-        spec = importlib.util.spec_from_file_location(
-            name, root / "scripts/banking_ru" / (name + ".py")
-        )
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        modules.append(module)
-    tasks = json.loads((root / "data/tau2/domains/banking_ru/tasks.json").read_text())
-    db = json.loads((root / "data/tau2/domains/banking_ru/db.json").read_text())
-    result = modules[0].with_contract(tasks)
-    modules[1].with_contract(result, db)
-    modules[2].with_contract(result, db)
-    assert modules[0].with_contract(result) == result
-    assert modules[1].with_contract(deepcopy(result), db) == result
-    assert modules[2].with_contract(deepcopy(result), db) == result

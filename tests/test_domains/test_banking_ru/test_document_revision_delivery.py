@@ -26,4 +26,4 @@ def test_archived_confirmation_rejected_before_delivery():
     assert not env.tools.db.document_deliveries
 
 
-pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")
+pytestmark = pytest.mark.usefixtures("operation_api_scenarios")

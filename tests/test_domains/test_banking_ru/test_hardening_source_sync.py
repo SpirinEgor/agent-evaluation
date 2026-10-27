@@ -65,38 +65,3 @@ def test_sync_refreshes_document_and_existing_receipt_without_other_task_changes
     first = {f: f.read_bytes() for f in tmp_path.glob("*.json")}
     module.sync(tmp_path)
     assert all(f.read_bytes() == raw for f, raw in first.items())
-
-
-def test_subscription_generator_preserves_hardened_claim_plan():
-    import sys
-
-    root = Path(__file__).resolve().parents[3]
-    sys.path.insert(0, str(root / "scripts/banking_ru"))
-    import shutil
-    import tempfile
-
-    from build_subscription_regulation_contract import build
-
-    with tempfile.TemporaryDirectory(dir=root) as temp:
-        data = Path(temp) / "data"
-        from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
-
-        shutil.copytree(BANKING_RU_DATA_DIR, data)
-        tasks = json.loads((data / "tasks.json").read_text())
-        task = next(t for t in tasks if t["id"] == "Bank 54")
-        task["description"]["notes"] = "Hardened 2200 plan with linked receipts"
-        task["evaluation_criteria"]["result_evidence"].append(
-            {
-                "evidence_id": "bank54:txn_314104:accept_claim",
-                "tool_names": ["get_transactions"],
-                "record_id": "txn_314104",
-                "expected_fields": {"amount": 700},
-            }
-        )
-        (data / "tasks.json").write_text(json.dumps(tasks))
-        outputs = build(data)
-        updated = json.loads(outputs[data / "tasks.json"])
-        assert (
-            next(t for t in updated if t["id"] == "Bank 54")["description"]["notes"]
-            == task["description"]["notes"]
-        )

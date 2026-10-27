@@ -1,1 +1,0 @@
-Bank2 composite-v1 subject-only fixture copied from the local state before Bank2 v2. Includes exact original source files and manifest descriptors. Other task subject rows are never restored by this fixture. SHA256 parent.json: f0e979989070db5d1d81f631df23fe7b72282334e477f87c6352cd1f4e9011d5

@@ -1,5 +1,7 @@
 """Formal review captures a claim; it is different from a customer statement."""
 
+from pathlib import Path
+
 import pytest
 
 from tau2.domains.banking_ru.client_requests import StructuredIdentityBankingTools
@@ -9,9 +11,11 @@ from tau2.domains.banking_ru.file_corpus import FileCorpus
 
 @pytest.fixture
 def tools(tmp_path):
-    from tests.utils.banking_parent_fixture import copy_historical_data
+    import shutil
 
-    d = copy_historical_data("reward_workflow_2026_10_21", tmp_path / "workflow")
+    FIXTURES = Path(__file__).resolve().parents[2] / "fixtures/banking_ru"
+
+    d = Path(shutil.copytree(FIXTURES / "reward_api", tmp_path / "workflow"))
     db = BankingDB.model_validate_json((d / "db.json").read_text())
     db.session.verified_customers.append("gromov_a_1187")
     return StructuredIdentityBankingTools(db, FileCorpus(d))

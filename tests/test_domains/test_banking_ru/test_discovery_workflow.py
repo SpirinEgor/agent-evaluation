@@ -38,12 +38,15 @@ def test_real_prompt_declares_call_budget():
 
 @pytest.fixture
 def workflow_tools(tmp_path):
+    import shutil
+
     from tau2.domains.banking_ru.client_requests import StructuredIdentityBankingTools
     from tau2.domains.banking_ru.data_model import BankingDB
     from tau2.domains.banking_ru.file_corpus import FileCorpus
-    from tests.utils.banking_parent_fixture import copy_historical_data
 
-    parent = copy_historical_data("reward_workflow_2026_10_21", tmp_path / "workflow")
+    FIXTURES = Path(__file__).resolve().parents[2] / "fixtures/banking_ru"
+
+    parent = Path(shutil.copytree(FIXTURES / "reward_api", tmp_path / "workflow"))
     corpus = FileCorpus(parent)
     corpus.manifest["discoverable_workflows"] = True
     db = BankingDB.model_validate_json((parent / "db.json").read_text())

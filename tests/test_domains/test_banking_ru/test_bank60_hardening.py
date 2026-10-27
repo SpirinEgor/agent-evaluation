@@ -12,8 +12,6 @@ from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 
-ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = ROOT / "scripts/banking_ru/harden_bank60.py"
 OWNER = "fomin_r_9200"
 TARGET = "card_9200b"
 

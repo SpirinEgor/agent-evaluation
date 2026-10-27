@@ -111,4 +111,4 @@ def test_preparing_document_requires_explicit_status_and_no_duplicate_registrati
     assert len(env.tools.db.cases) == len(env.tools.db.document_deliveries) == 1
 
 
-pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")
+pytestmark = pytest.mark.usefixtures("operation_api_scenarios")

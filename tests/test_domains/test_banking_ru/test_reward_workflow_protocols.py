@@ -4,17 +4,39 @@ import json
 
 import pytest
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.data_model.tasks import Task, UserScenario
+from tau2.domains.banking_ru.environment import get_environment
 from tau2.platform.session import PlatformSession
 
 
 def identified(task_id):
-    task = next(t for t in get_tasks() if t.id == task_id)
+    customers = {
+        "Bank 2": ("gromov_a_1187", "+7 926 118-77-30"),
+        "Bank 40": ("solovyova_a_7734", "+7 916 773-40-56"),
+        "Bank 41": ("egorova_n_3358", "+7 916 335-84-20"),
+    }
+    customer, phone = customers[task_id]
+    task = Task(id="api-fixture", user_scenario=UserScenario(instructions="API test"))
     s = PlatformSession(task, get_environment, max_calls=150, max_errors=50)
-    for a in task.evaluation_criteria.actions:
-        s.call(a.name, a.arguments)
-        if a.name == "verify_identity":
-            break
+    decode(s.call("find_customer", {"phone": phone}))
+    answer = decode(
+        s.call(
+            "ask_client",
+            {
+                "customer_id": customer,
+                "request": {"type": "identity", "method": "code_word"},
+            },
+        )
+    )
+    result = s.call(
+        "verify_identity",
+        {
+            "customer_id": customer,
+            "credential": answer["data"]["credential"],
+            "answer_id": answer["answer_id"],
+        },
+    )
+    assert not result.is_error
     if task_id == "Bank 2":
         s.env.tools.db.cashback_adjustment_permissions["adjustment-A"] = {
             "id": "adjustment-A",
@@ -274,4 +296,4 @@ def test_adjustment_validates_every_amount_before_first_write(bad_field):
     assert db.model_dump() == before
 
 
-pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")
+pytestmark = pytest.mark.usefixtures("operation_api_scenarios")

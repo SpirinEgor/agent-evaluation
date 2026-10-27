@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pytest
 
+from tau2.domains.banking_ru.corpus_manifest import load_manifest
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
 from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.platform.session import PlatformSession
@@ -49,7 +50,7 @@ def test_sources18(task_id, mode, route, expected):
                     paths.append(a)
             for a in paths:
                 actions.remove(a)
-            meta = json.load(open(BANKING_RU_DATA_DIR / "manifest.json"))["documents"][
+            meta = load_manifest(BANKING_RU_DATA_DIR, verify=False)["documents"][
                 f"/knowledge/kb_final_{task_id.split()[1]}.md"
             ]["metadata"]
             index = (

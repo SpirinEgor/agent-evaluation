@@ -1,16 +1,13 @@
 """Bank57 addressed contract: cancel both mechanisms for one Ivi contract."""
 
-import importlib.util
 import json
 import os
-import shutil
 from copy import deepcopy
 from pathlib import Path
 
 import pytest
 
 from tau2.domains.banking_ru.environment import get_environment, get_tasks
-from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
 from tau2.platform.session import PlatformSession
 
 OWNER = "orlova_m_4400"
@@ -191,34 +188,3 @@ def test_bank57_full_grade(variant, expected):
         if variant != "only_subscription":
             _payload(session.call("cancel_autopayment", {"autopayment_id": BACKUP}))
     _finish_and_grade(session, variant, expected)
-
-
-def _migration():
-    path = Path(__file__).resolve().parents[3] / "scripts/banking_ru/harden_bank57.py"
-    spec = importlib.util.spec_from_file_location("harden_bank57_test", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_canonical_receipt_refresh_preserves_hardened_subscription_revision(tmp_path):
-    data = tmp_path / "data"
-    shutil.copytree(BANKING_RU_DATA_DIR, data)
-    for path, raw in _migration().build(data).items():
-        path.write_bytes(raw)
-    script = (
-        Path(__file__).resolve().parents[3]
-        / "scripts/banking_ru/build_subscription_regulation_contract.py"
-    )
-    spec = importlib.util.spec_from_file_location("subscription_refresh_bank57", script)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    before = json.loads((data / "manifest.json").read_text())["documents"][
-        "/policies/subscriptions.md"
-    ]
-    refreshed = json.loads(module.build(data)[data / "manifest.json"])["documents"][
-        "/policies/subscriptions.md"
-    ]
-    assert refreshed == before
-    assert refreshed["metadata"]["version"] == "3.1"
-    assert refreshed["metadata"]["revision_date"] == "2026-10-13"

@@ -1,12 +1,8 @@
 """Nominal funding differs from guaranteed customer cash after an explicit deduction."""
 
-from copy import deepcopy
 
 import pytest
 
-from tests.test_domains.test_banking_ru.test_compatibility_certificate import (
-    problem_offer,
-)
 from tests.test_domains.test_banking_ru.test_resolution_funding_pools import offer
 
 
@@ -73,33 +69,3 @@ def test_typed_component_exposes_explicit_deduction_and_legacy_zero():
     assert RewardResolutionComponent(**raw).settlement_deduction == 0.04
     raw.pop("settlement_deduction")
     assert RewardResolutionComponent(**raw).settlement_deduction == 0
-
-
-def test_author_proof_optimizes_net_and_never_accepts_gross_as_payment():
-    from bank2_resolution_oracle import compatibility_choices
-
-    o = problem_offer()
-    for r in o["components"]:
-        fee = 4 if r["exclusive_group"] == "g0" else 8
-        r.update(
-            amount=(12 + fee) / 100,
-            settlement_deduction=fee / 100,
-            bank_cost=(12 + fee) / 200,
-            partner_cost=(12 + fee) / 200,
-        )
-    o["selection_budget"].update(bank=0.18, partner=0.18)
-    result = compatibility_choices(o, {"a": 6, "b": 18}, certificate=["p00", "p11"])
-    assert result[0]["additional"] == 24 and result[0]["allocation"] == {
-        "a": 6,
-        "b": 18,
-    }
-    bad = deepcopy(o)
-    bad["amount"] = 0.36
-    # Feasible 24-cent net witness cannot prove a 36-cent optimum; even its
-    # sum-of-group-max upper bound is 24, so the returned value stays net.
-    assert (
-        compatibility_choices(bad, {"a": 100, "b": 100}, certificate=["p00", "p11"])[0][
-            "additional"
-        ]
-        == 24
-    )

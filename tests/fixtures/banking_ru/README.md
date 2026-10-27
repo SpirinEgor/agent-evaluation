@@ -1,41 +1,19 @@
-# Banking test inputs and maintained inventory
+# Banking API test fixtures
 
-`run_basic_tests.py` names its offline inventory explicitly: 61 reference/noop
-pairs, shared tool contracts, evaluator mechanisms, platform/corpus boundaries,
-and representative shared banking mechanisms. New files require an explicit
-inventory decision; they cannot silently extend this command through a glob.
-This inventory is a reproducible entry point, not evidence that every task or
-historical experiment has been validated.
+These self-contained inputs exercise shared banking APIs without loading task
+contracts, the current benchmark corpus, or archived experiment snapshots.
+Their records represent only test scenarios; they do not establish validity
+of any benchmark task or model result.
 
-Historical Bank2 version migrations, optimization/menu/stress experiments,
-source receipt audits and per-version route matrices remain available by their
-pytest paths, outside the basic command. Their version-specific sums, original
-three-component grades and procedural requirements are not assertions about the
-current release. They are not deleted, skipped, or reported as passing. No full
-historical regression was run for this change. The retained resolution APIs,
-selection oracle, certificates, dependencies, funding and promotion controls,
-settlement/replay protocols, whole historical restoration control, current
-catalog references/noop and evaluator checks preserve their distinct general
-mechanisms; this does not establish equivalence to every excluded experiment.
+- `operation_api/`: compensation, case documents, delivery and fee operations.
+- `investigation_api/`: investigation creation and idempotency.
+- `settlement_api/`: settlement and reward adjustment protocols.
+- `reward_api/`: client statements, discovery and formal reward review.
 
-Historical fixture construction starts with `fees_rewards_parent_2026_10_14`,
-then applies versioned subject/source overlays. The base includes every corpus
-file named by its manifest. Missing corpus files were recovered by their exact
-manifest SHA256 from existing historical snapshots, versioned subject fixtures
-and unchanged sources. Neither construction nor runtime reads today's corpus.
-The v5 overlay additionally pins the 26 source descriptors/files differing
-between that base and `bank2-hardening-2026-10-20/parent-data`. These are author
-fixtures, never model input or a validation claim about production tasks.
+Each fixture has its own DB, minimal corpus and compact manifest. Hash checks
+cover the DB, intake answers and every corpus file. Tests cover independence
+from the active benchmark and detection of modified fixture data.
 
-`reward_workflow_2026_10_21` is a small isolated API fixture derived from v25;
-see its README for retained rows and intentional component reduction. It replaces
-runtime access to ignored v24r/v25 artifact snapshots. The settlement-v3 subject
-fixture is applied over the same pinned base, not the current DB.
-
-Each fixture's `integrity.json` pins all executable input bytes (DB, tasks,
-answers, manifest, corpus and overlays). Loaders check it before copying or
-reading. Corpus construction independently checks each article against its
-manifest hash. README provenance and integrity manifests are versioned with the
-input they describe. Intentional fixture updates must update both input and its
-hash manifest; hash verification is integrity detection, not authenticity proof.
-Generated evidence belongs under pytest's temporary directory.
+`scripts/banking_ru/run_basic_tests.py` lists the maintained offline tests
+explicitly; collecting or passing those tests does not validate every task.
+Historical run results remain in their original reports.

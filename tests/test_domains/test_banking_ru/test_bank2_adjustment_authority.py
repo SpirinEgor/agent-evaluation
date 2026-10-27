@@ -91,5 +91,5 @@ def test_authorized_adjustment_has_linked_ledger_entry():
     assert tx.account_id == env.tools.db.transactions[TARGET].account_id
 
 
-# Explicitly retain the historical scenario version; composite tests live separately.
-pytestmark = pytest.mark.usefixtures("fees_rewards_parent_scenarios")
+# Standalone test data for the shared banking APIs.
+pytestmark = pytest.mark.usefixtures("operation_api_scenarios")
