@@ -5,6 +5,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 from tau2.domains.banking_ru.environment import (
     get_environment,
     get_tasks,
@@ -19,7 +21,9 @@ def test_shipped_task_set_and_completion_contract(tmp_path):
     index = json.loads((BANKING_RU_DATA_DIR / "tasks.json").read_text())
     assert index == {
         "task_files": [
-            "tasks/bank_002/scenario.json" if n == 2 else f"tasks/bank_{n:03d}.json"
+            f"tasks/bank_{n:03d}/scenario.json"
+            if n in (2, 40, 41)
+            else f"tasks/bank_{n:03d}.json"
             for n in range(1, 62)
         ]
     }
@@ -84,19 +88,20 @@ def test_corpus_and_tools_are_shipped_and_available():
     )
 
 
-def test_bank2_split_files_are_not_exposed_through_agent_corpus():
+@pytest.mark.parametrize("number", [2, 40, 41])
+def test_split_files_are_not_exposed_through_agent_corpus(number):
     from scripts.banking_ru.run_codex_harness import build_prompt
     from tau2.platform.session import PlatformSession
 
-    task = next(task for task in get_tasks() if task.id == "Bank 2")
-    folder = BANKING_RU_DATA_DIR / "tasks/bank_002"
+    task = next(task for task in get_tasks() if task.id == f"Bank {number}")
+    folder = BANKING_RU_DATA_DIR / f"tasks/bank_{number:03d}"
     assert task.ticket == (folder / "ticket.md").read_bytes().decode("utf-8")
     session = PlatformSession(task, get_environment, mcp_layout="systems")
     prompt = build_prompt(policy=session.policy, ticket=task.ticket)
     assert task.ticket in prompt
     for name in ("scenario.json", "evaluation.json"):
         assert (folder / name).read_text() not in prompt
-        for path in (f"/tasks/bank_002/{name}", str(folder / name)):
+        for path in (f"/tasks/bank_{number:03d}/{name}", str(folder / name)):
             assert session.call(
                 "file_read", {"path": path}, system="knowledge"
             ).is_error
