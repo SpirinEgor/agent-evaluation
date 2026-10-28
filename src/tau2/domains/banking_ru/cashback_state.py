@@ -84,6 +84,76 @@ def state_guard(db, customer_id, period, expected_revision):
     return None
 
 
+def pending_funding(db, offer):
+    """Only metadata is public until the accepted statement is reconciled."""
+    return any(
+        update["offer_id"] == offer.id
+        and update["customer_id"] == offer.customer_id
+        and update["period"] == offer.period
+        and update["status"] == "pending"
+        and "previous_version" in update
+        for update in db.reward_resolution_offer_updates.values()
+    )
+
+
+def funding_replacement(tools, offer, update):
+    """Validate a statement-scoped decision completely before changing any state."""
+    from tau2.domains.banking_ru.discovery_workflow import statement_needed
+    from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionOffer
+
+    statement = tools.db.reward_statement_registrations.get(update.get("statement_id"))
+    case = tools.db.cases.get(offer.case_id)
+    needed = {
+        tid
+        for tid in offer.transaction_ids
+        if statement_needed(tools._get_transaction(tid))
+    }
+    if (
+        type(update.get("previous_version")) is not int
+        or type(update.get("new_version")) is not int
+        or update["previous_version"] != offer.version
+        or update["new_version"] != offer.version + 1
+        or offer.status != "approved"
+        or not needed
+        or not statement
+        or statement.get("id") != update["statement_id"]
+        or statement.get("status") != "accepted"
+        or statement.get("customer_id") != offer.customer_id
+        or statement.get("case_id") != offer.case_id
+        or not needed
+        <= set(statement.get("transaction_ids", []))
+        <= set(offer.transaction_ids)
+        or not case
+        or case.customer_id != offer.customer_id
+        or case.reward_period != offer.period
+        or any(
+            tools._get_transaction(tid).customer_id != offer.customer_id
+            for tid in offer.transaction_ids
+        )
+        or any(
+            operation.packet.get("offer_id") == offer.id
+            for operation in tools.db.reward_resolution_executions.values()
+        )
+    ):
+        raise ValueError("ERR_INVALID_OFFER_DECISION: Неверная версия или заявление")
+    try:
+        replacement = RewardResolutionOffer.model_validate(
+            {
+                **offer.model_dump(),
+                "version": update["new_version"],
+                "amount": update["new_amount"],
+                "selection_budget": update["new_selection_budget"],
+            }
+        )
+        if replacement.selection_budget is None:
+            raise ValueError("Отсутствует бюджет финансирования")
+        return replacement
+    except (KeyError, ValueError) as exc:
+        raise ValueError(
+            "ERR_INVALID_OFFER_DECISION: Неверные условия финансирования"
+        ) from exc
+
+
 def refresh(tools, customer_id, period):
     from tau2.domains.banking_ru.data_model import Transaction
 
@@ -102,7 +172,6 @@ def refresh(tools, customer_id, period):
             and cashback_period(tools.db, t, t.reward_program, period)
         ],
     )
-    capture_revision(tools.db, customer_id, period)
     previous = revision(tools.db, customer_id, period)
     batches = [
         s
@@ -133,15 +202,23 @@ def refresh(tools, customer_id, period):
         and u["period"] == period
         and u["status"] == "pending"
     ]
+    if len({u["offer_id"] for u in updates}) != len(updates):
+        raise ValueError("ERR_INVALID_OFFER_DECISION: Повтор решения для предложения")
+    funding = [u for u in updates if "previous_version" in u]
+    if any(
+        not isinstance(u.get("id"), str) or not u["id"].strip() for u in funding
+    ) or len({u["id"] for u in funding}) != len(funding):
+        raise ValueError("ERR_INVALID_OFFER_DECISION: Неверный идентификатор события")
+    replacements = {}
     for update in updates:
         offer = tools.db.reward_resolution_offers.get(update["offer_id"])
-        if (
-            not offer
-            or offer.customer_id != customer_id
-            or offer.period != period
-            or offer.status != "under_review"
-        ):
+        if not offer or offer.customer_id != customer_id or offer.period != period:
             raise ValueError("ERR_INVALID_OFFER_DECISION")
+        if "previous_version" in update:
+            replacements[offer.id] = funding_replacement(tools, offer, update)
+        elif offer.status != "under_review":
+            raise ValueError("ERR_INVALID_OFFER_DECISION")
+    capture_revision(tools.db, customer_id, period)
     for t in credits:
         tools.db.transactions[t.id] = t
         account = tools.db.accounts[t.account_id]
@@ -149,7 +226,12 @@ def refresh(tools, customer_id, period):
     for s in batches:
         s.update(status="settled", ledger_ids=[row["id"] for row in s["credits"]])
     for update in updates:
-        tools.db.reward_resolution_offers[update["offer_id"]].status = "approved"
+        if update["offer_id"] in replacements:
+            tools.db.reward_resolution_offers[update["offer_id"]] = replacements[
+                update["offer_id"]
+            ]
+        else:
+            tools.db.reward_resolution_offers[update["offer_id"]].status = "approved"
         update["status"] = "applied"
     if batches or updates:
         advance(tools.db, customer_id, period)
@@ -160,6 +242,22 @@ def refresh(tools, customer_id, period):
         "previous_revision": previous,
         "current_revision": revision(tools.db, customer_id, period),
         "changed_offer_ids": [u["offer_id"] for u in updates],
+        **(
+            {
+                "funding_decisions": [
+                    {
+                        "event_id": u["id"],
+                        "offer_id": u["offer_id"],
+                        "statement_id": u["statement_id"],
+                        "previous_version": u["previous_version"],
+                        "new_version": u["new_version"],
+                    }
+                    for u in funding
+                ]
+            }
+            if funding
+            else {}
+        ),
         "changed_transaction_ids": [t.id for t in credits],
         "changed_records": [
             {"id": t.id, "customer_id": t.customer_id} for t in credits

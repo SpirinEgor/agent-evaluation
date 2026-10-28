@@ -3017,6 +3017,26 @@
       "only_if_target_attempted": true
     },
     {
+      "binding_id": "bank2:v8:received-submission",
+      "source_action_id": "bank2:v8:submit-statement",
+      "target_action_id": "bank2:v8:register-statement",
+      "argument_name": "submission_id",
+      "result_path": [
+        "id"
+      ],
+      "only_if_target_attempted": true
+    },
+    {
+      "binding_id": "bank2:v8:received-registration",
+      "source_action_id": "bank2:v8:register-statement",
+      "target_action_id": "bank2:v8:accept-statement",
+      "argument_name": "statement_id",
+      "result_path": [
+        "id"
+      ],
+      "only_if_target_attempted": true
+    },
+    {
       "binding_id": "common_identity_secret_Bank 2",
       "source_action_id": "ask_identity_Bank 2",
       "target_action_id": "verify_identity_1",
@@ -3233,6 +3253,69 @@
       "compare_args": [
         "customer_id"
       ]
+    },
+    {
+      "action_id": "bank2:v8:preliminary-offers",
+      "name": "get_reward_resolution_offers",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "case_id": "case_610903"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v8:give-statement",
+      "name": "give_discoverable_user_tool",
+      "arguments": {
+        "name": "submit_reward_statement"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v8:submit-statement",
+      "name": "ask_client",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "request": {
+          "type": "client_action",
+          "tool_name": "submit_reward_statement",
+          "arguments": {
+            "case_id": "case_610903",
+            "transaction_ids": [
+              "txn_804227"
+            ]
+          }
+        }
+      },
+      "required_for_reward": false,
+      "compare_args": [],
+      "argument_values": {
+        "request.type": "client_action",
+        "request.tool_name": "submit_reward_statement"
+      }
+    },
+    {
+      "action_id": "bank2:v8:register-statement",
+      "name": "register_reward_statement",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "submission_id": "client-statement:10a933f8f0ec582f",
+        "case_id": "case_610903"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v8:accept-statement",
+      "name": "get_reward_statement_status",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "statement_id": "bank-statement:client-statement:10a933f8f0ec582f"
+      },
+      "required_for_reward": false,
+      "compare_args": []
     },
     {
       "action_id": "bank2:v4:refresh",
@@ -3460,38 +3543,39 @@
         "request": {
           "type": "reward_resolution_confirmation",
           "offer_id": "offer_610735",
-          "offer_version": 1,
+          "offer_version": 2,
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 15.0
+              "amount": 18
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 20.0
+              "amount": 24
             }
           ],
-          "total_amount": 35.0,
+          "total_amount": 42,
           "case_id": "case_610903",
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 10.0
+              "amount": 7
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 33.0
+              "amount": 29
             },
             {
               "transaction_id": "txn_804205",
-              "amount": 7.0
+              "amount": 7
             }
           ],
           "state_revision": 2,
           "component_ids": [
             "B",
             "D",
-            "E"
+            "E",
+            "G"
           ]
         }
       },
@@ -3508,18 +3592,18 @@
       "name": "execute_reward_resolution",
       "arguments": {
         "offer_id": "offer_610735",
-        "offer_version": 1,
+        "offer_version": 2,
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 15.0
+            "amount": 18
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 20.0
+            "amount": 24
           }
         ],
-        "total_amount": 35.0,
+        "total_amount": 42,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-1",
         "expected_revision": 2,
@@ -3527,7 +3611,8 @@
         "component_ids": [
           "B",
           "D",
-          "E"
+          "E",
+          "G"
         ]
       },
       "required_for_reward": true,
@@ -3543,11 +3628,11 @@
         "items": [
           {
             "transaction_id": "txn_804219",
-            "amount": 10.0
+            "amount": 7
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 33.0
+            "amount": 29
           }
         ],
         "expected_revision": 3
@@ -3831,7 +3916,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -3871,7 +3958,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -3912,7 +4001,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -3952,7 +4043,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -3992,7 +4085,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4033,7 +4128,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4074,7 +4171,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4115,7 +4214,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4155,7 +4256,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4196,7 +4299,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4237,7 +4342,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4300,7 +4407,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4359,7 +4468,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4426,7 +4537,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4496,7 +4609,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay",
@@ -4554,7 +4669,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4616,7 +4733,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4678,7 +4797,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4740,7 +4861,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4804,7 +4927,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4868,7 +4993,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4932,7 +5059,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -4994,7 +5123,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -5058,7 +5189,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -5122,7 +5255,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -5186,7 +5321,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -5232,7 +5369,9 @@
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
-        "consent_stale"
+        "consent_stale",
+        "funding_pending",
+        "offer_changed"
       ],
       "only_if_target_attempted": true,
       "before_action_id": "bank2:v5:pay"
@@ -5246,7 +5385,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_amounts.md",
         "complete": true,
-        "sha256": "509060a395619f8221974f1fa03091d0cefa2686a4f8f39c612f977b598be3cb"
+        "sha256": "7aa41f799cd9c51ff321becac1a8a501705849740e6a484b6d00de795f33477b"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5284,7 +5423,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_execution.md",
         "complete": true,
-        "sha256": "4ac0ffc480ea2678d89343db657bf8e53fde6cecf890332913a52ab4659f5737"
+        "sha256": "b50e6546bad3b148c5ea278b186083181a6888b2c6f52f152d64fa56bbe11e05"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5311,7 +5450,11 @@
         "customer_reported_offer_id": "offer_610729",
         "customer_reported_status": "approved"
       },
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:pay",
+      "recoverable_result_statuses": [
+        "funding_pending",
+        "offer_changed"
+      ]
     },
     {
       "evidence_id": "bank2:v5:offer:offer_610711",
@@ -5340,7 +5483,11 @@
         "valid_from": "2026-08-01",
         "valid_to": "2026-08-31"
       },
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:pay",
+      "recoverable_result_statuses": [
+        "funding_pending",
+        "offer_changed"
+      ]
     },
     {
       "evidence_id": "bank2:v5:offer:offer_610719",
@@ -5369,7 +5516,11 @@
         "valid_from": "2026-08-01",
         "valid_to": "2026-08-31"
       },
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:pay",
+      "recoverable_result_statuses": [
+        "funding_pending",
+        "offer_changed"
+      ]
     },
     {
       "evidence_id": "bank2:v5:offer:offer_610723",
@@ -5398,7 +5549,11 @@
         "valid_from": "2026-08-01",
         "valid_to": "2026-08-31"
       },
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:pay",
+      "recoverable_result_statuses": [
+        "funding_pending",
+        "offer_changed"
+      ]
     },
     {
       "evidence_id": "bank2:v5:offer:offer_610729",
@@ -5427,7 +5582,11 @@
         "valid_from": "2026-08-01",
         "valid_to": "2026-08-31"
       },
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:pay",
+      "recoverable_result_statuses": [
+        "funding_pending",
+        "offer_changed"
+      ]
     },
     {
       "evidence_id": "bank2:v5:received-payment",
@@ -5455,36 +5614,6 @@
         "sha256": "b201150aeae326b0067d853d17e54877891888b9ef011f18f298a2df6e3a2389"
       },
       "before_action_id": "bank2:v6:submit"
-    },
-    {
-      "evidence_id": "bank2:v7:composite-offer",
-      "tool_names": [
-        "get_reward_resolution_offers"
-      ],
-      "record_id": "offer_610735",
-      "expected_fields": {
-        "id": "offer_610735",
-        "customer_id": "gromov_a_1187",
-        "case_id": "case_610903",
-        "period": "2026-07",
-        "transaction_ids": [
-          "txn_804219",
-          "txn_804227"
-        ],
-        "version": 1,
-        "amount": 40,
-        "amount_basis": "incremental",
-        "status": "approved",
-        "rights": "preserve",
-        "terms_id": "reward_resolution_rights",
-        "allocation_terms_id": "reward_resolution_amounts",
-        "allocation_first_transaction_id": "txn_804219",
-        "valid_from": "2026-08-01",
-        "valid_to": "2026-08-31",
-        "component_count": 8
-      },
-      "before_action_id": "bank2:v5:consent",
-      "only_if_target_attempted": true
     },
     {
       "evidence_id": "common_discovery_Bank 2",

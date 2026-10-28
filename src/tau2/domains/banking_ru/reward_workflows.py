@@ -321,6 +321,32 @@ def register_operation(tools, request_id, customer_id, result, unknown=False):
     )
 
 
+def _resolution_paid_claim(db, case, transaction_id):
+    """A claim can be reconciled only against a real payment for this case."""
+    for operation in db.reward_resolution_executions.values():
+        if (
+            operation.customer_id != case.customer_id
+            or operation.case_id != case.id
+            or operation.period != case.reward_period
+            or transaction_id not in operation.transaction_ids
+            or operation.result.get("status") != "succeeded"
+        ):
+            continue
+        for record in operation.result.get("ledger", []):
+            credit = db.transactions.get(record.get("id"))
+            if (
+                credit is not None
+                and credit.model_dump() == record
+                and credit.customer_id == case.customer_id
+                and credit.original_transaction_id == transaction_id
+                and credit.kind == "cashback"
+                and credit.status == "posted"
+                and cents(credit.amount) > 0
+            ):
+                return True
+    return False
+
+
 class RewardWorkflowMixin:
     def _bank_operation_status(self, customer_id, request_id):
         self._require_verified(customer_id)
@@ -428,9 +454,13 @@ class RewardWorkflowMixin:
             if item.transaction_id in existing and cents(item.amount) < cents(
                 existing[item.transaction_id].amount
             ):
-                raise ValueError(
-                    "ERR_INVALID_ARGUMENT: Нельзя уменьшить существующее требование"
-                )
+                gaps = standard_gaps(self.db, case.customer_id, case.reward_period)
+                if not _resolution_paid_claim(
+                    self.db, case, item.transaction_id
+                ) or cents(item.amount) != gaps.get(item.transaction_id):
+                    raise ValueError(
+                        "ERR_INVALID_ARGUMENT: Уменьшение возможно только до фактического остатка после выплаты по делу"
+                    )
         reservations = [
             CashbackAdjustmentReservation.model_validate(x)
             for x in (reserved_adjustments or [])

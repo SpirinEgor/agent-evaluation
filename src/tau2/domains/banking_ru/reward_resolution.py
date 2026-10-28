@@ -3,7 +3,12 @@
 from copy import deepcopy
 from decimal import ROUND_HALF_EVEN, Decimal
 
-from tau2.domains.banking_ru.cashback_state import advance, revision, state_guard
+from tau2.domains.banking_ru.cashback_state import (
+    advance,
+    pending_funding,
+    revision,
+    state_guard,
+)
 from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionExecution
 from tau2.domains.banking_ru.reward_workflows import (
     cents,
@@ -132,6 +137,7 @@ def list_offers(tools, customer_id, case_id):
         row = offer.model_dump()
         row.update(
             state_revision=revision(tools.db, customer_id, offer.period),
+            funding_status="pending" if pending_funding(tools.db, offer) else "final",
             component_count=len(offer.components),
             components_complete=len(offer.components) <= 128,
         )
@@ -151,6 +157,7 @@ def list_components(tools, offer_id, offset=0, limit=50):
     total = len(offer.components)
     return dict(
         offer_id=offer_id,
+        offer_version=offer.version,
         total=total,
         offset=offset,
         next_offset=offset + limit if offset + limit < total else None,
@@ -219,13 +226,6 @@ def execute(
 
     from tau2.domains.banking_ru.discovery_workflow import require_bank_acceptance
 
-    try:
-        require_bank_acceptance(
-            tools, offer.customer_id, offer.transaction_ids, case_id=offer.case_id
-        )
-    except ValueError as exc:
-        reject(str(exc))
-
     rows = normalized(payouts)
     packet = dict(
         offer_id=offer_id,
@@ -251,9 +251,29 @@ def execute(
             reject("Уже выбран способ урегулирования этих покупок")
     if not idempotency_key.strip():
         reject("Пустой ключ")
+    if pending_funding(tools.db, offer):
+        return {
+            "status": "funding_pending",
+            "offer_id": offer.id,
+            "current_offer_version": offer.version,
+            "current_revision": revision(tools.db, offer.customer_id, offer.period),
+        }
+    if offer.version != offer_version:
+        return {
+            "status": "offer_changed",
+            "offer_id": offer.id,
+            "expected_offer_version": offer_version,
+            "current_offer_version": offer.version,
+            "current_revision": revision(tools.db, offer.customer_id, offer.period),
+        }
+    try:
+        require_bank_acceptance(
+            tools, offer.customer_id, offer.transaction_ids, case_id=offer.case_id
+        )
+    except ValueError as exc:
+        reject(str(exc))
     if (
         offer.status != "approved"
-        or offer.version != offer_version
         or not offer.valid_from <= tools.db.today <= offer.valid_to
     ):
         reject("Нет действующего банковского одобрения")
@@ -341,7 +361,9 @@ def execute(
         reserved = sum(
             cents(item.amount)
             for existing in tools.db.cases.values()
-            if existing.customer_id == offer.customer_id and existing.status == "open"
+            if existing.customer_id == offer.customer_id
+            and existing.status == "open"
+            and existing.id != case.id
             for item in existing.reward_items
             if item.transaction_id == tid
         )

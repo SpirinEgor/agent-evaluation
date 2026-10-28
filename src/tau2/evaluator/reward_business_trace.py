@@ -60,6 +60,7 @@ def _component_amounts(offer, args, sources):
                 source.call.arguments.get("offer_id") != offer["id"]
                 or not isinstance(page, dict)
                 or page.get("offer_id") != offer["id"]
+                or str(page.get("offer_version")) != str(offer.get("version"))
             ):
                 continue
             if integer(page.get("total")) != count:
@@ -107,10 +108,30 @@ def reward_business_failures(trace, policy):
         if not result or (
             isinstance(result, dict)
             and result.get("status")
-            in {"settlement_pending", "state_changed", "consent_stale"}
+            in {
+                "settlement_pending",
+                "state_changed",
+                "consent_stale",
+                "funding_pending",
+                "offer_changed",
+            }
         ):
             continue
         name, args, ident = target.call.name, target.call.arguments, target.call.id
+        if name == "refresh_cashback_settlement" and isinstance(result, dict):
+            for decision in result.get("funding_decisions", []):
+                accepted = any(
+                    row.get("id") == decision.get("statement_id")
+                    and row.get("status") == "accepted"
+                    and row.get("customer_id") == policy["customer_id"]
+                    and row.get("case_id") == policy["case_id"]
+                    and bool(row.get("transaction_ids"))
+                    and set(row["transaction_ids"]) <= selected
+                    for source in received(target, "get_reward_statement_status")
+                    for row in records(payload(source))
+                )
+                if not accepted:
+                    failures.append(f"{ident}:funding_acceptance_not_received")
         if name in {"create_cashback_investigation", "grant_cashback"}:
             failures.append(f"{ident}:forbidden_reward_creation")
         if name == "amend_cashback_investigation":
@@ -227,6 +248,8 @@ def reward_business_failures(trace, policy):
                 or _money(offer.get("component_count", 0)) > 0
                 or args.get("component_ids")
             )
+            if offer and str(offer.get("version")) != str(args.get("offer_version")):
+                failures.append(f"{ident}:resolution_offer_changed_after_consent")
             if composite and consent_source is not None:
                 # All composite terms must already be known when the confirmed
                 # packet is formed. Later pages cannot retroactively justify it.
@@ -242,6 +265,7 @@ def reward_business_failures(trace, policy):
                 or args.get("case_id") != policy["case_id"]
                 or offer.get("period") != policy["period"]
                 or offer.get("status") != "approved"
+                or offer.get("funding_status") == "pending"
                 or str(offer.get("version")) != str(args.get("offer_version"))
                 or not offer.get("valid_from", "~")
                 <= policy["bank_date"]

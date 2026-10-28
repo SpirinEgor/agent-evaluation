@@ -127,6 +127,14 @@ def cashback_state_failures(observed, policy):
     for target in observed:
         name, args = target.call.name, target.call.arguments
         result = payload(target)
+        if (
+            name == "execute_reward_resolution"
+            and isinstance(result, dict)
+            and result.get("status") in {"funding_pending", "offer_changed"}
+        ):
+            # A refused preliminary/stale offer made no payment. Its guessed
+            # revision cannot invalidate a later lawful, fully received retry.
+            continue
         if name in [
             "execute_cashback_adjustment",
             "execute_reward_resolution",
@@ -154,6 +162,8 @@ def cashback_state_failures(observed, policy):
                 "settlement_pending",
                 "state_changed",
                 "consent_stale",
+                "funding_pending",
+                "offer_changed",
             ]
             if not recoverable and result:
                 settled = any(

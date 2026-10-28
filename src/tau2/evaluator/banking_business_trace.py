@@ -14,7 +14,13 @@ def _effectful(target):
     return bool(result) and not (
         isinstance(result, dict)
         and result.get("status")
-        in {"settlement_pending", "state_changed", "consent_stale"}
+        in {
+            "settlement_pending",
+            "state_changed",
+            "consent_stale",
+            "funding_pending",
+            "offer_changed",
+        }
     )
 
 

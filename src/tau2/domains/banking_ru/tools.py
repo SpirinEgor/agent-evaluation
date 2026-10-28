@@ -1193,7 +1193,8 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         expected_revision: Optional[int] = None,
     ) -> Case:
         """Дополнить открытое дело. Для standard_cashback и cashback_reconciliation items задаёт итоговые суммы
-        покупок, включая уже заявленное; уменьшение запрещено. Для будущей выплаты
+        покупок, включая уже заявленное. Уменьшение допустимо только до фактического
+        остатка после проведённой выплаты по соглашению этого дела. Для будущей выплаты
         передайте reserved_adjustments. Для иных программ добавляются только новые покупки.
         """
         from tau2.domains.banking_ru.data_model import CashbackStateResult

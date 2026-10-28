@@ -491,6 +491,7 @@ def test_composite_action_accepts_complete_received_pages_and_rejects_missing_or
             {"offer_id": "offer", "offset": i, "limit": 1},
             {
                 "offer_id": "offer",
+                "offer_version": 1,
                 "offset": i,
                 "total": 2,
                 "next_offset": i + 1 if i == 0 else None,
@@ -543,3 +544,120 @@ def test_composite_action_rejects_fabricated_success_with_invalid_terms_or_packe
         else:
             args["component_ids"] = ["x", "y", "y"]
         assert failures(rows), defect
+
+
+def test_component_pages_must_match_received_offer_version_and_allow_recovery():
+    from copy import deepcopy
+
+    rows = composite_rows()
+    offer = rows[0][2][0]
+    offer["version"] = 2
+    rows[1][2]["data"]["offer_version"] = 2
+    rows[2][1]["offer_version"] = 2
+    parts = offer.pop("components")
+    offer.update(components=[], components_complete=False)
+    pages = [
+        (
+            "get_reward_resolution_components",
+            {"offer_id": "offer", "offset": i},
+            {
+                "offer_id": "offer",
+                "offer_version": 2,
+                "offset": i,
+                "total": 2,
+                "components": [part],
+            },
+            False,
+        )
+        for i, part in enumerate(parts)
+    ]
+    assert failures([rows[0], *pages, *rows[1:]]) == []
+    stale = deepcopy(pages[0])
+    stale[2]["offer_version"] = 1
+    assert failures([rows[0], stale, pages[1], *rows[1:]])
+    assert failures([rows[0], stale, *pages, *rows[1:]]) == []
+    unversioned = deepcopy(pages[0])
+    unversioned[2].pop("offer_version")
+    assert failures([rows[0], unversioned, pages[1], *rows[1:]])
+
+
+def test_new_received_offer_invalidates_prior_consent_for_fabricated_success():
+    from copy import deepcopy
+
+    rows = composite_rows()
+    new_offer = deepcopy(rows[0])
+    new_offer[2][0]["version"] = 2
+    assert failures([*rows[:2], new_offer, rows[2]])
+
+
+def test_preliminary_funding_cannot_authorize_success_but_safe_rejection_recovers():
+    from copy import deepcopy
+
+    rows = composite_rows()
+    rows[0][2][0]["funding_status"] = "pending"
+    assert failures(rows)
+    final = deepcopy(rows[0])
+    final[2][0]["funding_status"] = "final"
+    refused = (rows[2][0], rows[2][1], {"status": "funding_pending"}, False)
+    assert failures([rows[0], rows[1], refused, final, rows[1], rows[2]]) == []
+
+
+def test_funding_refresh_requires_received_acceptance_and_safe_pending_needs_no_revision():
+    from tau2.evaluator.cashback_state import cashback_state_failures
+
+    args = {"customer_id": "own", "period": "2026-07"}
+    receipt = (
+        "get_reward_statement_status",
+        {"customer_id": "own", "statement_id": "st"},
+        {
+            "id": "st",
+            "customer_id": "own",
+            "case_id": "case",
+            "status": "accepted",
+            "transaction_ids": ["t1"],
+        },
+        False,
+    )
+    refresh = (
+        "refresh_cashback_settlement",
+        args,
+        {
+            "status": "settled",
+            "customer_id": "own",
+            "period": "2026-07",
+            "funding_decisions": [
+                {
+                    "event_id": "event",
+                    "offer_id": "offer",
+                    "statement_id": "st",
+                    "previous_version": 1,
+                    "new_version": 2,
+                }
+            ],
+        },
+        False,
+    )
+    assert failures([refresh])
+    assert failures([receipt, refresh]) == []
+    delayed = trace_of([receipt, refresh])
+    delayed.observed[0] = delayed.observed[0].model_copy(
+        update={"result_position": delayed.observed[1].call_position + 1}
+    )
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    assert reward_business_failures(delayed, POLICY)
+    for status in ["funding_pending", "offer_changed"]:
+        rows = [
+            (
+                "execute_reward_resolution",
+                {"offer_id": "offer", "expected_revision": 999},
+                {"status": status},
+                False,
+            )
+        ]
+        assert (
+            cashback_state_failures(
+                trace_of(rows).observed, {"customer_id": "own", "period": "2026-07"}
+            )
+            == []
+        )

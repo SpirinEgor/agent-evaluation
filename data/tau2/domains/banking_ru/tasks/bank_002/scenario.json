@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Получить максимальную допустимую выплату, дополнить существующее дело остатками и передать полный состав на рассмотрение, сохранив права и остальные позиции.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "2026-10-29-bank2-composite-v7; completion_only; B+D+E: 35 RUB, review 50 RUB; model difficulty not measured"
+    "notes": "2026-10-29-bank2-funding-v8; completion_only; final B+D+E+G: 42 RUB, review 43 RUB; model difficulty not measured"
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -152,9 +152,32 @@
               "partner": 20
             }
           }
+        },
+        "transactions": {
+          "txn_804227": {
+            "reward_discrepancy_type": "partner_activation_review"
+          }
+        },
+        "reward_resolution_offer_updates": {
+          "funding-610735-final": {
+            "id": "funding-610735-final",
+            "customer_id": "gromov_a_1187",
+            "period": "2026-07",
+            "offer_id": "offer_610735",
+            "status": "pending",
+            "statement_id": "bank-statement:client-statement:10a933f8f0ec582f",
+            "previous_version": 1,
+            "new_version": 2,
+            "new_amount": 45,
+            "new_selection_budget": {
+              "id": "budget_610735",
+              "bank": 23,
+              "partner": 20
+            }
+          }
         }
       }
     }
   },
-  "scenario_version": "2026-10-29-bank2-composite-v7"
+  "scenario_version": "2026-10-29-bank2-funding-v8"
 }

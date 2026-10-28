@@ -21,6 +21,7 @@ def tools(count=348, verified=True):
         customer_id="c",
         case_id="case",
         period="2026-07",
+        version=1,
         components=[Row(id=f"p{i}", incompatible_with=[]) for i in range(count)],
     )
 
@@ -60,3 +61,12 @@ def test_no_unverified_or_unknown_offer_read(offer, verified):
 def test_empty_last_page_has_explicit_end():
     result = resolution.list_components(tools(), "offer", 348, 50)
     assert result["components"] == [] and result["next_offset"] is None
+
+
+def test_component_pages_identify_the_version_actually_read():
+    t = tools(count=2)
+    first = resolution.list_components(t, "offer", 0, 1)
+    t.db.reward_resolution_offers["offer"].version = 2
+    second = resolution.list_components(t, "offer", 1, 1)
+    assert first["offer_version"] == 1
+    assert second["offer_version"] == 2
