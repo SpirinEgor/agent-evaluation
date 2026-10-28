@@ -14,6 +14,14 @@ from pydantic import BaseModel, ConfigDict, Field, create_model, field_serialize
 from typing_extensions import override
 
 
+class ToolExecutionRejected(ValueError):
+    """A trusted precondition rejected execution before disclosure or business effects.
+
+    Raise only at audited input/ownership guards. Ordinary failures do not
+    establish that execution was harmless and must keep their normal type.
+    """
+
+
 class BaseTool(BaseModel, ABC):
     """The base class for a Tool that can be called by LLMs."""
 

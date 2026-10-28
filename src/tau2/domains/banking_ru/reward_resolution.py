@@ -11,6 +11,7 @@ from tau2.domains.banking_ru.reward_workflows import (
     reward_obligations,
     standard_gaps,
 )
+from tau2.environment.tool import ToolExecutionRejected
 
 
 def owned_offer(tools, offer_id, case_id):
@@ -22,7 +23,7 @@ def owned_offer(tools, offer_id, case_id):
     if case is None:
         raise ValueError("ERR_NOT_FOUND: Дело не найдено")
     if case.customer_id != offer.customer_id or offer.case_id != case_id:
-        raise ValueError("ERR_FOREIGN_OWNER: Предложение и дело не связаны")
+        raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Предложение и дело не связаны")
     return offer, case
 
 
@@ -123,7 +124,7 @@ def list_offers(tools, customer_id, case_id):
     if case is None:
         raise ValueError("ERR_NOT_FOUND: Дело не найдено")
     if case.customer_id != customer_id:
-        raise ValueError("ERR_FOREIGN_OWNER: Чужое дело")
+        raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужое дело")
     results = []
     for offer in tools.db.reward_resolution_offers.values():
         if offer.customer_id != customer_id or offer.case_id != case_id:
@@ -160,7 +161,7 @@ def list_components(tools, offer_id, offset=0, limit=50):
 def confirm(tools, customer_id, request):
     offer, case = owned_offer(tools, request.offer_id, request.case_id)
     if customer_id != offer.customer_id:
-        raise ValueError("ERR_FOREIGN_OWNER: Чужое предложение")
+        raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужое предложение")
     packet = request.model_dump(exclude={"type"})
     if offer.components or packet["component_ids"]:
         packet["component_ids"] = sorted(packet["component_ids"])
@@ -171,7 +172,7 @@ def confirm(tools, customer_id, request):
         for item in packet[key]:
             tx = tools._get_transaction(item["transaction_id"])
             if tx.customer_id != customer_id:
-                raise ValueError("ERR_FOREIGN_OWNER: Чужая операция")
+                raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужая операция")
     preferences = tools.db.reward_resolution_preferences.get(customer_id)
     if preferences is None:
         return {"status": "unsupported_context", "data": None}

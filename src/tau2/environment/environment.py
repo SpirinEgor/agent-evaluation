@@ -15,7 +15,7 @@ from tau2.data_model.message import (
 )
 from tau2.data_model.tasks import EnvAssertion, EnvFunctionCall, InitializationData
 from tau2.environment.db import DB
-from tau2.environment.tool import Tool
+from tau2.environment.tool import Tool, ToolExecutionRejected
 from tau2.environment.toolkit import ToolKitBase, ToolSignature, get_tool_signatures
 
 
@@ -482,6 +482,7 @@ class Environment:
             The response of the tool call.
         """
         error = False
+        execution_rejected = False
         try:
             resp = self.make_tool_call(
                 message.name, requestor=message.requestor, **message.arguments
@@ -490,6 +491,7 @@ class Environment:
         except Exception as e:
             resp = f"Error: {e}"
             error = True
+            execution_rejected = isinstance(e, ToolExecutionRejected)
         logger.debug(f"Response: {resp}")
         resp = self.to_json_str(resp)
         return ToolMessage(
@@ -498,4 +500,5 @@ class Environment:
             requestor=message.requestor,
             role="tool",
             error=error,
+            execution_rejected=execution_rejected,
         )

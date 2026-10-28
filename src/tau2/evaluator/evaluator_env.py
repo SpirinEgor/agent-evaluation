@@ -269,16 +269,18 @@ class EnvironmentEvaluator(EvaluatorBase[Message]):
             db_match = False
 
         state_failures = []
-        if (
-            task.evaluation_criteria.banking_contract_version == "db_action_v1"
-            and task.evaluation_criteria.db_state_checks
+        if task.evaluation_criteria.banking_contract_version == "db_action_v1" and (
+            task.evaluation_criteria.db_state_checks
+            or task.evaluation_criteria.banking_business_contract
         ):
             from tau2.evaluator.db_state_checks import state_check_failures
 
             db = predicted_environment.tools.db
             snapshot = db.model_dump(mode="json") if db is not None else {}
             state_failures = state_check_failures(
-                snapshot, task.evaluation_criteria.db_state_checks
+                snapshot,
+                task.evaluation_criteria.db_state_checks,
+                banking_contract=task.evaluation_criteria.banking_business_contract,
             )
             if state_failures:
                 db_match, db_reward = False, 0.0
@@ -499,16 +501,18 @@ class FullDuplexEnvironmentEvaluator(EvaluatorBase[Tick]):
             db_match = False
 
         state_failures = []
-        if (
-            task.evaluation_criteria.banking_contract_version == "db_action_v1"
-            and task.evaluation_criteria.db_state_checks
+        if task.evaluation_criteria.banking_contract_version == "db_action_v1" and (
+            task.evaluation_criteria.db_state_checks
+            or task.evaluation_criteria.banking_business_contract
         ):
             from tau2.evaluator.db_state_checks import state_check_failures
 
             db = predicted_environment.tools.db
             snapshot = db.model_dump(mode="json") if db is not None else {}
             state_failures = state_check_failures(
-                snapshot, task.evaluation_criteria.db_state_checks
+                snapshot,
+                task.evaluation_criteria.db_state_checks,
+                banking_contract=task.evaluation_criteria.banking_business_contract,
             )
             if state_failures:
                 db_match, db_reward = False, 0.0

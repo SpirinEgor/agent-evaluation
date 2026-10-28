@@ -569,7 +569,7 @@ class ToolMessage(BaseModel):
     error: bool = Field(description="Whether the tool call failed.", default=False)
     execution_rejected: bool = Field(
         default=False,
-        description="Trusted platform rejected this call before domain execution.",
+        description="Trusted platform or domain guard rejected this call before disclosure or business effects.",
     )
     turn_idx: Optional[int] = Field(
         description="The index of the turn in the conversation.", default=None

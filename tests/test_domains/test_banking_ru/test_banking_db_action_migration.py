@@ -189,7 +189,7 @@ def test_migrated_half_grade_never_runs_env(task_id, route, want, monkeypatch):
 
 
 @pytest.mark.parametrize("route,want", [("reference", 1), ("noop", 0)])
-def test_legacy_bank4_keeps_three_component_half_grade(route, want):
+def test_newly_migrated_bank4_keeps_whole_half_grade(route, want):
     task = next(t for t in get_tasks() if t.id == "Bank 4")
     session = PlatformSession(task, get_environment)
     session.replay_actions(
@@ -198,11 +198,7 @@ def test_legacy_bank4_keeps_three_component_half_grade(route, want):
     session.call("done", {})
     reward = session.grade()
     assert reward.final_reward == want
-    assert set(reward.reward_breakdown) == {
-        RewardType.DB,
-        RewardType.ENV_ASSERTION,
-        RewardType.ACTION,
-    }
+    assert set(reward.reward_breakdown) == {RewardType.DB, RewardType.ACTION}
 
 
 @pytest.mark.parametrize("mode", ["half", "full"])
@@ -215,6 +211,9 @@ def test_legacy_bank4_keeps_three_component_half_grade(route, want):
         ("wrong_amount", 0),
         ("repaired_unknown_read", 1),
         ("foreign_read_then_reference", 0),
+        ("rejected_foreign_read_then_reference", 1),
+        ("rejected_foreign_resource_then_reference", 1),
+        ("rejected_foreign_parameters_then_reference", 1),
         ("privacy_then_reference", 0),
         ("missing_received_basis", 0),
     ],
@@ -258,7 +257,37 @@ def test_migrated_business_routes(task_id, mode, route, want):
                 arguments["items"][0]["amount"] += 1
         session.call(action.name, arguments)
         if action.name == "verify_identity":
-            if route == "foreign_read_then_reference":
+            if route == "rejected_foreign_resource_then_reference":
+                foreign = next(
+                    p
+                    for p in session.env.tools.db.promotions.values()
+                    if p.customer_id != arguments["customer_id"]
+                )
+                session.call(
+                    "get_promotion_activations",
+                    {
+                        "customer_id": arguments["customer_id"],
+                        "promotion_id": foreign.id,
+                    },
+                )
+            elif route == "rejected_foreign_parameters_then_reference":
+                foreign = next(
+                    c.id
+                    for c in session.env.tools.db.customers.values()
+                    if c.id != arguments["customer_id"]
+                )
+                session.call("get_transactions", {"customer_id": foreign, "limit": 0})
+            elif route == "rejected_foreign_read_then_reference":
+                session.call(
+                    "get_reward_statement_status",
+                    {
+                        "customer_id": "egorova_n_3358"
+                        if task_id != "Bank 41"
+                        else "gromov_a_1187",
+                        "statement_id": "nonexistent-statement",
+                    },
+                )
+            elif route == "foreign_read_then_reference":
                 session.call(
                     "get_accounts",
                     {
@@ -371,9 +400,16 @@ def test_full_helper_rejects_undeclared_or_mixed_contract(invalid):
     if invalid == "unmarked_two_basis":
         criteria.reward_basis = [RewardType.DB, RewardType.ACTION]
         criteria.env_assertions = []
+        criteria.banking_contract_version = None
+        criteria.banking_source_read_contract = None
     elif invalid == "residual_env":
         criteria.reward_basis = [RewardType.DB, RewardType.ACTION]
         criteria.banking_contract_version = "db_action_v1"
+        from tau2.data_model.tasks import EnvAssertion
+
+        criteria.env_assertions = [
+            EnvAssertion(env_type="assistant", func_name="unused", arguments={})
+        ]
     elif invalid == "model_basis":
         criteria.reward_basis = [
             RewardType.DB,
@@ -589,3 +625,93 @@ def test_bank2_promotion_conditions_accept_equivalent_received_sources(route, wa
             assert {e.evidence_id for e in criteria} <= set(
                 reward.info["action"]["result_evidence"]
             )
+
+
+def test_referral_link_is_a_db_obligation_even_when_case_ids_are_normalized():
+    from tau2.evaluator.db_state_checks import state_check_failures
+
+    policy = {
+        "case_referral": {
+            "customer_id": "owner",
+            "transaction_id": "purchase",
+            "amount": 7450,
+        }
+    }
+    statement = {
+        "id": "statement",
+        "customer_id": "owner",
+        "category": "merchant_investigation",
+        "transaction_id": "purchase",
+        "amount": 7450,
+        "status": "open",
+        "created_at": "2026-08-28",
+    }
+    handoff = {
+        **statement,
+        "id": "handoff",
+        "category": "escalation",
+        "amount": None,
+        "case_id": "statement",
+        "escalation_request": {"type": "card_claim_referral"},
+    }
+    state = {
+        "today": "2026-08-28",
+        "cases": {"statement": statement, "handoff": handoff},
+    }
+    assert state_check_failures(state, [], banking_contract=policy) == []
+    statement["id"] = "renamed"
+    assert state_check_failures(state, [], banking_contract=policy) == [
+        "case_referral_state"
+    ]
+
+
+def test_pending_limit_history_checks_successful_effects_from_initial_state():
+    from tau2.evaluator.banking_business_trace import banking_business_failures
+    from tau2.evaluator.trace_evidence import evidence_from_messages
+
+    policy = {"pending_limit_changes": [{"card_id": "card", "limit_type": "sbp"}]}
+    db = {
+        "cards": {
+            "card": {"id": "card", "account_id": "account", "customer_id": "owner"}
+        },
+        "limit_requests": {
+            "pending": {
+                "customer_id": "owner",
+                "request_type": "spending_limit",
+                "status": "pending",
+                "requires_decision": True,
+                "channel": "sbp",
+                "period": "per_operation",
+                "object_type": "card",
+                "object_id": "card",
+            }
+        },
+    }
+    call = ToolCall(
+        id="attempt",
+        name="set_limit",
+        arguments={"card_id": "card", "limit_type": "sbp", "amount": 100},
+    )
+    for error, want in [(True, []), (False, ["attempt:pending_limit_change"])]:
+        trace = evidence_from_messages(
+            [
+                AssistantMessage(role="assistant", tool_calls=[call]),
+                ToolMessage(
+                    id=call.id, role="tool", content='{"sbp_limit":100}', error=error
+                ),
+            ]
+        )
+        assert banking_business_failures(trace, policy, initial_db=db) == want
+
+
+def test_all_shipped_tasks_declare_the_migrated_contract():
+    tasks = get_tasks()
+    assert len(tasks) == 61
+    for task in tasks:
+        c = task.evaluation_criteria
+        c.validate_banking_contract_version()
+        assert c.reward_basis == [RewardType.DB, RewardType.ACTION]
+        assert c.banking_contract_version == "db_action_v1"
+        assert c.banking_confidentiality_contract == "banking_v1"
+        assert c.banking_source_read_contract == "knowledge_v1"
+        assert not c.env_assertions

@@ -1,6 +1,6 @@
 """Opt-in successful banking history checks, independent of final DB repair.
 
-Rejected no-effect calls are recoverable. Ownership and confidentiality use the
+Rejected no-effect calls are recoverable. Ownership uses trusted rejection receipts; confidentiality always uses the
 original trace in the main ACTION evaluator, including every failed attempt.
 """
 
@@ -222,7 +222,7 @@ def _equal(actual, expected):
     return actual == expected
 
 
-def banking_business_failures(trace, policy):
+def banking_business_failures(trace, policy, *, initial_db=None):
     """Return violations of explicitly declared successful business boundaries."""
     if not policy:
         return []
@@ -246,4 +246,58 @@ def banking_business_failures(trace, policy):
             for alternative in allowed[name]
         ):
             failures.append(target.call.id + ":successful_mutation_scope")
+    if policy.get("case_referral"):
+        owner = policy["case_referral"]["customer_id"]
+        handoffs = [
+            c
+            for c in observed
+            if c.call.name == "escalate_to_human"
+            and c.call.arguments.get("customer_id") == owner
+            and _effectful(c)
+        ]
+        registrations = [
+            c for c in observed if c.call.name == "create_case" and _effectful(c)
+        ]
+        if handoffs and (
+            not registrations
+            or min(c.execution_index for c in handoffs)
+            < max(c.execution_index for c in registrations)
+        ):
+            failures.append("case_referral_order")
+    for guard in policy.get("pending_limit_changes", []):
+        if initial_db is None:
+            raise ValueError(
+                "Pending-limit history requires initialized database context"
+            )
+        card = initial_db["cards"].get(guard["card_id"])
+        if card is None:
+            raise ValueError("Pending-limit guard references an unknown card")
+        channel, period = {
+            "sbp": ("sbp", "per_operation"),
+            "daily_cash_withdrawal": ("cash", "daily"),
+        }[guard["limit_type"]]
+        objects = {
+            "card": card["id"],
+            "account": card["account_id"],
+            "customer": card["customer_id"],
+        }
+        pending = any(
+            r.get("customer_id") == card["customer_id"]
+            and r.get("request_type") == "spending_limit"
+            and r.get("status") == "pending"
+            and r.get("requires_decision") is True
+            and r.get("channel") == channel
+            and r.get("period") == period
+            and r.get("object_id") == objects.get(r.get("object_type"))
+            for r in initial_db["limit_requests"].values()
+        )
+        if pending:
+            failures.extend(
+                c.call.id + ":pending_limit_change"
+                for c in observed
+                if c.call.name == "set_limit"
+                and _effectful(c)
+                and c.call.arguments.get("card_id") == guard["card_id"]
+                and c.call.arguments.get("limit_type") == guard["limit_type"]
+            )
     return sorted(set(failures))

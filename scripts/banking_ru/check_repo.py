@@ -177,13 +177,17 @@ def check_profiles(tasks, document):
             legacy.add(task["id"])
         else:
             errors.append(f"{task['id']}: undocumented evaluation profile: {basis}")
-    described, legacy_count = set(), None
+    described, legacy_count = set(), 0
     for line in document.read_text().splitlines():
         cells = [cell.strip() for cell in line.split("|")]
         if len(cells) < 4:
             continue
         if cells[2] == "DB × ACTION":
-            described.update(re.findall(r"Bank \d+", cells[1]))
+            whole = re.fullmatch(r"Все (\d+) задач(?:а|и)?", cells[1])
+            if whole and int(whole[1]) == len(tasks):
+                described.update(task["id"] for task in tasks)
+            else:
+                described.update(re.findall(r"Bank \d+", cells[1]))
         if cells[2] == "DB × ENV_ASSERTION × ACTION":
             match = re.fullmatch(r"Остальные (\d+)", cells[1])
             if match:

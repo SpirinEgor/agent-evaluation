@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 from pydantic import RootModel
 
-from tau2.environment.tool import as_tool
+from tau2.environment.tool import ToolExecutionRejected, as_tool
 from tau2.environment.toolkit import ToolKitBase, ToolType, is_tool
 
 SPECIAL_TOOLS = frozenset(
@@ -42,7 +42,7 @@ def require_bank_acceptance(tools, customer_id, transaction_ids, case_id=None):
     for tid in transaction_ids:
         tx = tools._get_transaction(tid)
         if tx.customer_id != customer_id:
-            raise ValueError("ERR_FOREIGN_RESOURCE")
+            raise ToolExecutionRejected("ERR_FOREIGN_RESOURCE")
         if statement_needed(tx) and not any(
             r["customer_id"] == customer_id
             and tid in r["transaction_ids"]
@@ -225,7 +225,7 @@ class DiscoveryBankingTools(ToolKitBase):
             or not case
             or case.customer_id != customer_id
         ):
-            raise ValueError("ERR_FOREIGN_OR_UNKNOWN_SUBMISSION")
+            raise ToolExecutionRejected("ERR_FOREIGN_OR_UNKNOWN_SUBMISSION")
         key = "bank-statement:" + submission_id
         self.db.reward_statement_registrations.setdefault(
             key,
@@ -255,7 +255,7 @@ class DiscoveryBankingTools(ToolKitBase):
         self._require_verified(customer_id)
         row = self.db.reward_statement_registrations.get(statement_id)
         if not row or row["customer_id"] != customer_id:
-            raise ValueError("ERR_FOREIGN_OR_UNKNOWN_STATEMENT")
+            raise ToolExecutionRejected("ERR_FOREIGN_OR_UNKNOWN_STATEMENT")
         row.update(status="accepted", update_available=False)
         return DiscoveryResponse(deepcopy(row))
 

@@ -159,8 +159,8 @@ def test_bank60_scoped_pending_and_tariff_routes(route, expected, mode):
     assert reward.final_reward == expected, reward.info
     if route == "matching_pending":
         assert reward.reward_breakdown[RewardType.DB] == 1
-        assert reward.reward_breakdown[RewardType.ACTION] == 1
-        assert reward.reward_breakdown[RewardType.ENV_ASSERTION] == 0
+        assert reward.reward_breakdown[RewardType.ACTION] == 0
+        assert RewardType.ENV_ASSERTION not in reward.reward_breakdown
     if expected:
         limits = session.env.tools.db.card_limits
         assert limits[TARGET].sbp_limit == 400000

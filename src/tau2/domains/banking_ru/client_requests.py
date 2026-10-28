@@ -9,6 +9,7 @@ from tau2.domains.banking_ru.business_assertions import BankingBusinessAssertion
 from tau2.domains.banking_ru.closure_signature import closure_document, document_hash
 from tau2.domains.banking_ru.data_model import CashbackInvestigationItem, Customer
 from tau2.domains.banking_ru.file_pilot import FileBankingTools, FileResponse
+from tau2.environment.tool import ToolExecutionRejected
 from tau2.environment.toolkit import ToolType, is_tool
 
 
@@ -358,7 +359,9 @@ class StructuredIdentityBankingTools(
             self._require_verified(customer_id)
             contact = self.db.document_contacts.get(request.contact_id)
             if contact is None or contact.customer_id != customer_id:
-                raise ValueError("ERR_FOREIGN_RESOURCE: Контакт не принадлежит клиенту")
+                raise ToolExecutionRejected(
+                    "ERR_FOREIGN_RESOURCE: Контакт не принадлежит клиенту"
+                )
             sources = [
                 a.document_channel_confirmation
                 for a in self.db.client_answers.get(customer_id, [])
@@ -622,7 +625,7 @@ class StructuredIdentityBankingTools(
                 )
             loan = self._get_loan(loan_id)
             if loan.customer_id != customer_id:
-                raise ValueError("ERR_FOREIGN_OWNER: чужой кредит")
+                raise ToolExecutionRejected("ERR_FOREIGN_OWNER: чужой кредит")
             if loan.status != "active":
                 raise ValueError("ERR_INVALID_ARGUMENT: кредит не действует")
             sources = [
@@ -675,7 +678,7 @@ class StructuredIdentityBankingTools(
                 request.quote_id,
             )
             if loan.customer_id != customer_id:
-                raise ValueError("ERR_FOREIGN_OWNER: чужой кредит")
+                raise ToolExecutionRejected("ERR_FOREIGN_OWNER: чужой кредит")
             sources = [
                 a.loan_repayment_confirmation
                 for a in self.db.client_answers.get(customer_id, [])
@@ -744,7 +747,9 @@ class StructuredIdentityBankingTools(
                 )
             transaction = self._get_transaction(transaction_id)
             if transaction.customer_id != customer_id:
-                raise ValueError("ERR_FOREIGN_OWNER: операция другого клиента")
+                raise ToolExecutionRejected(
+                    "ERR_FOREIGN_OWNER: операция другого клиента"
+                )
             if (
                 transaction.status != "blocked"
                 or transaction.kind != "transfer"
@@ -1078,7 +1083,9 @@ class StructuredIdentityBankingTools(
         source = self._get_account(account_id)
         target = self._get_account(payout_account_id)
         if source.customer_id != customer_id or target.customer_id != customer_id:
-            raise ValueError("ERR_FOREIGN_ACCOUNT: both accounts must belong to signer")
+            raise ToolExecutionRejected(
+                "ERR_FOREIGN_ACCOUNT: both accounts must belong to signer"
+            )
         if source.id == target.id or source.currency != target.currency:
             raise ValueError(
                 "ERR_INVALID_ARGUMENT: different own accounts of same currency required"
@@ -1163,7 +1170,7 @@ class StructuredIdentityBankingTools(
         self._require_verified(source.customer_id)
         target = self._get_account(payout_account_id)
         if source.customer_id != target.customer_id:
-            raise ValueError(
+            raise ToolExecutionRejected(
                 "ERR_FOREIGN_ACCOUNT: accounts belong to different customers"
             )
         receipt = None

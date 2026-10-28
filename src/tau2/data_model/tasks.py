@@ -833,11 +833,28 @@ class DocumentDeliveryContract(BaseModel):
     contact_ids: list[NonemptyContractID] = Field(min_length=1)
 
 
+class CaseReferralContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    customer_id: NonemptyContractID
+    transaction_id: NonemptyContractID
+    amount: PositiveContractAmount
+
+
+class PendingLimitGuard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    card_id: NonemptyContractID
+    limit_type: Literal["sbp", "daily_cash_withdrawal"]
+
+
 class BankingBusinessContract(BaseModel):
-    """Selected business boundaries checked on successful tool history."""
+    """Declared banking obligations, split between final state and successful history."""
 
     model_config = ConfigDict(extra="forbid")
 
+    case_referral: CaseReferralContract | None = None
+    pending_limit_changes: list[PendingLimitGuard] = Field(default_factory=list)
     fee_refunds: dict[NonemptyContractID, PositiveContractAmount] = Field(
         default_factory=dict
     )
@@ -846,7 +863,13 @@ class BankingBusinessContract(BaseModel):
 
     @model_validator(mode="after")
     def validate_nonempty_contract(self):
-        if not (self.fee_refunds or self.document_delivery or self.allowed_mutations):
+        if not (
+            self.fee_refunds
+            or self.document_delivery
+            or self.allowed_mutations
+            or self.case_referral
+            or self.pending_limit_changes
+        ):
             raise ValueError("Business contract must declare a guarded operation")
         return self
 

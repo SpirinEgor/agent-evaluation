@@ -11,7 +11,7 @@ Two kinds of rules live here, and the difference is deliberate:
   customer's products, granting cashback that is merely not due yet. These calls
   succeed. Blocking them in code would make the trap unmeasurable — the agent
   cannot refrain from doing what is impossible. They are graded with
-  `env_assertions` instead.
+  DB × ACTION instead.
 """
 
 import json
@@ -74,6 +74,7 @@ from tau2.domains.banking_ru.reward_workflows import (
     money,
     register_operation,
 )
+from tau2.environment.tool import ToolExecutionRejected
 from tau2.environment.toolkit import ToolKitBase, ToolType, is_tool
 from tau2.utils import get_dict_hash
 
@@ -188,7 +189,12 @@ def _tokens(value: str) -> set[str]:
 
 
 def _error(code: str, message: str) -> ValueError:
-    return ValueError(f"{code}: {message}")
+    cls = (
+        ToolExecutionRejected
+        if code in {ERR_NOT_VERIFIED, ERR_FOREIGN_ACCOUNT}
+        else ValueError
+    )
+    return cls(f"{code}: {message}")
 
 
 class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
@@ -748,9 +754,13 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         """
         self._get_customer(customer_id)
         if not 1 <= limit <= 50:
-            raise _error(ERR_INVALID_ARGUMENT, "limit должен быть в диапазоне 1..50.")
+            raise ToolExecutionRejected(
+                "ERR_INVALID_ARGUMENT: limit должен быть в диапазоне 1..50."
+            )
         if offset < 0:
-            raise _error(ERR_INVALID_ARGUMENT, "offset не может быть отрицательным.")
+            raise ToolExecutionRejected(
+                "ERR_INVALID_ARGUMENT: offset не может быть отрицательным."
+            )
         result = [
             t for t in self.db.transactions.values() if t.customer_id == customer_id
         ]
@@ -765,7 +775,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         if original_transaction_id is not None:
             original = self._get_transaction(original_transaction_id)
             if original.customer_id != customer_id:
-                raise ValueError(
+                raise ToolExecutionRejected(
                     "ERR_FOREIGN_RESOURCE: Исходная операция другого клиента"
                 )
             result = [
@@ -1094,12 +1104,16 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         if promotion_id is not None:
             promotion = self.db.promotions.get(promotion_id)
             if promotion is not None and promotion.customer_id != customer_id:
-                raise ValueError("ERR_FOREIGN_RESOURCE: Акция другого клиента")
+                raise ToolExecutionRejected(
+                    "ERR_FOREIGN_RESOURCE: Акция другого клиента"
+                )
             if any(
                 a.promotion_id == promotion_id and a.customer_id != customer_id
                 for a in self.db.promotion_activations.values()
             ):
-                raise ValueError("ERR_FOREIGN_RESOURCE: Активация другого клиента")
+                raise ToolExecutionRejected(
+                    "ERR_FOREIGN_RESOURCE: Активация другого клиента"
+                )
         return [
             a
             for a in self.db.promotion_activations.values()

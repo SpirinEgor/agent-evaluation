@@ -3,6 +3,8 @@
 from copy import deepcopy
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+from tau2.environment.tool import ToolExecutionRejected
+
 
 def cents(value):
     """Validate a finite monetary value with at most two decimal places."""
@@ -326,7 +328,9 @@ class RewardWorkflowMixin:
         if result is None:
             raise ValueError("ERR_NOT_FOUND: Запрос операции не найден")
         if result["customer_id"] != customer_id:
-            raise ValueError("ERR_FOREIGN_RESOURCE: Запрос принадлежит другому клиенту")
+            raise ToolExecutionRejected(
+                "ERR_FOREIGN_RESOURCE: Запрос принадлежит другому клиенту"
+            )
         return deepcopy(result)
 
     def _get_reward_investigations(self, customer_id, program=None, period=None):

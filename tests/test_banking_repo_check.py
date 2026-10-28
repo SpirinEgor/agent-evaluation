@@ -156,3 +156,24 @@ def test_copy_destination_is_an_output_not_a_dependency(guard, tmp_path, source)
     path = tmp_path / "test_sample.py"
     path.write_text(source)
     assert guard["check_test_inputs"]([path]) == []
+
+
+def test_profiles_allow_whole_migrated_catalog_and_detect_wrong_total(guard, tmp_path):
+    tasks = [
+        {
+            "id": "Bank 9",
+            "evaluation_criteria": {
+                "reward_basis": ["DB", "ACTION"],
+                "banking_contract_version": "db_action_v1",
+                "action_reward_scope": "full_contract",
+                "require_successful_actions": True,
+                "business_process_only": True,
+                "completion_mode": "completion_only",
+            },
+        }
+    ]
+    doc = tmp_path / "evaluation.md"
+    doc.write_text("| Все 1 задача | DB × ACTION | migrated |\n")
+    assert guard["check_profiles"](tasks, doc) == []
+    doc.write_text("| Все 2 задачи | DB × ACTION | migrated |\n")
+    assert guard["check_profiles"](tasks, doc)
