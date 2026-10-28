@@ -6,6 +6,9 @@ trust: bank-policy
 effective_from: '2026-08-28'
 title: Актуальность основания и согласия возврата
 scope: refund_execution
+document_id: "bank-policy-refund_execution"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Исполнение согласованной корректировки комиссии

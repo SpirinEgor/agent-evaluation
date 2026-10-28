@@ -4,9 +4,13 @@ title: Плановая смена тарифа расчётного обслу�
 revision_id: servicing-tariff-v1
 revision_date: 2026-10-11
 effective_from: 2026-08-28
-document_type: bank-operating-procedure
+document_type: "knowledge"
 trust: bank-policy
 owner: Тарифы и пакеты
+document_kind: "bank-operating-procedure"
+document_id: "kb_tariff_transition"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Плановая смена тарифа расчётного обслуживания

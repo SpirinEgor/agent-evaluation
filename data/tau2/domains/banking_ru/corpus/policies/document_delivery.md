@@ -6,6 +6,9 @@ trust: bank-policy
 effective_from: '2026-08-28'
 title: Доставка клиентских документов
 scope: document_delivery
+document_id: "bank-policy-document_delivery"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Официальные документы и разрешённая доставка

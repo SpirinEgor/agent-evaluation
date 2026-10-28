@@ -2,7 +2,7 @@
 id: "kb_final_53_part_1"
 title: "Вклад и кредит: сравнение вариантов и досрочное исполнение — полные источники, часть 1"
 revision_id: "2026-10-12-bounded-sources"
-document_type: "bank-consolidated-procedure"
+document_type: "knowledge"
 trust: "bank-policy"
 effective_from: "2025-01-01"
 source_paths: ["/knowledge/kb_167.md", "/knowledge/kb_168.md", "/knowledge/kb_340.md", "/knowledge/kb_341.md"]
@@ -15,6 +15,10 @@ source_revisions: {"kb_167": "1f352c9a0b38250c", "kb_168": "024ba15e77550476", "
 section: "Вклады и кредиты"
 effective_to: null
 superseded_by: null
+document_kind: "bank-consolidated-procedure"
+document_id: "kb_final_53_part_1"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Вклад и кредит: сравнение вариантов и досрочное исполнение — полные источники, часть 1

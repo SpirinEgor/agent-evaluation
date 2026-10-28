@@ -8,8 +8,12 @@ effective_to: null
 revision_id: "2026-10-14-cashback-state-v3"
 source_paths: ["/knowledge/kb_standard_cashback_v2.md"]
 source_revisions: {kb_standard_cashback_v2: "2026-10-14-cashback-state-v3"}
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "kb_cashback_adjustment_authority"
+created_at: "2026-05-20"
+updated_at: "2026-05-25"
 ---
 
 # Дополнительная компенсация и фактическая недоплата

@@ -6,8 +6,12 @@ keywords: [кешбэк, цикл, недоплата, расследовани�
 revision_id: 2026-10-14-cashback-state-v3
 effective_from: '2026-08-28'
 effective_to: null
-document_type: bank-knowledge
+document_type: "knowledge"
 trust: bank-policy
+document_kind: "bank-knowledge"
+document_id: "kb_standard_cashback_v2"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Сверка standard_cashback: редакция posting-v2

@@ -1,11 +1,15 @@
 ---
 id: kb_case_document_delivery
 revision_id: 2026-10-14-case-documents-v1
-document_type: policy
+document_type: "knowledge"
 trust: bank-policy
 effective_from: '2026-08-28'
 title: Доставка клиентских документов
 scope: document_delivery
+document_kind: "policy"
+document_id: "kb_case_document_delivery"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Протокол подтверждений регистрации обращений

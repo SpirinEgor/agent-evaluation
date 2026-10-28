@@ -7,8 +7,12 @@ effective_from: "2026-07-01"
 effective_to: null
 superseded_by: null
 revision_id: "2026-10-14-composite-v1"
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "kb_cashback_history"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Выбор категории и лимита обычного кешбэка

@@ -1,12 +1,16 @@
 ---
 id: "bank-routing"
 title: "Маршрутизация и согласование следующего сообщения"
-document_type: "bank-policy"
+document_type: "policy"
 trust: "bank-policy"
 revision_id: "2026-10-12-routing-v1"
 effective_from: "2026-08-28"
 effective_to: null
 keywords: ["маршрутизация", "подразделение", "ручная сверка", "штраф", "следующее сообщение"]
+document_kind: "bank-policy"
+document_id: "bank-routing"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Маршрутизация ручной сверки штрафа

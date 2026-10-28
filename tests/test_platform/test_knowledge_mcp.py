@@ -241,21 +241,53 @@ def test_knowledge_gateway_budgets_and_exact_receipts():
     )
 
 
-def test_live_corpus_missing_metadata_is_an_environment_error():
-    from tau2.domains.banking_ru.environment import get_environment, get_tasks
-    from tau2.platform.session import PlatformSession
-
-    task = next(t for t in get_tasks() if t.id == "Bank 2")
-    s = PlatformSession(task, get_environment, mcp_layout="directory")
+def test_missing_metadata_is_an_environment_error():
+    data = corpus()
+    del data.documents["/knowledge/calculation.md"]["metadata"]["created_at"]
+    s = _session_with_corpus(data)
     _open(s, "list_documents")
     result = _call(s, "list_documents", {})
     assert result.is_error and "CORPUS_METADATA_INCOMPLETE" in result.content[0].text
     assert not s.tool_call_errors and s.environment_errors
-    before = set(s.env.tools.corpus._read_paths)
+    before = deepcopy(s.env.tools.corpus.documents)
     _open(s, "corpus_command")
     result = _call(s, "corpus_command", {"command": "grep -n кешбэк /knowledge"})
     assert not result.is_error
-    assert s.env.tools.corpus._read_paths == before
+    assert s.env.tools.corpus.documents == before
+
+
+def test_published_corpus_has_unambiguous_metadata_and_exact_reads():
+    from pathlib import Path
+
+    from tau2.domains.banking_ru.file_corpus import FileCorpus
+
+    root = Path(__file__).resolve().parents[2] / "data/tau2/domains/banking_ru"
+    source = FileCorpus(root)
+    k = KnowledgeMCP(source, token="published-metadata")
+    cards = []
+    page = k.list_documents()
+    while True:
+        assert len(page["items"]) <= 5
+        cards.extend(page["items"])
+        if page["next_cursor"] is None:
+            break
+        page = k.list_documents(cursor=page["next_cursor"])
+    published = {
+        p: d
+        for p, d in source.documents.items()
+        if p.startswith(("/knowledge/", "/policies/"))
+    }
+    assert {card["path"] for card in cards} == set(published)
+    groups = {}
+    for card in cards:
+        groups.setdefault(card["document_id"], []).append(card)
+        read = k.read_document(card["document_id"], card["revision_id"])
+        assert read == k.corpus_command("cat " + card["path"])
+        assert read["content"] == published[card["path"]]["content"]
+        assert read["content_sha256"] == published[card["path"]]["sha256"]
+    for group in groups.values():
+        assert min(c["updated_at"] for c in group) == group[0]["created_at"]
+    assert not source._read_paths
 
 
 @pytest.mark.parametrize(

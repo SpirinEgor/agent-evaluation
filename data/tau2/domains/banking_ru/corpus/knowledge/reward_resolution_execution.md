@@ -6,8 +6,12 @@ keywords: ["кешбэк", "урегулирование", "предложени
 revision_id: "resolution-v1"
 effective_from: "2026-06-01"
 effective_to: null
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "reward_resolution_execution"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Согласие и исполнение предложения

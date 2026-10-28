@@ -10,6 +10,9 @@ owner: управление сберегательных продуктов
 revision_date: '2026-10-08'
 version: '2.0'
 basis: mandatory-rf-norms-and-own-sop
+document_id: "bank-policy-deposits"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Открытие, расчёт дохода и возврат вкладов

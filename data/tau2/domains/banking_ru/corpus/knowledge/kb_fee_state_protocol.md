@@ -4,8 +4,12 @@ section: "Тарифы"
 title: "Состояние возврата, событие процессинга и версия согласия"
 keywords: ["возврат", "актуальность", "state_version", "processing", "частичное согласие"]
 revision_id: "2026-10-14-composite-v1"
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "kb_fee_state_protocol"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 В исходной комиссии fee_refund_update описывает конкретное наблюдаемое событие:

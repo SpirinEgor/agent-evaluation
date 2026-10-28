@@ -7,8 +7,12 @@ effective_from: "2026-07-28"
 effective_to: null
 superseded_by: null
 revision_id: "2026-10-14-fee-refunds"
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "kb_fee_refund_reconciliation"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 Для каждой подтверждённо ошибочной комиссии определите невозмещённый остаток

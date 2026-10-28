@@ -2,7 +2,7 @@
 id: "kb_final_41_part_1"
 title: "N40: полный порядок проверки и сопровождения кешбэка"
 revision_id: "2026-10-14-investigation"
-document_type: "bank-consolidated-procedure"
+document_type: "knowledge"
 trust: "bank-policy"
 effective_from: "2026-08-18"
 section: "Акции и кешбэк"
@@ -16,6 +16,10 @@ regulatory_source_ids: []
 source_paths: ["/knowledge/kb_320.md", "/knowledge/kb_321.md", "/knowledge/kb_322.md", "/knowledge/kb_323.md", "/knowledge/kb_324.md", "/knowledge/kb_325.md", "/knowledge/kb_326.md", "/knowledge/kb_327.md", "/knowledge/kb_328.md", "/knowledge/kb_329.md", "/knowledge/kb_330.md", "/knowledge/kb_331.md", "/knowledge/kb_332.md", "/knowledge/kb_333.md"]
 source_ids: ["kb_320", "kb_321", "kb_322", "kb_323", "kb_324", "kb_325", "kb_326", "kb_327", "kb_328", "kb_329", "kb_330", "kb_331", "kb_332", "kb_333"]
 source_revisions: {"kb_320": "2026-10-14-investigation", "kb_321": "dcb433e58ca2e172", "kb_322": "2026-10-14-investigation", "kb_323": "a885839d9a9c3aad", "kb_324": "49c0f9e620ae2ea9", "kb_325": "39ff9dad9b8ac204", "kb_326": "f1e1334d1d9ddde6", "kb_327": "6480b7dc1feae926", "kb_328": "7c569c3a5c8e376b", "kb_329": "2026-10-14-investigation", "kb_330": "2026-10-14-investigation", "kb_331": "097796d0f367ca8e", "kb_332": "b509e3625fa336d4", "kb_333": "2026-10-14-investigation"}
+document_kind: "bank-consolidated-procedure"
+document_id: "kb_final_41_part_1"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # N40 — полные источники

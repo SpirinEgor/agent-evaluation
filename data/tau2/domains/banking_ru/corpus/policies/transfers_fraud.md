@@ -10,6 +10,9 @@ owner: операционный центр платежей и служба пр
 revision_date: '2026-10-13'
 version: '2.1'
 basis: mandatory-rf-norms-and-own-sop
+document_id: "bank-policy-transfers_fraud"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Розыск переводов и обращения о мошенничестве

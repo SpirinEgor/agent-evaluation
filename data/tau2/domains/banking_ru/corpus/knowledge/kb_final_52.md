@@ -2,7 +2,7 @@
 title: "Тарифы обслуживания: переход, ставки и потолки кешбэка"
 owner: "Тарифы и пакеты"
 revision_id: "fd2da219396f57ce"
-document_type: "bank-consolidated-procedure"
+document_type: "knowledge"
 revision_date: "2026-10-08"
 basis: "Собственные условия продукта, кампании или операционный порядок банка"
 regulatory_source_ids: []
@@ -15,6 +15,10 @@ effective_from: "2025-01-01"
 effective_to: null
 superseded_by: null
 trust: "bank-policy"
+document_kind: "bank-consolidated-procedure"
+document_id: "kb_final_52"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Тарифы обслуживания: переход, ставки и потолки кешбэка

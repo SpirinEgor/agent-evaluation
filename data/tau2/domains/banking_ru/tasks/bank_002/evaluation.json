@@ -3770,7 +3770,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_product_scope.md",
         "complete": true,
-        "sha256": "59a573779191f1e9c84a1314ced053b2961ea10644d4c85677ae5a19c28eae9a"
+        "sha256": "c764f3a14dc6d2dc2be3d81fa45e92f8c702d742bb06bc499051e63236da4f67"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3792,7 +3792,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_product_scope.md",
         "complete": true,
-        "sha256": "59a573779191f1e9c84a1314ced053b2961ea10644d4c85677ae5a19c28eae9a"
+        "sha256": "c764f3a14dc6d2dc2be3d81fa45e92f8c702d742bb06bc499051e63236da4f67"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3811,7 +3811,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_rate_history.md",
         "complete": true,
-        "sha256": "be30b06f6fffdb0ebf12321e5576e862df5894f9364d486dc861baf8a81a0b2c"
+        "sha256": "ee54b70f7fff730257e8d791077773b472e6a645c61fac34a17536f088caaf23"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3832,7 +3832,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_rate_history.md",
         "complete": true,
-        "sha256": "be30b06f6fffdb0ebf12321e5576e862df5894f9364d486dc861baf8a81a0b2c"
+        "sha256": "ee54b70f7fff730257e8d791077773b472e6a645c61fac34a17536f088caaf23"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3851,7 +3851,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_posting_period.md",
         "complete": true,
-        "sha256": "6f32f691a876e7ed4b30d33f49001eb8e71ec0098239382b70c35f39443bf1f2"
+        "sha256": "265ea26437dab73a5c1a98d289d2aa68c79b00a63d94fc503d7a9b13b227b152"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3873,7 +3873,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_posting_period.md",
         "complete": true,
-        "sha256": "6f32f691a876e7ed4b30d33f49001eb8e71ec0098239382b70c35f39443bf1f2"
+        "sha256": "265ea26437dab73a5c1a98d289d2aa68c79b00a63d94fc503d7a9b13b227b152"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3892,7 +3892,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_standard_limits.md",
         "complete": true,
-        "sha256": "40976c78cde58db167ab9f2a32e36379b8b6d3d17bc1cdb691031b2b111a7893"
+        "sha256": "afae2d205f03d7d52c85106b91548b4bb539eeb105bb0d86c4475d8279739f68"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3913,7 +3913,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_standard_limits.md",
         "complete": true,
-        "sha256": "40976c78cde58db167ab9f2a32e36379b8b6d3d17bc1cdb691031b2b111a7893"
+        "sha256": "afae2d205f03d7d52c85106b91548b4bb539eeb105bb0d86c4475d8279739f68"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3932,7 +3932,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_merchant_categories.md",
         "complete": true,
-        "sha256": "671e67c164861a33b4a9a35ad49d8f1b83b4c17b5f9f9e4daff34321522fc751"
+        "sha256": "09918ab50df68ec1e196384fb2b2cde05591de78001f5410678ed9ab9babe4ac"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3953,7 +3953,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_merchant_categories.md",
         "complete": true,
-        "sha256": "671e67c164861a33b4a9a35ad49d8f1b83b4c17b5f9f9e4daff34321522fc751"
+        "sha256": "09918ab50df68ec1e196384fb2b2cde05591de78001f5410678ed9ab9babe4ac"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3972,7 +3972,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_partner_offer.md",
         "complete": true,
-        "sha256": "c9bf60871510ec7470035c611523b0647660f3919a852c1fc12df07d1fdb6a19"
+        "sha256": "9b137f8b4e7da5a27ad268beb906e81ce69ff6281883b8c75c0b3f2ca70a4422"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -3994,7 +3994,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_partner_offer.md",
         "complete": true,
-        "sha256": "c9bf60871510ec7470035c611523b0647660f3919a852c1fc12df07d1fdb6a19"
+        "sha256": "9b137f8b4e7da5a27ad268beb906e81ce69ff6281883b8c75c0b3f2ca70a4422"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4013,7 +4013,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_program_priority.md",
         "complete": true,
-        "sha256": "614988edbcae8dcb04e0ecab62b6bda612d41322536bd60021f11f7b97a52ae6"
+        "sha256": "e6b34f0b234adf35337b08b5c41b1e8df8cc744ea1e0b5015441edebe0c67d6d"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4035,7 +4035,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_program_priority.md",
         "complete": true,
-        "sha256": "614988edbcae8dcb04e0ecab62b6bda612d41322536bd60021f11f7b97a52ae6"
+        "sha256": "e6b34f0b234adf35337b08b5c41b1e8df8cc744ea1e0b5015441edebe0c67d6d"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4054,7 +4054,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_refund_adjustments.md",
         "complete": true,
-        "sha256": "f32dda097e9e05bd8662b68262936bd22ba6252c48811c91674274a17d77b7ac"
+        "sha256": "b65dbd0e76825bb3e49e22f3fc8ae5fa9d6118684e99a5811d003b20ee722086"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4076,7 +4076,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_refund_adjustments.md",
         "complete": true,
-        "sha256": "f32dda097e9e05bd8662b68262936bd22ba6252c48811c91674274a17d77b7ac"
+        "sha256": "b65dbd0e76825bb3e49e22f3fc8ae5fa9d6118684e99a5811d003b20ee722086"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4095,7 +4095,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_card_reissue.md",
         "complete": true,
-        "sha256": "e5a3956efb5dccaef4efcbc1daa28cdcb5fae38880e7f2ae4adaa03422c5f5d1"
+        "sha256": "10bf356ac89f48bb8868cdf78efbf7feff4d397554d91433a1d513c2a32e49cb"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4116,7 +4116,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_card_reissue.md",
         "complete": true,
-        "sha256": "e5a3956efb5dccaef4efcbc1daa28cdcb5fae38880e7f2ae4adaa03422c5f5d1"
+        "sha256": "10bf356ac89f48bb8868cdf78efbf7feff4d397554d91433a1d513c2a32e49cb"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4135,7 +4135,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_payment_reconciliation.md",
         "complete": true,
-        "sha256": "4c2ec962c950dc67c50512ed3c8904b266ef65a4668e353b706ae22d90339258"
+        "sha256": "c04d76e57bd846daa66278e5e2a7dbcf370f44f498c407c16a2cc0cfba3301ef"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4157,7 +4157,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_payment_reconciliation.md",
         "complete": true,
-        "sha256": "4c2ec962c950dc67c50512ed3c8904b266ef65a4668e353b706ae22d90339258"
+        "sha256": "c04d76e57bd846daa66278e5e2a7dbcf370f44f498c407c16a2cc0cfba3301ef"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4176,7 +4176,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_case_amendment.md",
         "complete": true,
-        "sha256": "922755d210a69250bf462c3bd0b3928af5d82a676700c1f5ee7921cf0678cf1b"
+        "sha256": "2fcd0cfa76eae0fb2647d7e2720d544b051568d0d356feef8737b6aa0447b339"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4198,7 +4198,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_case_amendment.md",
         "complete": true,
-        "sha256": "922755d210a69250bf462c3bd0b3928af5d82a676700c1f5ee7921cf0678cf1b"
+        "sha256": "2fcd0cfa76eae0fb2647d7e2720d544b051568d0d356feef8737b6aa0447b339"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5186,7 +5186,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_amounts.md",
         "complete": true,
-        "sha256": "3722e523dcd831050558541b96724820e0a0481f1c24bb7a3a0ed8a3b318d4d9"
+        "sha256": "698ccf42ae704178ef74ca6b224d266cc284e357a67bd4d920e9a4799164ffff"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5204,7 +5204,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_rights.md",
         "complete": true,
-        "sha256": "46f1f7e0527bb1654855ca2061c01960322864f44ff1e7295bf4d45a1069318f"
+        "sha256": "79194bac3a4730b997139289b2dcc5b2b1a906c4c69ede4fde2b3efbe9a1eaed"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5222,7 +5222,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_execution.md",
         "complete": true,
-        "sha256": "b87bff959f31b356adbb7640b43f7de02c0ff01a3ade7cbb60450af384d0020c"
+        "sha256": "78ed29d937877f08ed47e25656c88970031aac9595026e340dae091b89a0cb3f"
       },
       "recoverable_result_statuses": [
         "settlement_pending",

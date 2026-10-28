@@ -7,8 +7,12 @@ effective_from: "2026-07-01"
 effective_to: null
 superseded_by: null
 revision_id: "2026-10-14-investigation"
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "kb_reward_reconciliation"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Возвраты и частичные выплаты при сверке вознаграждений

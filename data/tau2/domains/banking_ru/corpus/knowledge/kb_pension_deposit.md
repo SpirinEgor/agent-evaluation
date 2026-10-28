@@ -1,10 +1,14 @@
 ---
 id: kb_pension_deposit
 title: "Пенсионный: договорные условия расчёта и выплаты"
-document_type: own-product-terms
+document_type: "knowledge"
 trust: bank-policy
 effective_from: "2026-03-01"
 revision_id: "2026-10-09-bank8"
+document_kind: "own-product-terms"
+document_id: "kb_pension_deposit"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Пенсионный: договорные условия расчёта и выплаты

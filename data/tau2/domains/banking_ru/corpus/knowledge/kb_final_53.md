@@ -2,7 +2,7 @@
 id: "kb_final_53"
 title: "Вклад и кредит: сравнение вариантов и досрочное исполнение"
 revision_id: "2026-10-12-bounded-overview"
-document_type: "bank-procedure-overview"
+document_type: "knowledge"
 trust: "bank-policy"
 effective_from: "2025-01-01"
 owner: "Кредитное и вкладное сопровождение"
@@ -14,6 +14,10 @@ effective_to: null
 superseded_by: null
 related_paths: ["/knowledge/kb_167.md", "/knowledge/kb_168.md", "/knowledge/kb_340.md", "/knowledge/kb_341.md", "/knowledge/kb_342.md", "/knowledge/kb_343.md", "/knowledge/kb_344.md", "/knowledge/kb_345.md", "/knowledge/kb_346.md", "/knowledge/kb_347.md", "/knowledge/kb_348.md", "/knowledge/kb_349.md"]
 related_bundle_paths: ["/knowledge/kb_final_53_part_1.md", "/knowledge/kb_final_53_part_2.md", "/knowledge/kb_final_53_part_3.md"]
+document_kind: "bank-procedure-overview"
+document_id: "kb_final_53"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Вклад и кредит: сравнение вариантов и досрочное исполнение

@@ -10,6 +10,9 @@ owner: управление тарифов и программ лояльнос�
 revision_date: '2026-10-13'
 version: '2.1'
 basis: mandatory-rf-norms-and-own-sop
+document_id: "bank-policy-fees_rewards"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Тарифные начисления, корректировки и вознаграждения

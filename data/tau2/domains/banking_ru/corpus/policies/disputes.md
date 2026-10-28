@@ -10,6 +10,9 @@ owner: претензионный центр карточных операций
 revision_date: '2026-10-12'
 version: '2.0'
 basis: mandatory-rf-norms-and-own-sop
+document_id: "bank-policy-disputes"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Приём претензий и сопровождение спорных операций

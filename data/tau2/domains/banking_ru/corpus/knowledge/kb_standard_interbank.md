@@ -4,11 +4,15 @@ section: "Тарифы"
 title: "Стандарт: межбанковский перевод другому получателю по реквизитам"
 effective_from: "2026-08-01"
 effective_to: null
-document_type: "own-product-terms"
+document_type: "knowledge"
 trust: "bank-policy"
 owner: "Управление тарифов Banking.ru"
 revision_id: "2026-10-09-bank6"
 basis: "Собственные условия тарифа; ст. 29 395-1 для переводов самому себе"
+document_kind: "own-product-terms"
+document_id: "kb_standard_interbank"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # Тариф «Стандарт»: перевод по банковским реквизитам

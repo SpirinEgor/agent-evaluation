@@ -7,8 +7,12 @@ effective_from: "2026-07-01"
 effective_to: "2026-08-27"
 superseded_by: "kb_cashback_adjustment_authority"
 revision_id: "2026-07-01-authority-v0"
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "kb_cashback_adjustment_authority"
+created_at: "2026-05-20"
+updated_at: "2026-05-20"
 ---
 
 # Архив: прежний порядок полномочий

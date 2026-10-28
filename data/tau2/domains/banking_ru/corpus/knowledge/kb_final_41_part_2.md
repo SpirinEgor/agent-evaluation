@@ -2,7 +2,7 @@
 id: "kb_final_41_part_2"
 title: "N40: полный порядок проверки и сопровождения кешбэка"
 revision_id: "2026-10-14-investigation"
-document_type: "bank-consolidated-procedure"
+document_type: "knowledge"
 trust: "bank-policy"
 effective_from: "2026-08-18"
 section: "Акции и кешбэк"
@@ -16,6 +16,10 @@ regulatory_source_ids: []
 source_paths: ["/knowledge/kb_reward_reconciliation.md"]
 source_ids: ["kb_reward_reconciliation"]
 source_revisions: {"kb_reward_reconciliation": "2026-10-14-investigation"}
+document_kind: "bank-consolidated-procedure"
+document_id: "kb_final_41_part_2"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # N40 — полные источники

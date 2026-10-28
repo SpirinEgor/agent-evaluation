@@ -2,7 +2,7 @@
 id: "kb_final_41"
 title: "N40: полный порядок проверки и сопровождения кешбэка"
 revision_id: "2026-10-14-investigation"
-document_type: "bank-procedure-overview"
+document_type: "knowledge"
 trust: "bank-policy"
 effective_from: "2026-08-18"
 section: "Акции и кешбэк"
@@ -15,6 +15,10 @@ basis: "Собственные условия продукта, кампании
 regulatory_source_ids: []
 related_paths: ["/knowledge/kb_320.md", "/knowledge/kb_321.md", "/knowledge/kb_322.md", "/knowledge/kb_323.md", "/knowledge/kb_324.md", "/knowledge/kb_325.md", "/knowledge/kb_326.md", "/knowledge/kb_327.md", "/knowledge/kb_328.md", "/knowledge/kb_329.md", "/knowledge/kb_330.md", "/knowledge/kb_331.md", "/knowledge/kb_332.md", "/knowledge/kb_333.md", "/knowledge/kb_reward_reconciliation.md"]
 related_bundle_paths: ["/knowledge/kb_final_41_part_1.md", "/knowledge/kb_final_41_part_2.md"]
+document_kind: "bank-procedure-overview"
+document_id: "kb_final_41"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # N40: полный порядок проверки и сопровождения кешбэка

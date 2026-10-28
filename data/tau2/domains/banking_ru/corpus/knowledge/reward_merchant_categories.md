@@ -6,8 +6,12 @@ keywords: ["кешбэк", "вознаграждения", "multi-program-v1", "
 revision_id: "multi-program-v1"
 effective_from: "2026-06-01"
 effective_to: null
-document_type: "bank-knowledge"
+document_type: "knowledge"
 trust: "bank-policy"
+document_kind: "bank-knowledge"
+document_id: "reward_merchant_categories"
+created_at: "2026-05-25"
+updated_at: "2026-05-25"
 ---
 
 # MCC и продавец

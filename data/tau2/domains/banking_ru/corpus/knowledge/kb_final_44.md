@@ -1,21 +1,5 @@
 ---
-id: "kb_final_44"
-section: "Акции и кешбэк"
-title: "LETO26: полные условия участия, прогресса и выплаты"
-keywords: ["кешбэк", "кафе", "LETO26", "прогресс", "август"]
-effective_from: "2026-06-01"
-effective_to: "2026-10-31"
-superseded_by: null
-document_type: "bank-consolidated-procedure"
-trust: "bank-policy"
-source_ids: ["kb_300", "kb_301", "kb_302", "kb_303", "kb_304", "kb_305", "kb_306", "kb_307", "kb_308", "kb_309", "kb_310", "kb_311", "kb_312"]
-owner: "Программы лояльности"
-revision_id: "2026-10-13-required-sources"
-revision_date: "2026-10-13"
-basis: "Собственные условия продукта, кампании или операционный порядок банка"
-regulatory_source_ids: []
-source_paths: ["/knowledge/kb_300.md", "/knowledge/kb_301.md", "/knowledge/kb_302.md", "/knowledge/kb_303.md", "/knowledge/kb_304.md", "/knowledge/kb_305.md", "/knowledge/kb_306.md", "/knowledge/kb_307.md", "/knowledge/kb_308.md", "/knowledge/kb_309.md", "/knowledge/kb_310.md", "/knowledge/kb_311.md", "/knowledge/kb_312.md"]
-source_revisions: {"kb_300": "2026-10-13-required-sources", "kb_301": "0cae1b7c5a9397fc", "kb_302": "a6b2f1436f9b6cc9", "kb_303": "dcc002c9a958d4d4", "kb_304": "1598ff66dc289e3e", "kb_305": "673aee5c5501ab96", "kb_306": "64db8df049faed66", "kb_307": "d6653bbcc55e0632", "kb_308": "259c47208794280c", "kb_309": "d42e03228748fe6b", "kb_310": "fe0bafa6865479f9", "kb_311": "3adb84037107dcb2", "kb_312": "d812bc292b19cf8d"}
+{"id": "kb_final_44", "section": "Акции и кешбэк", "title": "LETO26: полные условия участия, прогресса и выплаты", "keywords": ["кешбэк", "кафе", "LETO26", "прогресс", "август"], "effective_from": "2026-06-01", "effective_to": "2026-10-31", "superseded_by": null, "document_type": "knowledge", "trust": "bank-policy", "source_ids": ["kb_300", "kb_301", "kb_302", "kb_303", "kb_304", "kb_305", "kb_306", "kb_307", "kb_308", "kb_309", "kb_310", "kb_311", "kb_312"], "owner": "Программы лояльности", "revision_id": "2026-10-13-required-sources", "revision_date": "2026-10-13", "basis": "Собственные условия продукта, кампании или операционный порядок банка", "regulatory_source_ids": [], "source_paths": ["/knowledge/kb_300.md", "/knowledge/kb_301.md", "/knowledge/kb_302.md", "/knowledge/kb_303.md", "/knowledge/kb_304.md", "/knowledge/kb_305.md", "/knowledge/kb_306.md", "/knowledge/kb_307.md", "/knowledge/kb_308.md", "/knowledge/kb_309.md", "/knowledge/kb_310.md", "/knowledge/kb_311.md", "/knowledge/kb_312.md"], "source_revisions": {"kb_300": "2026-10-13-required-sources", "kb_301": "0cae1b7c5a9397fc", "kb_302": "a6b2f1436f9b6cc9", "kb_303": "dcc002c9a958d4d4", "kb_304": "1598ff66dc289e3e", "kb_305": "673aee5c5501ab96", "kb_306": "64db8df049faed66", "kb_307": "d6653bbcc55e0632", "kb_308": "259c47208794280c", "kb_309": "d42e03228748fe6b", "kb_310": "fe0bafa6865479f9", "kb_311": "3adb84037107dcb2", "kb_312": "d812bc292b19cf8d"}, "document_kind": "bank-consolidated-procedure", "document_id": "kb_final_44", "created_at": "2026-05-25", "updated_at": "2026-05-25"}
 ---
 
 # LETO26: полные условия участия, прогресса и выплаты
