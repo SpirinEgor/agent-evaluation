@@ -19,11 +19,6 @@ MIGRATED = ("Bank 2", "Bank 40", "Bank 41")
 @pytest.mark.parametrize(
     "task_id,action_id,amount,want",
     [
-        ("Bank 2", "bank2:v5:pay", "24", 1),
-        ("Bank 2", "bank2:v5:pay", "24.0", 1),
-        ("Bank 2", "bank2:v5:pay", "24.000", 1),
-        ("Bank 2", "bank2:v5:pay", "24.5", 0),
-        ("Bank 2", "bank2:v5:pay", "240", 0),
         ("Bank 40", "bank40:receipt-B", "139", 1),
         ("Bank 40", "bank40:receipt-B", "139.0", 1),
         ("Bank 40", "bank40:receipt-B", '"139.000"', 1),
@@ -54,9 +49,7 @@ def test_shipped_numeric_result_patterns_compare_complete_amounts(
         ),
     )
     content = (
-        '{"total_amount": ' + amount + "}"
-        if task_id == "Bank 2"
-        else '{"status":"posted","original_transaction_id":"txn_088219",'
+        '{"status":"posted","original_transaction_id":"txn_088219",'
         '"refunded": ' + amount + ', "balance": 0}'
     )
     call = ToolCall(id="numeric", name=action.name, arguments=action.arguments)
@@ -520,7 +513,7 @@ def test_bank2_retry_accepts_equivalent_payment_packet(mode):
     arguments["payouts"].reverse()
     for item in arguments["payouts"]:
         item["amount"] = int(item["amount"])
-    arguments["component_ids"] = []
+    arguments["component_ids"].reverse()
     assert not session.call("execute_reward_resolution", arguments).is_error
     session.call("done", {})
     reward = (

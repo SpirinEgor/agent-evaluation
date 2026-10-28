@@ -3459,35 +3459,40 @@
         "customer_id": "gromov_a_1187",
         "request": {
           "type": "reward_resolution_confirmation",
-          "offer_id": "offer_610723",
+          "offer_id": "offer_610735",
           "offer_version": 1,
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 11.0
+              "amount": 15.0
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 13.0
+              "amount": 20.0
             }
           ],
-          "total_amount": 24.0,
+          "total_amount": 35.0,
           "case_id": "case_610903",
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 14.0
+              "amount": 10.0
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 40.0
+              "amount": 33.0
             },
             {
               "transaction_id": "txn_804205",
               "amount": 7.0
             }
           ],
-          "state_revision": 2
+          "state_revision": 2,
+          "component_ids": [
+            "B",
+            "D",
+            "E"
+          ]
         }
       },
       "required_for_reward": false,
@@ -3502,30 +3507,32 @@
       "action_id": "bank2:v5:pay",
       "name": "execute_reward_resolution",
       "arguments": {
-        "offer_id": "offer_610723",
+        "offer_id": "offer_610735",
         "offer_version": 1,
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 11.0
+            "amount": 15.0
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 13.0
+            "amount": 20.0
           }
         ],
-        "total_amount": 24.0,
+        "total_amount": 35.0,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-1",
         "expected_revision": 2,
-        "idempotency_key": "bank2-resolution"
+        "idempotency_key": "bank2-resolution",
+        "component_ids": [
+          "B",
+          "D",
+          "E"
+        ]
       },
       "required_for_reward": true,
       "compare_args": [
         "case_id"
-      ],
-      "result_patterns": [
-        "\"total_amount\"\\s*:\\s*24(?:\\.0+)?\\s*[,}]"
       ]
     },
     {
@@ -3536,11 +3543,11 @@
         "items": [
           {
             "transaction_id": "txn_804219",
-            "amount": 14.0
+            "amount": 10.0
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 40.0
+            "amount": 33.0
           }
         ],
         "expected_revision": 3
@@ -5239,14 +5246,15 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_amounts.md",
         "complete": true,
-        "sha256": "698ccf42ae704178ef74ca6b224d266cc284e357a67bd4d920e9a4799164ffff"
+        "sha256": "509060a395619f8221974f1fa03091d0cefa2686a4f8f39c612f977b598be3cb"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
         "consent_stale"
       ],
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:consent",
+      "only_if_target_attempted": true
     },
     {
       "evidence_id": "bank2:v5:doc:reward_resolution_rights",
@@ -5257,14 +5265,15 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_rights.md",
         "complete": true,
-        "sha256": "79194bac3a4730b997139289b2dcc5b2b1a906c4c69ede4fde2b3efbe9a1eaed"
+        "sha256": "3bf2043c321f0a1519ed2ae43f7478aadd23e45c305d4a08d542cadcbe19d199"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
         "consent_stale"
       ],
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:consent",
+      "only_if_target_attempted": true
     },
     {
       "evidence_id": "bank2:v5:doc:reward_resolution_execution",
@@ -5275,14 +5284,15 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_execution.md",
         "complete": true,
-        "sha256": "b24d79035abe215d81eb56db9b70aa4d9ce1ec1b53b89f61013306d2372cccdd"
+        "sha256": "4ac0ffc480ea2678d89343db657bf8e53fde6cecf890332913a52ab4659f5737"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
         "state_changed",
         "consent_stale"
       ],
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:consent",
+      "only_if_target_attempted": true
     },
     {
       "evidence_id": "bank2:v5:preferences",
@@ -5445,6 +5455,36 @@
         "sha256": "b201150aeae326b0067d853d17e54877891888b9ef011f18f298a2df6e3a2389"
       },
       "before_action_id": "bank2:v6:submit"
+    },
+    {
+      "evidence_id": "bank2:v7:composite-offer",
+      "tool_names": [
+        "get_reward_resolution_offers"
+      ],
+      "record_id": "offer_610735",
+      "expected_fields": {
+        "id": "offer_610735",
+        "customer_id": "gromov_a_1187",
+        "case_id": "case_610903",
+        "period": "2026-07",
+        "transaction_ids": [
+          "txn_804219",
+          "txn_804227"
+        ],
+        "version": 1,
+        "amount": 40,
+        "amount_basis": "incremental",
+        "status": "approved",
+        "rights": "preserve",
+        "terms_id": "reward_resolution_rights",
+        "allocation_terms_id": "reward_resolution_amounts",
+        "allocation_first_transaction_id": "txn_804219",
+        "valid_from": "2026-08-01",
+        "valid_to": "2026-08-31",
+        "component_count": 8
+      },
+      "before_action_id": "bank2:v5:consent",
+      "only_if_target_attempted": true
     },
     {
       "evidence_id": "common_discovery_Bank 2",

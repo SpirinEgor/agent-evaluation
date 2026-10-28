@@ -203,6 +203,8 @@ def test_resolution_requires_exact_received_confirmed_packet():
     ]
     payment = ("execute_reward_resolution", args, {"status": "succeeded"}, False)
     assert failures(prefix + [payment]) == []
+    offer.update(component_count="0", components_complete="True", components=[])
+    assert failures(prefix + [payment]) == []
     assert failures(
         prefix + [(payment[0], {**args, "total_amount": 9}, payment[2], False)]
     ) == ["2:resolution_packet_not_confirmed", "2:resolution_amount_outside_offer"]
@@ -371,3 +373,173 @@ def test_unknown_amendment_item_cannot_match_missing_initial_amount():
             )
         ]
     ) == ["0:outside_reward_scope"]
+
+
+def composite_rows():
+    """A hand-calculated 12 nominal / 10 cash menu, without a hidden optimum."""
+    from copy import deepcopy
+
+    offer = {
+        "id": "offer",
+        "customer_id": "own",
+        "case_id": "case",
+        "period": "2026-07",
+        "transaction_ids": ["t1", "t2"],
+        "status": "approved",
+        "version": 1,
+        "rights": "preserve",
+        "valid_from": "2026-08-01",
+        "valid_to": "2026-09-01",
+        "amount": 10,
+        "amount_basis": "incremental",
+        "terms_id": "rights",
+        "allocation_terms_id": "amounts",
+        "allocation_first_transaction_id": "t1",
+        "allocation_first_amount": 4,
+        "selection_budget": {"id": "budget", "bank": 6, "partner": 6},
+        "component_count": 2,
+        "components_complete": True,
+        "components": [
+            {
+                "id": "x",
+                "exclusive_group": "bank",
+                "amount": 5,
+                "settlement_deduction": 1,
+                "bank_cost": 3,
+                "partner_cost": 2,
+                "allocation_first_amount": 1,
+            },
+            {
+                "id": "y",
+                "exclusive_group": "partner",
+                "amount": 7,
+                "settlement_deduction": 1,
+                "bank_cost": 3,
+                "partner_cost": 4,
+                "allocation_first_amount": 3,
+                "required_companions": [["x"]],
+            },
+        ],
+    }
+    args = {
+        "case_id": "case",
+        "offer_id": "offer",
+        "offer_version": 1,
+        "component_ids": ["x", "y"],
+        "payouts": [
+            {"transaction_id": "t1", "amount": 4},
+            {"transaction_id": "t2", "amount": 6},
+        ],
+        "total_amount": 10,
+        "confirmation_id": "consent",
+        "expected_revision": 2,
+        "idempotency_key": "key",
+    }
+    consent = {
+        "customer_id": "own",
+        "status": "confirmed",
+        "confirmation_id": "consent",
+        "data": {
+            k: deepcopy(v)
+            for k, v in args.items()
+            if k not in {"confirmation_id", "expected_revision", "idempotency_key"}
+        }
+        | {"state_revision": 2},
+    }
+    return [
+        (
+            "get_reward_resolution_offers",
+            {"customer_id": "own", "case_id": "case"},
+            [offer],
+            False,
+        ),
+        ("ask_client", {"customer_id": "own"}, consent, False),
+        ("execute_reward_resolution", args, {"status": "succeeded"}, False),
+    ]
+
+
+def test_composite_action_accepts_received_valid_selection_and_safe_retry():
+    rows = composite_rows()
+    assert failures(rows) == []
+    assert failures([rows[1], rows[0], rows[2]])
+    assert failures(rows + [rows[-1]]) == []
+    # Valid but smaller is a DB objective failure, not an ACTION failure.
+    rows[2][1].update(
+        component_ids=["x"],
+        total_amount=4,
+        payouts=[
+            {"transaction_id": "t1", "amount": 1},
+            {"transaction_id": "t2", "amount": 3},
+        ],
+    )
+    rows[1][2]["data"].update(
+        {k: rows[2][1][k] for k in ["component_ids", "total_amount", "payouts"]}
+    )
+    assert failures(rows) == []
+
+
+def test_composite_action_accepts_complete_received_pages_and_rejects_missing_or_late_page():
+    from copy import deepcopy
+
+    rows = composite_rows()
+    offer = rows[0][2][0]
+    parts = offer.pop("components")
+    offer.update(components=[], components_complete=False)
+    pages = [
+        (
+            "get_reward_resolution_components",
+            {"offer_id": "offer", "offset": i, "limit": 1},
+            {
+                "offer_id": "offer",
+                "offset": i,
+                "total": 2,
+                "next_offset": i + 1 if i == 0 else None,
+                "components": [p],
+            },
+            False,
+        )
+        for i, p in enumerate(parts)
+    ]
+    assert failures([rows[0], *pages, *rows[1:]]) == []
+    assert failures([rows[0], rows[1], *pages, rows[2]])
+    assert failures([rows[0], pages[0], *rows[1:]])
+    assert failures([rows[0], pages[0], *rows[1:], pages[1]])
+    foreign = deepcopy(pages[1])
+    foreign[2]["offer_id"] = "foreign"
+    assert failures([rows[0], pages[0], foreign, *rows[1:]])
+    duplicate = deepcopy(pages[1])
+    duplicate[2]["components"] = [parts[0]]
+    assert failures([rows[0], pages[0], duplicate, *rows[1:]])
+
+
+def test_composite_action_rejects_fabricated_success_with_invalid_terms_or_packet():
+    for defect in [
+        "budget",
+        "dependency",
+        "incompatibility",
+        "group",
+        "net",
+        "allocation",
+        "unknown",
+        "duplicate",
+    ]:
+        rows = composite_rows()
+        offer = rows[0][2][0]
+        args = rows[2][1]
+        if defect == "budget":
+            offer["selection_budget"]["bank"] = 5
+        elif defect == "dependency":
+            offer["components"][1]["required_companions"] = [["absent"]]
+        elif defect == "incompatibility":
+            offer["components"][1]["incompatible_with"] = ["x"]
+        elif defect == "group":
+            offer["components"][1]["exclusive_group"] = "bank"
+        elif defect == "net":
+            offer["components"][0]["settlement_deduction"] = 2
+        elif defect == "allocation":
+            offer["components"][0]["allocation_first_amount"] = 2
+        elif defect == "unknown":
+            args["component_ids"] = ["x", "absent"]
+        else:
+            args["component_ids"] = ["x", "y", "y"]
+        assert failures(rows), defect

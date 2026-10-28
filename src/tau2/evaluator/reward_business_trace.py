@@ -38,6 +38,48 @@ def _execution_packet(name, args):
     return packet
 
 
+def _component_amounts(offer, args, sources):
+    """Validate received terms, without searching for an optimal selection."""
+    from tau2.domains.banking_ru.reward_resolution import selected_amounts
+    from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionOffer
+
+    def integer(value):
+        number = _money(value)
+        if not number.is_finite() or number < 0 or number != number.to_integral_value():
+            raise ValueError("Invalid component pagination")
+        return int(number)
+
+    parts = offer.get("components") or []
+    count = integer(offer.get("component_count", len(parts)))
+    inline = str(offer.get("components_complete", True)).lower() == "true"
+    if not inline or len(parts) != count:
+        positions = {}
+        for source in sources:
+            page = payload(source)
+            if (
+                source.call.arguments.get("offer_id") != offer["id"]
+                or not isinstance(page, dict)
+                or page.get("offer_id") != offer["id"]
+            ):
+                continue
+            if integer(page.get("total")) != count:
+                raise ValueError("Component total differs from offer")
+            offset = integer(page.get("offset"))
+            for index, part in enumerate(page.get("components") or [], offset):
+                if index >= count or (index in positions and positions[index] != part):
+                    raise ValueError("Conflicting component page")
+                positions[index] = part
+        if len(positions) != count:
+            raise ValueError("Complete components not received")
+        parts = [positions[i] for i in range(count)]
+    raw = {k: v for k, v in offer.items() if k in RewardResolutionOffer.model_fields}
+    raw["components"] = parts
+    typed = RewardResolutionOffer.model_validate(raw)
+    if typed.amount_basis != "incremental" or not typed.components:
+        raise ValueError("Composite offer must be incremental")
+    return selected_amounts(typed, args.get("component_ids") or [])
+
+
 def reward_business_failures(trace, policy):
     """Validate every successful protected mutation, including later repaired ones."""
     if not policy:
@@ -146,6 +188,7 @@ def reward_business_failures(trace, policy):
             payouts = args.get("payouts", [])
             tids = {x.get("transaction_id") for x in payouts}
             confirmed = False
+            consent_source = None
             for source in received(target, "ask_client"):
                 consent = payload(source)
                 data = consent.get("data", {}) if isinstance(consent, dict) else {}
@@ -171,6 +214,7 @@ def reward_business_failures(trace, policy):
                     == sorted(args.get("component_ids") or [])
                 ):
                     confirmed = True
+                    consent_source = source
             if not confirmed:
                 failures.append(f"{ident}:resolution_packet_not_confirmed")
             offer = None
@@ -178,6 +222,19 @@ def reward_business_failures(trace, policy):
                 for row in records(payload(source)):
                     if row.get("id") == args.get("offer_id"):
                         offer = row
+            composite = bool(offer) and (
+                offer.get("components")
+                or _money(offer.get("component_count", 0)) > 0
+                or args.get("component_ids")
+            )
+            if composite and consent_source is not None:
+                # All composite terms must already be known when the confirmed
+                # packet is formed. Later pages cannot retroactively justify it.
+                offer = None
+                for source in received(consent_source, "get_reward_resolution_offers"):
+                    for row in records(payload(source)):
+                        if row.get("id") == args.get("offer_id"):
+                            offer = row
             if (
                 not offer
                 or offer.get("customer_id") != policy["customer_id"]
@@ -192,8 +249,29 @@ def reward_business_failures(trace, policy):
                 or tids != set(offer.get("transaction_ids", []))
             ):
                 failures.append(f"{ident}:resolution_offer_not_received")
-            elif offer.get("components") or args.get("component_ids"):
-                failures.append(f"{ident}:unsupported_resolution_components")
+            elif composite:
+                try:
+                    total, expected = _component_amounts(
+                        offer,
+                        args,
+                        received(
+                            consent_source or target, "get_reward_resolution_components"
+                        ),
+                    )
+                    actual = {
+                        x.get("transaction_id"): _money(x.get("amount"))
+                        for x in payouts
+                    }
+                    if (
+                        _money(args.get("total_amount")) != Decimal(total) / 100
+                        or actual != {k: Decimal(v) / 100 for k, v in expected.items()}
+                        or len(actual) != len(payouts)
+                    ):
+                        raise ValueError("Payment differs from received components")
+                except (ValueError, TypeError, KeyError, AttributeError):
+                    failures.append(
+                        f"{ident}:resolution_components_invalid_or_not_received"
+                    )
             else:
                 total = sum((_money(x.get("amount")) for x in payouts), Decimal(0))
                 by_tx = {

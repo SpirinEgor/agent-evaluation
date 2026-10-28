@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Получить максимальную допустимую выплату, дополнить существующее дело остатками и передать полный состав на рассмотрение, сохранив права и остальные позиции.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "2026-10-29-bank2-linked-goals-v6; completion_only; model difficulty unconfirmed"
+    "notes": "2026-10-29-bank2-composite-v7; completion_only; B+D+E: 35 RUB, review 50 RUB; model difficulty not measured"
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -15,6 +15,146 @@
       "task_instructions": "Внутренних ID не знаете. Подтверждайте личность только собственным ответом. Просите решить только проблему из обращения; не добавляйте других операций."
     }
   },
-  "initial_state": null,
-  "scenario_version": "2026-10-29-bank2-linked-goals-v6"
+  "initial_state": {
+    "initialization_data": {
+      "agent_data": {
+        "reward_resolution_offers": {
+          "offer_610735": {
+            "id": "offer_610735",
+            "customer_id": "gromov_a_1187",
+            "case_id": "case_610903",
+            "period": "2026-07",
+            "transaction_ids": [
+              "txn_804219",
+              "txn_804227"
+            ],
+            "version": 1,
+            "amount": 40,
+            "amount_basis": "incremental",
+            "status": "approved",
+            "rights": "preserve",
+            "terms_id": "reward_resolution_rights",
+            "allocation_terms_id": "reward_resolution_amounts",
+            "allocation_first_transaction_id": "txn_804219",
+            "allocation_first_amount": 15,
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "components": [
+              {
+                "id": "A",
+                "exclusive_group": "bank",
+                "amount": 18,
+                "settlement_deduction": 2,
+                "bank_cost": 14,
+                "partner_cost": 4,
+                "allocation_first_amount": 7,
+                "incompatible_with": [
+                  "D"
+                ],
+                "required_companions": []
+              },
+              {
+                "id": "B",
+                "exclusive_group": "bank",
+                "amount": 14,
+                "settlement_deduction": 0,
+                "bank_cost": 8,
+                "partner_cost": 6,
+                "allocation_first_amount": 6,
+                "incompatible_with": [],
+                "required_companions": []
+              },
+              {
+                "id": "C",
+                "exclusive_group": "partner",
+                "amount": 16,
+                "settlement_deduction": 3,
+                "bank_cost": 3,
+                "partner_cost": 13,
+                "allocation_first_amount": 5,
+                "incompatible_with": [
+                  "F"
+                ],
+                "required_companions": []
+              },
+              {
+                "id": "D",
+                "exclusive_group": "partner",
+                "amount": 12,
+                "settlement_deduction": 0,
+                "bank_cost": 6,
+                "partner_cost": 6,
+                "allocation_first_amount": 5,
+                "incompatible_with": [],
+                "required_companions": []
+              },
+              {
+                "id": "E",
+                "exclusive_group": "service",
+                "amount": 10,
+                "settlement_deduction": 1,
+                "bank_cost": 5,
+                "partner_cost": 5,
+                "allocation_first_amount": 4,
+                "incompatible_with": [],
+                "required_companions": [
+                  [
+                    "B"
+                  ]
+                ]
+              },
+              {
+                "id": "F",
+                "exclusive_group": "service",
+                "amount": 8,
+                "settlement_deduction": 0,
+                "bank_cost": 2,
+                "partner_cost": 6,
+                "allocation_first_amount": 3,
+                "incompatible_with": [],
+                "required_companions": []
+              },
+              {
+                "id": "G",
+                "exclusive_group": "extra",
+                "amount": 7,
+                "settlement_deduction": 0,
+                "bank_cost": 4,
+                "partner_cost": 3,
+                "allocation_first_amount": 3,
+                "incompatible_with": [],
+                "required_companions": [
+                  [
+                    "C",
+                    "D"
+                  ]
+                ]
+              },
+              {
+                "id": "H",
+                "exclusive_group": "extra",
+                "amount": 13,
+                "settlement_deduction": 7,
+                "bank_cost": 5,
+                "partner_cost": 8,
+                "allocation_first_amount": 2,
+                "incompatible_with": [],
+                "required_companions": [
+                  [
+                    "E"
+                  ]
+                ]
+              }
+            ],
+            "selection_budget": {
+              "id": "budget_610735",
+              "bank": 20,
+              "partner": 20
+            }
+          }
+        }
+      }
+    }
+  },
+  "scenario_version": "2026-10-29-bank2-composite-v7"
 }
