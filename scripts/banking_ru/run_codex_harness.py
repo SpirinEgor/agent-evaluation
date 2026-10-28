@@ -150,6 +150,7 @@ def build_prompt(
     mcp_urls: dict[str, str] | None = None,
     max_calls: int | None = None,
     max_errors: int | None = None,
+    max_discovery_calls: int | None = None,
 ) -> str:
     """Compose the entire visible contract for one isolated task attempt."""
     return "\n\n".join(
@@ -162,12 +163,19 @@ def build_prompt(
                 "никаких других инструментов или источников."
             ),
             policy,
+            "Доступны bank_directory для поиска систем и инструментов и открытия схем, "
+            "bank_call — для вызова открытой операции. Операция done вызывается через bank_call.",
             (
                 f"Ресурсный бюджет: максимум {max_calls} банковских вызовов; "
                 + (
                     f"максимум {max_errors} ошибок. "
                     if max_errors and max_errors > 0
                     else "ошибки без отдельного лимита. "
+                )
+                + (
+                    f"Discovery учитывается отдельно: максимум {max_discovery_calls} вызовов. "
+                    if max_discovery_calls is not None
+                    else "Discovery учитывается отдельно; числовой лимит не задан. "
                 )
                 + "Завершите работу через done до исчерпания бюджета."
                 if max_calls is not None
@@ -176,7 +184,7 @@ def build_prompt(
             ticket,
             (
                 "Когда выполните необходимые действия или решите, что "
-                "дальше действовать нельзя, обязательно вызовите инструмент `done`."
+                "дальше действовать нельзя, вызовите операцию `done` через bank_call."
             ),
         ]
     )
@@ -517,16 +525,22 @@ async def run_one_attempt(
     effort: str,
     timeout_seconds: float,
     work_root: Path,
-    mcp_layout: str = "systems",
+    mcp_layout: str = "directory",
     container_image: str = "banking-codex-isolated:0.162.0-alpha.17.2",
     expected_image_id: str | None = None,
 ) -> dict:
     """Open, run, classify and close one session exactly once."""
+    if mcp_layout != "directory":
+        raise ValueError("Supported banking harness requires directory layout")
     opened = await client.open(
         task_id, participant=f"codex-{model}-{effort}", mcp_layout=mcp_layout
     )
     run: dict
     try:
+        from tau2.domains.banking_ru.mcp_systems import SINGLE_SERVER
+
+        if opened.mcp_layout != "directory" or set(opened.mcp_urls) != {SINGLE_SERVER}:
+            raise ValueError("Platform did not provide the directory-only MCP surface")
         with tempfile.TemporaryDirectory(
             prefix=f"codex-{task_id}-", dir=work_root
         ) as temp_dir:
@@ -544,6 +558,7 @@ async def run_one_attempt(
                     mcp_urls=opened.mcp_urls,
                     max_calls=opened.max_calls,
                     max_errors=opened.max_errors,
+                    max_discovery_calls=opened.max_discovery_calls,
                 ),
                 timeout_seconds,
                 container_image,
@@ -591,6 +606,8 @@ async def run_one_attempt(
         "token": opened.token,
         "max_calls": opened.max_calls,
         "max_errors": opened.max_errors,
+        "max_discovery_calls": opened.max_discovery_calls,
+        "discovery": finish["result"].get("discovery", state.get("discovery")),
         "mcp_layout": opened.mcp_layout,
         "mcp_systems": list(opened.mcp_urls),
         "state": state,

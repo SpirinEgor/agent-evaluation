@@ -568,10 +568,11 @@ def test_approval_denial_keeps_attempt_zero_after_done_and_banking_one(
         policy="common policy",
         ticket="ticket",
         token="test-token",
-        mcp_urls={},
-        max_calls=60,
-        max_errors=5,
-        mcp_layout="systems",
+        mcp_urls={"banking_ru_pilot": "http://test/mcp"},
+        max_calls=100,
+        max_errors=0,
+        max_discovery_calls=None,
+        mcp_layout="directory",
     )
 
     class Client:
@@ -820,3 +821,208 @@ def test_journal_rejects_wrong_session_or_task(tmp_path):
     record["token"] = "../outside"
     with pytest.raises(ValueError, match="token"):
         h.attach_persisted_journal(record, tmp_path)
+
+
+def test_supported_harness_requests_directory_before_any_model_call(tmp_path):
+    import asyncio
+
+    class Captured(Exception):
+        pass
+
+    class Client:
+        async def open(self, task_id, **kwargs):
+            assert kwargs["mcp_layout"] == "directory"
+            raise Captured()
+
+    with pytest.raises(Captured):
+        asyncio.run(
+            load_harness().run_one_attempt(
+                client=Client(),
+                task_id="Bank 2",
+                model="unused",
+                effort="low",
+                timeout_seconds=1,
+                work_root=tmp_path,
+            )
+        )
+
+
+def test_directory_harness_round_trip_with_real_mcp_and_no_model(
+    app, settings, tmp_path, monkeypatch
+):
+    import asyncio
+
+    import httpx
+
+    from tau2.platform.client import PlatformClient
+
+    h = load_harness()
+    observed = {}
+    monkeypatch.syspath_prepend(
+        str(Path(__file__).resolve().parents[2] / "scripts/banking_ru")
+    )
+    gates = h.load_preflight()
+    surface_dir = tmp_path / "checked-surface"
+    surface_dir.mkdir()
+    (surface_dir / "AUTHOR_ONLY_canary.txt").write_text("AUTHOR_ONLY_roundtrip_fixture")
+    gates.surface_child(
+        {"task_id": "Bank 2", "model": {"max_calls": 100, "max_errors": 0}}, surface_dir
+    )
+    expected = gates.read(surface_dir / "surface-packet.json")
+
+    async def go():
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=app), base_url="http://platform"
+            ) as http:
+                client = PlatformClient("http://platform", http_client=http)
+                original = client.open
+
+                async def capture(*args, **kwargs):
+                    opened = await original(*args, **kwargs)
+                    observed["opened"] = opened
+                    return opened
+
+                client.open = capture
+
+                async def local_stub(command, prompt, *args, **kwargs):
+                    opened = observed["opened"]
+                    assert opened.mcp_layout == "directory"
+                    assert "bank_directory" in prompt and "bank_call" in prompt
+                    async with client.connect(opened) as mcp:
+                        actual = (await mcp.list_tools()).model_dump(mode="json")
+                        gates.verify_live_surface(
+                            expected,
+                            opened.policy,
+                            prompt,
+                            {"banking_ru_pilot": actual},
+                            [],
+                            configuration=gates.session_configuration(opened),
+                        )
+                        assert {t.name for t in (await mcp.list_tools()).tools} == {
+                            "bank_directory",
+                            "bank_call",
+                        }
+                        assert (
+                            await mcp.call_tool("file_read", {"path": "/AGENTS.md"})
+                        ).is_error
+                        page = await mcp.call_tool(
+                            "bank_directory", {"operation": "list_systems"}
+                        )
+                        assert len(json.loads(page.content[0].text)["items"]) == 5
+                        for name in ("list_documents", "read_document"):
+                            assert not (
+                                await mcp.call_tool(
+                                    "bank_directory",
+                                    {
+                                        "operation": "open_tool",
+                                        "system_id": "knowledge",
+                                        "tool_name": name,
+                                    },
+                                )
+                            ).is_error
+                        cards = await mcp.call_tool(
+                            "bank_call",
+                            {
+                                "system_id": "knowledge",
+                                "tool_name": "list_documents",
+                                "arguments": {},
+                            },
+                        )
+                        card = json.loads(cards.content[0].text)["items"][0]
+                        result = await mcp.call_tool(
+                            "bank_call",
+                            {
+                                "system_id": "knowledge",
+                                "tool_name": "read_document",
+                                "arguments": {
+                                    "document_id": card["document_id"],
+                                    "revision_id": card["revision_id"],
+                                },
+                            },
+                        )
+                        assert (
+                            not result.is_error
+                            and json.loads(result.content[0].text)["content"]
+                        )
+                        assert not (
+                            await mcp.call_tool(
+                                "bank_directory",
+                                {
+                                    "operation": "open_tool",
+                                    "system_id": "support",
+                                    "tool_name": "done",
+                                },
+                            )
+                        ).is_error
+                        assert not (
+                            await mcp.call_tool(
+                                "bank_call",
+                                {
+                                    "system_id": "support",
+                                    "tool_name": "done",
+                                    "arguments": {},
+                                },
+                            )
+                        ).is_error
+                    return {
+                        "stdout": "",
+                        "stderr": "",
+                        "output_observations": [],
+                        "timed_out": False,
+                        "exit_code": 0,
+                    }
+
+                monkeypatch.setattr(h, "invoke_isolated_codex", local_stub)
+                return await h.run_one_attempt(
+                    client=client,
+                    task_id="Bank 2",
+                    model="local-stub",
+                    effort="low",
+                    timeout_seconds=5,
+                    work_root=tmp_path,
+                )
+
+    record = asyncio.run(go())
+    assert record["mcp_layout"] == "directory" and record["state"]["status"] == "done"
+    assert not record["technical_failure"] and record["final_reward"] == 0
+    assert record["discovery"]["calls"] == 5
+    h.attach_persisted_journal(record, settings.results_dir)
+    saved = json.loads((settings.results_dir / (record["token"] + ".json")).read_text())
+    events = saved["info"]["mcp_events"]
+    assert any(e.get("canonical_name") == "read_document" for e in events)
+    assert all("response_order" in e for e in events)
+    assert record["platform_event_status"] == "linked"
+
+
+def test_harness_closes_wrong_layout_before_invoking_runtime(tmp_path, monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+
+    h = load_harness()
+    closed = []
+
+    class Client:
+        async def open(self, *args, **kwargs):
+            return SimpleNamespace(
+                token="fixture", mcp_layout="systems", mcp_urls={"crm": "http://test"}
+            )
+
+        async def close(self, token):
+            closed.append(token)
+
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("Runtime must not be invoked")
+
+    monkeypatch.setattr(h, "invoke_isolated_codex", forbidden)
+    result = asyncio.run(
+        h.run_one_attempt(
+            client=Client(),
+            task_id="Bank 2",
+            model="unused",
+            effort="low",
+            timeout_seconds=1,
+            work_root=tmp_path,
+        )
+    )
+    assert result["classification"] == "invalid_harness" and closed == ["fixture"]

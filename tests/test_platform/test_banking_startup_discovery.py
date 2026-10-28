@@ -31,7 +31,7 @@ def test_startup_has_no_system_map_or_document_targets():
     assert "MCP" in policy and "done" in policy
 
 
-@pytest.mark.parametrize("layout", ["single", "systems"])
+@pytest.mark.parametrize("layout", ["single", "systems", "directory"])
 def test_session_uses_startup_from_its_environment_snapshot(layout, tmp_path):
     from tau2.domains.banking_ru.corpus_manifest import corpus_files, corpus_hash
     from tau2.domains.banking_ru.data_model import BankingDB

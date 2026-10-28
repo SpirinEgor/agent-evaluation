@@ -8,6 +8,7 @@ import json
 import math
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -77,7 +78,9 @@ def inputs(spec):
         ROOT / "uv.lock",
         Path(sys.executable).resolve(),
     ]
-    paths += [path_for(spec["data_dir"]), path_for(spec["solution_contract"])]
+    paths += [path_for(spec["data_dir"])]
+    if spec.get("solution_contract"):
+        paths.append(path_for(spec["solution_contract"]))
     boundary = spec["boundary"]
     paths += [path_for(boundary[k]) for k in ["receipt", "anchor_version"]]
     paths += [
@@ -228,9 +231,30 @@ def leak_hits(surfaces, private_tokens):
     ]
 
 
-def verify_live_surface(expected, policy, prompt, schemas, private_tokens):
+def session_configuration(session):
+    return {
+        "mcp_layout": session.mcp_layout,
+        "max_calls": session.max_calls,
+        "max_errors": session.max_errors,
+        "max_discovery_calls": session.max_discovery_calls,
+    }
+
+
+def verify_live_surface(
+    expected, policy, prompt, schemas, private_tokens, *, configuration
+):
     """Fail before model invocation if the actual session differs from the checked one."""
+    from tau2.domains.banking_ru.mcp_systems import SINGLE_SERVER
+
     actual_tools = [tool for response in schemas.values() for tool in response["tools"]]
+    if (
+        configuration.get("mcp_layout") != "directory"
+        or configuration != expected.get("configuration")
+        or set(schemas) != {SINGLE_SERVER}
+        or len(actual_tools) != 2
+        or {tool["name"] for tool in actual_tools} != {"bank_directory", "bank_call"}
+    ):
+        raise ValueError("Live model surface differs from verified directory preflight")
     by_name = lambda_tool_sort
     if (
         policy != expected["startup"]
@@ -508,7 +532,8 @@ def surface_child(spec, out):
         get_environment,
         max_calls=spec["model"]["max_calls"],
         max_errors=spec["model"]["max_errors"],
-        mcp_layout="systems",
+        mcp_layout="directory",
+        max_discovery_calls=spec["model"].get("max_discovery_calls"),
     )
     schemas = [t.model_dump(mode="json") for t in session.mcp_tools]
     startup = session.policy
@@ -519,11 +544,19 @@ def surface_child(spec, out):
         "startup": startup,
         "single_startup": single,
         "schemas": json.dumps(schemas),
+        "discovered_schemas": json.dumps(
+            [
+                tool.model_dump(mode="json")
+                for tools in session.system_tools.values()
+                for tool in tools
+            ]
+        ),
         "prompt": build_prompt(
             policy=startup,
             ticket=task.ticket,
             max_calls=session.max_calls,
             max_errors=session.max_errors,
+            max_discovery_calls=session.max_discovery_calls,
         ),
         **bodies,
     }
@@ -535,15 +568,41 @@ def surface_child(spec, out):
         "/tasks.json",
         "/db.json",
         "/scripts/banking_ru/bank2_resolution_oracle.py",
-        str(path_for(spec["solution_contract"])),
+        *(
+            [str(path_for(spec["solution_contract"]))]
+            if spec.get("solution_contract")
+            else []
+        ),
         str(ROOT / "AGENTS.md"),
         str(out / "AUTHOR_ONLY_canary.txt"),
     ]
-    denied = {p: session.call("file_read", {"path": p}).is_error for p in hidden}
-    canary = (out / "AUTHOR_ONLY_canary.txt").read_text().strip()
-    searched = session.call(
-        "file_search", {"pattern": canary, "root": "/", "limit": 200}
+
+    def knowledge_call(arguments):
+        return session.call(
+            "bank_call",
+            {
+                "system_id": "knowledge",
+                "tool_name": "corpus_command",
+                "arguments": arguments,
+            },
+        )
+
+    opened = session.call(
+        "bank_directory",
+        {
+            "operation": "open_tool",
+            "system_id": "knowledge",
+            "tool_name": "corpus_command",
+        },
     )
+    if opened.is_error:
+        raise ValueError("Cannot open knowledge schema for isolation checks")
+    denied = {
+        p: knowledge_call({"command": "cat " + shlex.quote(p)}).is_error for p in hidden
+    }
+    native_bypass_denied = session.call("file_read", {"path": "/AGENTS.md"}).is_error
+    canary = (out / "AUTHOR_ONLY_canary.txt").read_text().strip()
+    searched = knowledge_call({"command": "grep -n " + shlex.quote(canary) + " /"})
     search_result = (
         json.loads(searched.content[0].text) if not searched.is_error else None
     )
@@ -553,6 +612,7 @@ def surface_child(spec, out):
         {
             "startup": startup,
             "single_startup": single,
+            "configuration": session_configuration(session),
             "prompt": visible["prompt"],
             "schemas": schemas,
             "corpus": [
@@ -564,9 +624,13 @@ def surface_child(spec, out):
     write(
         out / "surface-result.json",
         {
-            "passed": not hits and all(denied.values()) and search_clean,
+            "passed": not hits
+            and all(denied.values())
+            and search_clean
+            and native_bypass_denied,
             "leak_hits": hits,
             "hidden_reads_denied": denied,
+            "native_bypass_denied": native_bypass_denied,
             "canary_not_searchable": search_clean,
             "limits": "Finite content screen and MCP probes; physical CLI boundary checked separately",
             "model_calls": 0,
@@ -675,7 +739,7 @@ async def probe(spec, out):
                 "--split",
                 "base",
                 "--mcp-layout",
-                "systems",
+                "directory",
                 "--host",
                 "127.0.0.1",
                 "--port",
@@ -687,6 +751,10 @@ async def probe(spec, out):
                 "--results-dir",
                 str(folder / "platform"),
             ]
+            if model.get("max_discovery_calls") is not None:
+                command.extend(
+                    ["--max-discovery-calls", str(model["max_discovery_calls"])]
+                )
             write(folder / "server-command.json", command)
             with (folder / "server.log").open("w") as log:
                 server = subprocess.Popen(
@@ -717,6 +785,7 @@ async def probe(spec, out):
                                 mcp_urls=opened.mcp_urls,
                                 max_calls=opened.max_calls,
                                 max_errors=opened.max_errors,
+                                max_discovery_calls=opened.max_discovery_calls,
                             )
                             expected = read(out / "surface-packet.json")
                             schemas = {}
@@ -731,6 +800,7 @@ async def probe(spec, out):
                                 actual_prompt,
                                 schemas,
                                 spec.get("private_tokens", []),
+                                configuration=session_configuration(opened),
                             )
                             (folder / "prompt.txt").write_text(actual_prompt)
                             (folder / "startup.txt").write_text(opened.policy)
@@ -754,7 +824,7 @@ async def probe(spec, out):
                             effort=model["effort"],
                             timeout_seconds=model["timeout_seconds"],
                             work_root=work,
-                            mcp_layout="systems",
+                            mcp_layout="directory",
                             container_image=model["image"],
                             expected_image_id=boundary["image"],
                         )

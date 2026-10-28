@@ -297,28 +297,47 @@ def test_validation_does_not_reuse_old_control_reports(tmp_path, monkeypatch):
     assert json.loads((tmp_path / "validation.json").read_text())["passed"] is False
 
 
-def test_live_surface_must_match_checked_prompt_and_tools():
+def test_live_surface_must_match_checked_prompt_tools_and_limits():
+    from copy import deepcopy
+
     m = module()
-    expected = {"startup": "policy", "prompt": "checked", "schemas": [{"name": "done"}]}
+    config = {
+        "mcp_layout": "directory",
+        "max_calls": 100,
+        "max_errors": 0,
+        "max_discovery_calls": None,
+    }
+    tools = [{"name": "bank_directory"}, {"name": "bank_call"}]
+    expected = {
+        "startup": "policy",
+        "prompt": "checked",
+        "schemas": tools,
+        "configuration": config,
+    }
+    schemas = {"banking_ru_pilot": {"tools": tools}}
     m.verify_live_surface(
-        expected, "policy", "checked", {"support": {"tools": [{"name": "done"}]}}, []
+        expected, "policy", "checked", schemas, [], configuration=config
     )
-    with pytest.raises(ValueError, match="surface"):
-        m.verify_live_surface(
-            expected,
-            "policy",
-            "different",
-            {"support": {"tools": [{"name": "done"}]}},
-            [],
-        )
-    with pytest.raises(ValueError, match="surface"):
-        m.verify_live_surface(
-            expected,
-            "policy",
-            "checked",
-            {"support": {"tools": [{"name": "other"}]}},
-            [],
-        )
+    for changed in ("prompt", "tools", "layout", "discovery", "old_packet", "endpoint"):
+        packet, actual = deepcopy(expected), deepcopy(schemas)
+        effective = deepcopy(config)
+        prompt = "checked"
+        if changed == "prompt":
+            prompt = "different"
+        elif changed == "tools":
+            actual["banking_ru_pilot"]["tools"].append({"name": "file_read"})
+        elif changed == "layout":
+            effective["mcp_layout"] = "systems"
+        elif changed == "discovery":
+            effective["max_discovery_calls"] = 20
+        elif changed == "old_packet":
+            packet.pop("configuration")
+        else:
+            actual["crm"] = actual.pop("banking_ru_pilot")
+        with pytest.raises(ValueError, match="surface"):
+            m.verify_live_surface(
+                packet, "policy", prompt, actual, [], configuration=effective
+            )
 
 
 def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
@@ -448,7 +467,7 @@ def test_real_control_report_matches_task_contract(tmp_path, task_id, route, exp
     )
 
 
-def test_real_system_schemas_match_checked_surface():
+def test_real_directory_schemas_match_checked_surface():
     import sys
 
     from tau2.domains.banking_ru.environment import get_environment, get_tasks
@@ -461,7 +480,7 @@ def test_real_system_schemas_match_checked_surface():
         sys.path.pop(0)
     task = next(task for task in get_tasks() if task.id == "Bank 2")
     session = PlatformSession(
-        task, get_environment, max_calls=100, max_errors=0, mcp_layout="systems"
+        task, get_environment, max_calls=100, max_errors=0, mcp_layout="directory"
     )
     prompt = build_prompt(
         policy=session.policy,
@@ -471,14 +490,23 @@ def test_real_system_schemas_match_checked_surface():
     )
     expected = {
         "startup": session.policy,
+        "configuration": module().session_configuration(session),
         "prompt": prompt,
         "schemas": [tool.model_dump(mode="json") for tool in session.mcp_tools],
     }
     systems = {
-        name: {"tools": [tool.model_dump(mode="json") for tool in tools]}
-        for name, tools in session.system_tools.items()
+        "banking_ru_pilot": {
+            "tools": [t.model_dump(mode="json") for t in session.mcp_tools]
+        }
     }
-    module().verify_live_surface(expected, session.policy, prompt, systems, [])
+    module().verify_live_surface(
+        expected,
+        session.policy,
+        prompt,
+        systems,
+        [],
+        configuration=module().session_configuration(session),
+    )
 
 
 def test_control_rejects_boolean_reward(tmp_path):
@@ -627,3 +655,31 @@ def test_control_rejects_extra_reward_component(tmp_path):
         json.dump({"half": row, "full": row}, stream)
     with pytest.raises(ValueError, match="breakdown"):
         module().check_control(p, 1, expected_basis=["DB", "ACTION"])
+
+
+def test_surface_child_uses_directory_and_probes_gateway_without_solution_file(
+    tmp_path, monkeypatch
+):
+    monkeypatch.syspath_prepend(str(ROOT / "scripts/banking_ru"))
+    m = module()
+    (tmp_path / "AUTHOR_ONLY_canary.txt").write_text("AUTHOR_ONLY_surface_fixture")
+    m.surface_child(
+        {
+            "task_id": "Bank 2",
+            "model": {"max_calls": 100, "max_errors": 0, "max_discovery_calls": 30},
+        },
+        tmp_path,
+    )
+    packet = m.read(tmp_path / "surface-packet.json")
+    result = m.read(tmp_path / "surface-result.json")
+    assert packet["configuration"] == {
+        "mcp_layout": "directory",
+        "max_calls": 100,
+        "max_errors": 0,
+        "max_discovery_calls": 30,
+    }
+    assert {t["name"] for t in packet["schemas"]} == {"bank_directory", "bank_call"}
+    assert result["passed"] and result["model_calls"] == 0
+    assert result["canary_not_searchable"]
+    assert all(result["hidden_reads_denied"].values())
+    assert result["native_bypass_denied"]

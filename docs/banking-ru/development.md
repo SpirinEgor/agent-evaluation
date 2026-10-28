@@ -289,6 +289,7 @@ worktree отдельно сохрани нужные игнорируемые �
 | Общие контракты | `make check-banking-contracts` | Confidentiality, access, identity, discovery; проверяет согласованность, не полную валидность задач |
 | Механизмы оценщика | `make test-banking-evaluator` | Поддерживаемая группа; не заменяет контроли конкретного задания |
 | MCP, сессии, изоляция, поставка | `make test-banking-infra` | Поддерживаемая инфраструктурная группа; для небольшой правки можно выбрать отдельный тест |
+| Harness и preflight | `uv run pytest tests/test_platform/test_codex_harness.py tests/test_platform/test_banking_preflight.py tests/test_platform/test_banking_startup_discovery.py tests/test_platform/test_codex_container.py -q` | Офлайн-проверки directory, совпадения поверхности, MCP-журнала и изоляции; тест настоящего Docker требует явно заданного BANKING_CODEX_TEST_IMAGE |
 | Knowledge MCP | `uv run pytest tests/test_platform/test_knowledge_mcp.py -q` | Самостоятельный корпус, метаданные, страницы, grep без полных статей, cat/read, бюджеты и MCP HTTP; без моделей и миграции задач |
 | Каталог и общий диспетчер | `uv run pytest tests/test_platform/test_bank_directory.py tests/test_platform/test_directory_session.py -q` | Пагинация, схемы, строгие аргументы, MCP, журнал, отдельные бюджеты и адресные контроли Bank 2; модель не вызывается |
 | Банковские предметные регрессии | `make test-banking-regressions` | Более широкая группа; выбирается при соответствующем влиянии |
@@ -336,8 +337,9 @@ worktree отдельно сохрани нужные игнорируемые �
    Сформулируй гипотезу и контроли. Задача и среда не меняются между сравниваемыми
    попытками без явного разделения версий.
 2. Подготовь отдельный набор входов и авторскую спецификацию preflight.
-   Поле `solution_contract` пока требуется текущим кодом; используй авторский
-   документ проверки, например отчёт. Отдельный Solution Contract.md не создаётся.
+   Отдельный Solution Contract.md не создаётся. Старое поле `solution_contract`
+   необязательно и поддерживается только для совместимости прежних спецификаций;
+   существующие авторские отчёты можно включить в `inputs`.
    Спецификация связывает `task_id`, `data_dir`, `inputs`, `validation_command`,
    `evidence_env`, `controls`, `boundary`, модель и `max_attempts`.
    Контроли задают ожидаемый 0/1 и привязаны к версии; `boundary` содержит
@@ -357,6 +359,14 @@ worktree отдельно сохрани нужные игнорируемые �
    полный доступ Codex внутри него, без доступа к хосту, Wiki, репозиторию,
    эталонам и прошлым результатам; свежая MCP-сессия. Сохрани image ID и подтверждения.
    Успех preflight не расширяет границу разрешений или число попыток.
+   Поддерживаемый harness и его preflight используют `directory`: один MCP-эндпоинт,
+   на старте только bank_directory/bank_call. Surface packet закрепляет startup,
+   итоговый prompt, обе схемы и max_calls/max_errors/max_discovery_calls; перед
+   передачей тикета модели фактическая сессия должна совпасть с ним. В `model`
+   можно явно задать положительный max_discovery_calls; при отсутствии лимит None,
+   число discovery-вызовов всё равно учитывается отдельно. Старые surface packets
+   без этой конфигурации не принимаются. Смена кода требует нового подтверждения
+   физической контейнерной границы; локальная MCP-заглушка его не заменяет.
 5. Только после успешных ворот и разрешения на конкретный объём запусти:
 
    ```sh
