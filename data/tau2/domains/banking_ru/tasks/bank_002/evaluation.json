@@ -4425,7 +4425,20 @@
         "txn_804227"
       ],
       "only_if_target_attempted": true,
-      "before_action_id": "bank2:v4:amend"
+      "before_action_id": "bank2:v4:amend",
+      "alternatives": [
+        {
+          "tool_names": [
+            "file_read"
+          ],
+          "record_id": "reward_partner_offer",
+          "expected_fields": {
+            "path": "/knowledge/reward_partner_offer.md",
+            "complete": true,
+            "sha256": "9b137f8b4e7da5a27ad268beb906e81ce69ff6281883b8c75c0b3f2ca70a4422"
+          }
+        }
+      ]
     },
     {
       "evidence_id": "bank2:v4:offer:bank2:v4:amend:resolution",
@@ -4452,7 +4465,20 @@
         "consent_stale"
       ],
       "only_if_target_attempted": true,
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:pay",
+      "alternatives": [
+        {
+          "tool_names": [
+            "file_read"
+          ],
+          "record_id": "reward_partner_offer",
+          "expected_fields": {
+            "path": "/knowledge/reward_partner_offer.md",
+            "complete": true,
+            "sha256": "9b137f8b4e7da5a27ad268beb906e81ce69ff6281883b8c75c0b3f2ca70a4422"
+          }
+        }
+      ]
     },
     {
       "evidence_id": "bank2:v4:activation:bank2:v4:amend",

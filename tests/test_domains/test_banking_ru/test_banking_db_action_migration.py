@@ -491,3 +491,101 @@ def test_bank2_retry_accepts_equivalent_payment_packet(mode):
         session.grade() if mode == "half" else grade_full_session(session).reward_info
     )
     assert reward.final_reward == 1, reward.info
+
+
+@pytest.mark.parametrize(
+    "route,want",
+    [
+        ("api", 1),
+        ("article", 1),
+        ("cat", 1),
+        ("read_document", 1),
+        ("missing", 0),
+        ("wrong_article", 0),
+        ("late_article", 0),
+        ("missing_activation", 0),
+        ("foreign_read", 0),
+        ("disclosure", 0),
+    ],
+)
+def test_bank2_promotion_conditions_accept_equivalent_received_sources(route, want):
+    """Whole HALF/FULL grades; only the static promotion terms are interchangeable."""
+    from tau2.evaluator.evaluator_action import _result_evidence_calls
+    from tau2.evaluator.trace_evidence import evidence_from_messages
+
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    s = PlatformSession(task, get_environment, mcp_layout="directory")
+    path = "/knowledge/reward_partner_offer.md"
+    actions = deepcopy(task.evaluation_criteria.actions)
+    if route != "api":
+        actions = [a for a in actions if a.name != "get_promotions"]
+    if route == "missing_activation":
+        actions = [a for a in actions if a.name != "get_promotion_activations"]
+    source = next(
+        a for a in actions if a.name == "file_read" and a.arguments.get("path") == path
+    )
+    if route in {"missing", "late_article"}:
+        actions.remove(source)
+    elif route == "wrong_article":
+        source.arguments["path"] = "/knowledge/reward_resolution_rights.md"
+    elif route == "cat":
+        source.name, source.arguments = "corpus_command", {"command": "cat " + path}
+    elif route == "read_document":
+        meta = s.env.tools.corpus.documents[path]["metadata"]
+        source.name, source.arguments = (
+            "read_document",
+            {"document_id": meta["document_id"], "revision_id": meta["revision_id"]},
+        )
+    s.replay_actions(actions)
+    if route == "late_article":
+        s.replay_actions([source])
+
+    def call(system, name, args):
+        assert not s.call(
+            "bank_directory",
+            {"operation": "open_tool", "system_id": system, "tool_name": name},
+        ).is_error
+        return s.call(
+            "bank_call", {"system_id": system, "tool_name": name, "arguments": args}
+        )
+
+    if route == "foreign_read":
+        assert not call(
+            "core_banking", "get_accounts", {"customer_id": "egorova_n_3358"}
+        ).is_error
+    elif route == "disclosure":
+        assert not call(
+            "support",
+            "reply_to_ticket",
+            {
+                "customer_id": "gromov_a_1187",
+                "text": "Ваш OTP: "
+                + s.env.tools.db.customers["gromov_a_1187"].otp_code,
+            },
+        ).is_error
+    assert not call("support", "done", {}).is_error
+    criteria = [
+        e
+        for e in task.evaluation_criteria.result_evidence
+        if e.evidence_id.startswith("bank2:v4:offer:")
+    ]
+    assert len(criteria) == 2
+    if route == "api":
+        # Prove that the original API branch itself still satisfies both criteria,
+        # independently of the separate unchanged document-reading obligations.
+        observed = [
+            c
+            for c in evidence_from_messages(s.trajectory()).observed
+            if not (c.call.name == "file_read" and c.call.arguments.get("path") == path)
+        ]
+        assert all(
+            _result_evidence_calls(observed, task.evaluation_criteria.actions, e)
+            for e in criteria
+        )
+    for reward in (s.grade(), grade_full_session(s).reward_info):
+        assert reward.final_reward == want, reward.info
+        assert reward.reward_breakdown[RewardType.DB] == 1
+        if route in {"missing", "wrong_article", "late_article"}:
+            assert {e.evidence_id for e in criteria} <= set(
+                reward.info["action"]["result_evidence"]
+            )
