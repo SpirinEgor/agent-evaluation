@@ -17,6 +17,7 @@
 | Цели, вход агента, MCP, знания и оценка | [Концепт Banking.ru](docs/banking-ru.md) |
 | Компоненты, загрузка данных, сессия и путь до оценки | [Архитектура Banking.ru](docs/banking-ru/architecture.md) |
 | Каталог систем, схемы инструментов и общий вызов | [Контракт bank_directory и bank_call](docs/banking-ru/discovery.md) |
+| Каталог документов, редакции и команды корпуса | [Контракт knowledge MCP](docs/banking-ru/knowledge.md) |
 | Изменение задач, инфраструктуры и модельные эксперименты | [Процесс разработки и проверки](docs/banking-ru/development.md) |
 | Установка, набор данных, manifest и клиентские ответы | [README домена](data/tau2/domains/banking_ru/README.md) |
 | Поля задач и критериев | [Формат задачи](docs/banking-ru/task-format.md), [исполняемая схема](src/tau2/data_model/tasks.py) |
