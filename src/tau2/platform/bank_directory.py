@@ -1,16 +1,14 @@
 """Session-scoped, paged bank discovery; no domain state or grading decisions."""
 
-import base64
 import hashlib
-import hmac
 import json
-import secrets
 from copy import deepcopy
 
 import mcp.types as t
 from jsonschema import Draft202012Validator
 
 from tau2.domains.banking_ru.mcp_systems import SYSTEMS
+from tau2.platform.catalog_pages import CatalogPages, CursorError
 
 SYSTEM_NAMES = {
     "crm": "CRM",
@@ -131,7 +129,6 @@ class BankDirectory:
                     "input_schema": schema,
                 }
         self._opened = set()
-        self._secret = secrets.token_bytes(32)
         self._fingerprint = hashlib.sha256(
             json.dumps(
                 [token, self._systems, [self._tools[k] for k in sorted(self._tools)]],
@@ -139,6 +136,7 @@ class BankDirectory:
                 ensure_ascii=False,
             ).encode()
         ).hexdigest()
+        self._pages = CatalogPages(self._fingerprint)
 
     def _tool(self, system, name):
         if not isinstance(system, str) or system not in self._systems:
@@ -198,58 +196,12 @@ class BankDirectory:
                     word in _normal(" ".join(item.values())) for word in query.split()
                 )
             ]
-        context = hashlib.sha256(
-            json.dumps([operation, system, query, self._fingerprint]).encode()
-        ).hexdigest()
-        offset = 0
-        if "cursor" in request:
-            try:
-                raw = request["cursor"]
-                payload, signature = raw.split(".")
-                expected = hmac.new(
-                    self._secret, payload.encode(), hashlib.sha256
-                ).hexdigest()
-                if not hmac.compare_digest(signature, expected):
-                    raise ValueError()
-                data = json.loads(
-                    base64.b64decode(
-                        payload + "=" * (-len(payload) % 4),
-                        altchars=b"-_",
-                        validate=True,
-                    )
-                )
-                offset = data["offset"]
-                if (
-                    data["context"] != context
-                    or type(offset) is not int
-                    or offset <= 0
-                    or offset % self.PAGE_SIZE
-                    or offset >= len(items)
-                ):
-                    raise ValueError()
-            except (ValueError, TypeError, KeyError):
-                raise DirectoryError(
-                    "INVALID_CURSOR", "Курсор не соответствует запросу или сессии"
-                ) from None
-        next_cursor = None
-        if offset + self.PAGE_SIZE < len(items):
-            payload = (
-                base64.urlsafe_b64encode(
-                    json.dumps(
-                        {"offset": offset + self.PAGE_SIZE, "context": context}
-                    ).encode()
-                )
-                .decode()
-                .rstrip("=")
+        try:
+            return self._pages.page(
+                items, [operation, system, query], request.get("cursor")
             )
-            signature = hmac.new(
-                self._secret, payload.encode(), hashlib.sha256
-            ).hexdigest()
-            next_cursor = payload + "." + signature
-        return {
-            "items": deepcopy(items[offset : offset + self.PAGE_SIZE]),
-            "next_cursor": next_cursor,
-        }
+        except CursorError as error:
+            raise DirectoryError("INVALID_CURSOR", str(error)) from None
 
     def validate_call(self, payload):
         if not isinstance(payload, dict) or set(payload) != {

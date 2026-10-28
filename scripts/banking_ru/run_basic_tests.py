@@ -50,6 +50,7 @@ GROUPS = {
                 "test_mcp_systems.py",
                 "test_bank_directory.py",
                 "test_directory_session.py",
+                "test_knowledge_mcp.py",
                 "test_service.py",
                 "test_session.py",
             )

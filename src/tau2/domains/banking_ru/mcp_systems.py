@@ -25,6 +25,10 @@ SYSTEMS = {
 }
 
 TOOL_OWNERS = {
+    "list_documents": "knowledge",
+    "search_documents": "knowledge",
+    "list_revisions": "knowledge",
+    "read_document": "knowledge",
     "unlock_discoverable_agent_tool": "support",
     "call_discoverable_agent_tool": "support",
     "give_discoverable_user_tool": "support",

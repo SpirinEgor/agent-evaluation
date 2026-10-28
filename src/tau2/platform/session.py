@@ -32,6 +32,8 @@ from tau2.environment.environment import Environment
 from tau2.environment.reference_bindings import reference_arguments
 from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
 from tau2.platform.bank_directory import BankDirectory, DirectoryError, directory_tools
+from tau2.platform.knowledge import TOOL_NAMES as KNOWLEDGE_TOOLS
+from tau2.platform.knowledge import KnowledgeMCP, knowledge_tools
 from tau2.platform.mcp_bridge import (
     DONE_TOOL_NAME,
     STOP_TOKEN,
@@ -97,6 +99,7 @@ class PlatformSession:
         self.max_discovery_calls = max_discovery_calls
         self.discovery_calls = 0
         self.tool_call_errors: list[dict] = []
+        self.environment_errors: list[dict] = []
         self.participant = participant
         self._on_finish = on_finish
         self.status = SessionStatus.OPEN
@@ -124,6 +127,7 @@ class PlatformSession:
         if mcp_layout == "systems" and not self.system_tools:
             raise ValueError("System MCP layout is supported only for banking_ru")
         self.directory = None
+        self.knowledge = None
         if mcp_layout == "directory":
             if self.env.domain_name != "banking_ru":
                 raise ValueError(
@@ -141,6 +145,8 @@ class PlatformSession:
                 "call_discoverable_agent_tool",
             ):
                 native.pop(name, None)
+            self.knowledge = KnowledgeMCP(self.env.tools.corpus, token=self.token)
+            native.update({tool.name: tool for tool in knowledge_tools()})
             self.system_tools = partition_tools(list(native.values()))
             self.directory = BankDirectory(self.system_tools, token=self.token)
             self.mcp_tools = directory_tools()
@@ -216,6 +222,7 @@ class PlatformSession:
             nested_args = call.arguments.get("arguments")
             if (
                 set(call.arguments) == {"name", "arguments"}
+                and isinstance(nested_name, str)
                 and nested_name in SPECIAL_TOOLS
                 and isinstance(nested_args, dict)
             ):
@@ -224,6 +231,22 @@ class PlatformSession:
                 )
                 event["canonical_name"] = nested_name
                 event["canonical_arguments"] = nested_args
+        if self.directory is not None:
+            event["budget"] = "banking"
+            if name == "bank_directory" or (
+                name == "bank_call"
+                and call.arguments.get("system_id") == "knowledge"
+                and isinstance(call.arguments.get("tool_name"), str)
+                and call.arguments.get("tool_name") in KNOWLEDGE_TOOLS
+                and self.knowledge.is_discovery(
+                    call.arguments["tool_name"],
+                    call.arguments.get("arguments")
+                    if isinstance(call.arguments.get("arguments"), dict)
+                    else {},
+                )
+            ):
+                event["budget"] = "discovery"
+                event["trace_call"] = False
         self._canonical_trace_calls[call.id] = trace_call
         if event["trace_call"]:
             self._messages.append(
@@ -246,7 +269,7 @@ class PlatformSession:
                 raise DirectoryError(
                     "WRONG_SYSTEM", "Используйте общий интерфейс каталога"
                 )
-            if name == "bank_directory":
+            if event.get("budget") == "discovery":
                 self.discovery_calls += 1
                 if (
                     self.max_discovery_calls is not None
@@ -256,6 +279,7 @@ class PlatformSession:
                         "DISCOVERY_BUDGET_EXHAUSTED",
                         "Лимит discovery исчерпан; уже открытые операции остаются доступны",
                     )
+            if name == "bank_directory":
                 payload = self.directory.handle(call.arguments)
                 result = text_result(json.dumps(payload, ensure_ascii=False))
                 event.update(
@@ -281,17 +305,51 @@ class PlatformSession:
                         "TOOL_SCHEMA_NOT_OPENED", "Получите результат открытия схемы"
                     )
                 canonical = self._canonical_trace_calls[call.id]
-                result = self._call(
-                    target, values, system=owner, attempt=(canonical, event)
-                )
+                if owner == "knowledge" and target in KNOWLEDGE_TOOLS:
+                    payload = self.knowledge.call(target, values)
+                    message = ToolMessage(
+                        id=call.id,
+                        role="tool",
+                        requestor="assistant",
+                        content=json.dumps(payload, ensure_ascii=False),
+                    )
+                    self._results[call.id] = message
+                    event.update(
+                        response=message.content,
+                        error=False,
+                        returned_at=datetime.now(timezone.utc).isoformat(),
+                    )
+                    if event.get("budget") != "discovery":
+                        canonical.execution_order = len(self.log)
+                        event["execution_order"] = canonical.execution_order
+                        self.log.append((canonical, message))
+                        if len(self.log) >= self.max_calls:
+                            self.finish(SessionStatus.BUDGET_EXHAUSTED)
+                    result = to_call_result(message)
+                else:
+                    result = self._call(
+                        target, values, system=owner, attempt=(canonical, event)
+                    )
             else:
                 raise DirectoryError(
                     "UNKNOWN_TOOL", "Доступны только bank_directory и bank_call"
                 )
         except DirectoryError as error:
-            self.tool_call_errors.append(
-                {"call_id": call.id, "surface": name, "code": error.code}
+            origin = getattr(error, "origin", "request")
+            diagnostics = (
+                self.environment_errors
+                if origin in {"corpus", "infrastructure"}
+                else self.tool_call_errors
             )
+            diagnostics.append(
+                {
+                    "call_id": call.id,
+                    "surface": name,
+                    "code": error.code,
+                    "origin": origin,
+                }
+            )
+            event["error_origin"] = origin
             message = ToolMessage(
                 id=call.id,
                 role="tool",
@@ -308,7 +366,7 @@ class PlatformSession:
                 diagnostic_code=error.code,
                 returned_at=datetime.now(timezone.utc).isoformat(),
             )
-            if name != "bank_directory":
+            if event.get("budget") != "discovery":
                 canonical = self._canonical_trace_calls[call.id]
                 canonical.execution_order = len(self.log)
                 event["execution_order"] = canonical.execution_order
@@ -328,6 +386,16 @@ class PlatformSession:
             "calls": self.discovery_calls,
             "max_calls": self.max_discovery_calls,
             "tool_call_errors": counts,
+            **(
+                {
+                    "environment_errors": {
+                        code: sum(e["code"] == code for e in self.environment_errors)
+                        for code in sorted({e["code"] for e in self.environment_errors})
+                    }
+                }
+                if self.environment_errors
+                else {}
+            ),
         }
 
     def _allowed(self, name: str, system: Optional[str]) -> bool:
@@ -639,6 +707,11 @@ class PlatformSession:
                 "transport_complete": self.transport_complete,
                 "discovery": self.discovery_metrics(),
                 "tool_call_errors": deepcopy(self.tool_call_errors),
+                **(
+                    {"environment_errors": deepcopy(self.environment_errors)}
+                    if self.environment_errors
+                    else {}
+                ),
                 **getattr(self.env, "run_metadata", {}),
             },
         )
