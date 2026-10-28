@@ -11,7 +11,37 @@ import re
 from contextlib import nullcontext
 
 
-def export_attempt(record, *, model, ticket, metadata=None, client=None):
+def recorded_events(record, folder):
+    """Read the immutable server journal bound to a saved attempt, or inline events."""
+    from pathlib import Path
+
+    if record.get("platform_event_status") != "linked":
+        return (record.get("result") or {}).get("mcp_events") or []
+    folder = Path(folder).resolve()
+    relative = record.get("platform_event_path", "")
+    if not isinstance(relative, str) or not re.fullmatch(
+        r"platform/[a-zA-Z0-9_-]+\.json", relative
+    ):
+        raise ValueError("Invalid platform journal path")
+    path = (folder / relative).resolve()
+    if not path.is_relative_to(folder):
+        raise ValueError("Platform journal leaves attempt folder")
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != record.get("platform_event_sha256"):
+        raise ValueError("Platform journal hash mismatch")
+    journal = json.loads(raw)
+    events = journal.get("info", {}).get("mcp_events")
+    if (
+        journal.get("id") != record.get("token")
+        or journal.get("task_id") != record.get("task_id")
+        or not isinstance(events, list)
+        or not all(isinstance(event, dict) for event in events)
+    ):
+        raise ValueError("Platform journal provenance mismatch")
+    return events
+
+
+def export_attempt(record, *, model, ticket, metadata=None, client=None, events=None):
     """Submit recorded messages, tools and grades without changing the record.
 
     Spans represent import time; original event times are retained as metadata.
@@ -63,7 +93,7 @@ def export_attempt(record, *, model, ticket, metadata=None, client=None):
                 session_id=attempt, tags=["banking_ru"], trace_name="banking.attempt"
             )
         result = record.get("result") or {}
-        events = result.get("mcp_events") or []
+        events = (result.get("mcp_events") or []) if events is None else events
         run = record.get("run") or {}
         messages = []
         usage = None
@@ -205,6 +235,7 @@ if __name__ == "__main__":
                 model=args.model,
                 ticket=record.get("ticket"),
                 metadata=json.loads(args.metadata_json),
+                events=recorded_events(record, args.record.parent),
             )
         )
     )

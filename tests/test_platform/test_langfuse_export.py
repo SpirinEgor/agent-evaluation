@@ -3,6 +3,8 @@
 import json
 from contextlib import contextmanager
 
+import pytest
+
 from tau2.platform.langfuse_export import export_attempt
 
 
@@ -127,3 +129,31 @@ def test_missing_usage_is_explicit_and_no_fake_generation():
     export_attempt(r, model="m", ticket="t", client=c)
     assert c.observations[0]["metadata"]["usage"] is None
     assert not any(o["as_type"] == "generation" for o in c.observations)
+
+
+def test_export_loads_only_hash_bound_platform_events(tmp_path):
+    import hashlib
+    import json
+
+    from tau2.platform.langfuse_export import recorded_events
+
+    journal = {
+        "id": "session",
+        "task_id": "Bank 2",
+        "info": {"mcp_events": [{"canonical_name": "get_accounts"}]},
+    }
+    path = tmp_path / "platform" / "session.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps(journal))
+    record = {
+        "token": "session",
+        "task_id": "Bank 2",
+        "platform_event_status": "linked",
+        "platform_event_path": "platform/session.json",
+        "platform_event_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "result": {},
+    }
+    assert recorded_events(record, tmp_path) == journal["info"]["mcp_events"]
+    path.write_text("{}")
+    with pytest.raises(ValueError, match="hash"):
+        recorded_events(record, tmp_path)
