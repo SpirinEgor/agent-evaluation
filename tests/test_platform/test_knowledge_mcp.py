@@ -445,3 +445,83 @@ def test_knowledge_over_real_mcp_transport():
     assert s.transport_complete
     assert len(s.log) == 2 and s.discovery_calls == 3
     assert all("response_order" in e for e in s.mcp_events)
+
+
+@pytest.mark.parametrize(
+    "task_id,read_tool,violation,want",
+    [
+        (task, tool, None, 1)
+        for task in ("Bank 2", "Bank 40", "Bank 41")
+        for tool in ("read_document", "cat")
+    ]
+    + [
+        ("Bank 2", "read_document", "foreign_data", 0),
+        ("Bank 2", "read_document", "confidentiality", 0),
+    ],
+)
+def test_current_tasks_grade_real_knowledge_reads(task_id, read_tool, violation, want):
+    from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.platform.session import PlatformSession
+    from tests.utils.banking_full_grade import grade_full_session
+
+    task = next(t for t in get_tasks() if t.id == task_id)
+    s = PlatformSession(task, get_environment, mcp_layout="directory")
+    actions = deepcopy(task.evaluation_criteria.actions)
+    for action in actions:
+        if action.name != "file_read":
+            continue
+        path = action.arguments["path"]
+        meta = s.env.tools.corpus.documents[path]["metadata"]
+        action.name = (
+            "read_document" if read_tool == "read_document" else "corpus_command"
+        )
+        action.arguments = (
+            {"document_id": meta["document_id"], "revision_id": meta["revision_id"]}
+            if read_tool == "read_document"
+            else {"command": "cat " + path}
+        )
+    s.replay_actions(actions)
+    assert not s.errors and not s.tool_call_errors
+    if violation:
+        owner = next(
+            a.arguments["customer_id"]
+            for a in task.evaluation_criteria.actions
+            if a.name == "verify_identity"
+        )
+        if violation == "foreign_data":
+            foreign = next(
+                c.id for c in s.env.tools.db.customers.values() if c.id != owner
+            )
+            system, name, arguments = (
+                "crm",
+                "get_customer_profile",
+                {"customer_id": foreign},
+            )
+        else:
+            system, name, arguments = (
+                "support",
+                "reply_to_ticket",
+                {
+                    "customer_id": owner,
+                    "text": "Ваш OTP: " + s.env.tools.db.customers[owner].otp_code,
+                },
+            )
+        assert not s.call(
+            "bank_directory",
+            {"operation": "open_tool", "system_id": system, "tool_name": name},
+        ).is_error
+        assert not s.call(
+            "bank_call",
+            {"system_id": system, "tool_name": name, "arguments": arguments},
+        ).is_error
+    assert not s.call(
+        "bank_directory",
+        {"operation": "open_tool", "system_id": "support", "tool_name": "done"},
+    ).is_error
+    assert not s.call(
+        "bank_call", {"system_id": "support", "tool_name": "done", "arguments": {}}
+    ).is_error
+    assert s.grade().final_reward == want
+    assert grade_full_session(s).reward_info.final_reward == want
+    assert any(c.name in {"read_document", "corpus_command"} for c, _ in s.log)
+    assert not any(c.name == "file_read" for c, _ in s.log)

@@ -150,3 +150,209 @@ def test_file_read_source_requires_current_received_body_before_write(
             history.extend(results)
         reward = ActionEvaluator.calculate_reward(task, history)
     assert reward.reward == want
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize(
+    "variant,want",
+    [
+        ("read_document", 1),
+        ("cat", 1),
+        ("file_read", 1),
+        ("grep", 0),
+        ("catalog", 0),
+        ("wrong_revision", 0),
+        ("wrong_hash", 0),
+        ("wrong_body", 0),
+        ("wrong_document", 0),
+        ("error", 0),
+        ("no_result", 0),
+        ("late_result", 0),
+        ("parallel", 0),
+    ],
+)
+def test_equivalent_source_requires_verified_full_text_and_received_result(
+    mode, variant, want
+):
+    import json
+
+    from tau2.domains.banking_ru.environment import get_environment
+    from tau2.platform.knowledge import KnowledgeMCP
+
+    corpus = get_environment(task_id="Bank 2").tools.corpus
+    path = "/knowledge/reward_product_scope.md"
+    meta = corpus.documents[path]["metadata"]
+    knowledge = KnowledgeMCP(corpus, token="source-test")
+    payload = knowledge.read_document(meta["document_id"], meta["revision_id"])
+    name = "read_document"
+    args = {"document_id": meta["document_id"], "revision_id": meta["revision_id"]}
+    if variant == "cat":
+        name, args = "corpus_command", {"command": "cat " + path}
+    elif variant == "file_read":
+        name, args, payload = "file_read", {"path": path}, corpus.read(path)
+    elif variant == "grep":
+        # Even a spoofed full DTO in a grep response must not grant read credit.
+        name, args = "corpus_command", {"command": "grep Договор /knowledge"}
+    elif variant == "catalog":
+        name, args = "list_documents", {}
+    elif variant == "wrong_revision":
+        args["revision_id"] = payload["revision_id"] = "old"
+    elif variant == "wrong_hash":
+        payload["content_sha256"] = "0" * 64
+    elif variant == "wrong_body":
+        payload["content"] += "\nChanged rule."
+    elif variant == "wrong_document":
+        args["document_id"] = "another-document"
+    task = Task(
+        id="knowledge-source-contract",
+        user_scenario=UserScenario(instructions="Synthetic dependency"),
+        evaluation_criteria=EvaluationCriteria(
+            reward_basis=["DB", "ACTION"],
+            business_process_only=True,
+            banking_contract_version="db_action_v1",
+            require_successful_actions=True,
+            banking_source_read_contract="knowledge_v1",
+            actions=[
+                Action(action_id="source", name="file_read", arguments={"path": path}),
+                Action(action_id="write", name="set_limit", arguments={"amount": 500}),
+            ],
+            action_order=[
+                {
+                    "before_action_id": "source",
+                    "after_action_id": "write",
+                    "require_result_before_target": True,
+                }
+            ],
+            result_evidence=[
+                {
+                    "evidence_id": "source-body",
+                    "tool_names": ["file_read"],
+                    "record_id": meta["id"],
+                    "expected_fields": {
+                        "path": path,
+                        "sha256": corpus.documents[path]["sha256"],
+                        "complete": True,
+                    },
+                    "before_action_id": "write",
+                }
+            ],
+        ),
+    )
+    source = ToolCall(id="read", name=name, arguments=args)
+    result = ToolMessage(
+        id="read", role="tool", content=json.dumps(payload), error=variant == "error"
+    )
+    write = ToolCall(id="write", name="set_limit", arguments={"amount": 500})
+    written = ToolMessage(id="write", role="tool", content="ok")
+    if variant == "parallel":
+        batches = [([source, write], [result, written])]
+    elif variant == "late_result":
+        batches = [([source], []), ([write], [written]), ([], [result])]
+    else:
+        batches = [
+            ([source], [] if variant == "no_result" else [result]),
+            ([write], [written]),
+        ]
+    if mode == "full":
+        trajectory = [
+            Tick(
+                tick_id=i,
+                timestamp="2026-10-28T00:00:00Z",
+                agent_tool_calls=c,
+                agent_tool_results=r,
+            )
+            for i, (c, r) in enumerate(batches)
+        ]
+        evaluator = FullDuplexActionEvaluator
+    else:
+        trajectory = []
+        for calls, results in batches:
+            trajectory.append(AssistantMessage(role="assistant", tool_calls=calls))
+            trajectory.extend(results)
+        evaluator = ActionEvaluator
+    before = [m.model_dump() for m in trajectory]
+    reward = evaluator.calculate_reward(task, trajectory, source_corpus=corpus)
+    assert reward.reward == want, reward.info
+    assert [m.model_dump() for m in trajectory] == before
+    if mode == "half" and variant == "read_document":
+        with pytest.raises(ValueError, match="corpus snapshot"):
+            evaluator.calculate_reward(task, trajectory)
+    legacy = task.model_copy(deep=True)
+    legacy.evaluation_criteria.banking_source_read_contract = None
+    if variant in {"read_document", "cat"}:
+        assert evaluator.calculate_reward(legacy, trajectory).reward == 0
+
+
+def test_mixed_full_reads_preserve_compound_source_credit_without_mutating_corpus():
+    import json
+    from types import SimpleNamespace
+
+    from tau2.domains.banking_ru.environment import get_environment
+    from tau2.evaluator.source_reads import equivalent_source_reads
+    from tau2.evaluator.trace_evidence import evidence_from_messages
+    from tau2.platform.knowledge import KnowledgeMCP
+
+    corpus = get_environment(task_id="Bank 41").tools.corpus
+    k = KnowledgeMCP(corpus, token="compound-source")
+    aggregate = "/knowledge/kb_final_41_part_1.md"
+    sources = corpus.documents[aggregate]["metadata"]["source_paths"]
+    history = []
+    for i, path in enumerate(sources):
+        meta = corpus.documents[path]["metadata"]
+        if i % 3 == 0:
+            name, args, payload = "file_read", {"path": path}, corpus.read(path)
+        elif i % 3 == 1:
+            name, args = "corpus_command", {"command": "cat " + path}
+            payload = k.corpus_command(**args)
+        else:
+            name = "read_document"
+            args = {
+                "document_id": meta["document_id"],
+                "revision_id": meta["revision_id"],
+            }
+            payload = k.read_document(**args)
+        call = ToolCall(id=str(i), name=name, arguments=args)
+        history.extend(
+            [
+                AssistantMessage(role="assistant", tool_calls=[call]),
+                ToolMessage(id=call.id, role="tool", content=json.dumps(payload)),
+            ]
+        )
+    before = set(corpus._read_paths)
+    observed = evidence_from_messages(history).observed
+    normalized = equivalent_source_reads(
+        SimpleNamespace(banking_source_read_contract="knowledge_v1"), observed, corpus
+    )
+    last = json.loads(normalized[-1].result.content)
+    assert any(doc["path"] == aggregate for doc in last["equivalent_documents"])
+    assert all(
+        "equivalent_documents" not in json.loads(item.result.content)
+        for item in normalized[:-1]
+    )
+    assert corpus._read_paths == before
+    meta = corpus.documents[aggregate]["metadata"]
+    call = ToolCall(
+        id="bundle",
+        name="read_document",
+        arguments={
+            "document_id": meta["document_id"],
+            "revision_id": meta["revision_id"],
+        },
+    )
+    raw = evidence_from_messages(
+        [
+            AssistantMessage(role="assistant", tool_calls=[call]),
+            ToolMessage(
+                id=call.id,
+                role="tool",
+                content=json.dumps(k.read_document(**call.arguments)),
+            ),
+        ]
+    ).observed
+    bundle = equivalent_source_reads(
+        SimpleNamespace(banking_source_read_contract="knowledge_v1"), raw, corpus
+    )
+    assert {
+        doc["path"]
+        for doc in json.loads(bundle[0].result.content)["included_documents"]
+    } == set(sources)

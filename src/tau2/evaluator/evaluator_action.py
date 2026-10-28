@@ -28,6 +28,7 @@ from tau2.data_model.tasks import (
 from tau2.environment.toolkit import ToolType
 from tau2.evaluator.banking_confidentiality import resolve_confidentiality
 from tau2.evaluator.evaluator_base import EvaluatorBase
+from tau2.evaluator.source_reads import equivalent_source_reads
 from tau2.evaluator.trace_evidence import (
     ObservedCall as _ObservedCall,
 )
@@ -1424,6 +1425,7 @@ class ActionEvaluator(EvaluatorBase[Message]):
         full_trajectory: list[Message],
         tool_types: Optional[dict[str, ToolType]] = None,
         confidentiality_db: dict | None = None,
+        source_corpus=None,
     ) -> RewardInfo:
         """
         Calculate the reward based on whether the agent performed the required actions.
@@ -1475,18 +1477,21 @@ class ActionEvaluator(EvaluatorBase[Message]):
                 reward_breakdown={RewardType.ACTION: 1.0},
             )
 
-        action_checks = cls.evaluate_actions(
-            full_trajectory,
+        trace = evidence_from_messages(full_trajectory)
+        observed = trace.observed
+        matching_observed = equivalent_source_reads(
+            task.evaluation_criteria, observed, source_corpus
+        )
+        action_checks = _check_actions(
+            matching_observed,
             golden_actions,
             tool_types,
             require_success=task.evaluation_criteria.require_successful_actions,
         )
-
-        # Calculate reward: 1 if all expectations are met, 0 otherwise
         all_expectations_met = all(result.action_match for result in action_checks)
-        trace = evidence_from_messages(full_trajectory)
-        observed = trace.observed
-        business_observed = _business_observed(task.evaluation_criteria, observed)
+        business_observed = _business_observed(
+            task.evaluation_criteria, matching_observed
+        )
         access_failures = _tool_access_failures(
             observed, task.evaluation_criteria.actions or [], access_policy
         )
@@ -1496,7 +1501,9 @@ class ActionEvaluator(EvaluatorBase[Message]):
             task.evaluation_criteria.action_order,
             task.evaluation_criteria.require_successful_actions,
         )
-        forbidden_failures = _forbidden_failures(business_observed, forbidden_actions)
+        forbidden_failures = _forbidden_failures(
+            _business_observed(task.evaluation_criteria, observed), forbidden_actions
+        )
         pattern_failures = _forbidden_argument_pattern_failures(
             observed, forbidden_patterns
         )
@@ -1632,6 +1639,7 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
         full_trajectory: list[Tick],
         tool_types: Optional[dict[str, ToolType]] = None,
         confidentiality_db: dict | None = None,
+        source_corpus=None,
     ) -> RewardInfo:
         """
         Calculate the reward based on whether the agent performed the required actions.
@@ -1683,18 +1691,21 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
                 reward_breakdown={RewardType.ACTION: 1.0},
             )
 
-        action_checks = cls.evaluate_actions(
-            full_trajectory,
+        trace = evidence_from_ticks(full_trajectory)
+        observed = trace.observed
+        matching_observed = equivalent_source_reads(
+            task.evaluation_criteria, observed, source_corpus
+        )
+        action_checks = _check_actions(
+            matching_observed,
             golden_actions,
             tool_types,
             require_success=task.evaluation_criteria.require_successful_actions,
         )
-
-        # Calculate reward: 1 if all expectations are met, 0 otherwise
         all_expectations_met = all(result.action_match for result in action_checks)
-        trace = evidence_from_ticks(full_trajectory)
-        observed = trace.observed
-        business_observed = _business_observed(task.evaluation_criteria, observed)
+        business_observed = _business_observed(
+            task.evaluation_criteria, matching_observed
+        )
         access_failures = _tool_access_failures(
             observed, task.evaluation_criteria.actions or [], access_policy
         )
@@ -1704,7 +1715,9 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             task.evaluation_criteria.action_order,
             task.evaluation_criteria.require_successful_actions,
         )
-        forbidden_failures = _forbidden_failures(business_observed, forbidden_actions)
+        forbidden_failures = _forbidden_failures(
+            _business_observed(task.evaluation_criteria, observed), forbidden_actions
+        )
         pattern_failures = _forbidden_argument_pattern_failures(
             observed, forbidden_patterns
         )

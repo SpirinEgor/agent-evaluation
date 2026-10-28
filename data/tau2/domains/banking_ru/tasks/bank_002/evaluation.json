@@ -5432,5 +5432,6 @@
       "txn_804205": 7
     }
   },
-  "banking_confidentiality_contract": "banking_v1"
+  "banking_confidentiality_contract": "banking_v1",
+  "banking_source_read_contract": "knowledge_v1"
 }

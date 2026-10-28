@@ -4330,5 +4330,6 @@
       "txn_088220": 129
     }
   },
-  "banking_confidentiality_contract": "banking_v1"
+  "banking_confidentiality_contract": "banking_v1",
+  "banking_source_read_contract": "knowledge_v1"
 }

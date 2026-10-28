@@ -239,6 +239,14 @@ def evaluate_simulation(
             )
         confidentiality_db = env.tools.db.model_dump(mode="json")
 
+    source_corpus = None
+    if task.evaluation_criteria.banking_source_read_contract is not None:
+        if domain != "banking_ru" or env is None or not hasattr(env.tools, "corpus"):
+            raise ValueError(
+                "Knowledge read equivalence requires banking corpus context"
+            )
+        source_corpus = env.tools.corpus
+
     if evaluation_type == EvaluationType.ENV:
         reward_info = EnvEvaluator.calculate_reward(
             environment_constructor=registry.get_env_constructor(domain),
@@ -264,6 +272,7 @@ def evaluate_simulation(
             full_trajectory=trajectory,
             tool_types=tool_types,
             confidentiality_db=confidentiality_db,
+            source_corpus=source_corpus,
         )
     elif evaluation_type in {EvaluationType.ALL, EvaluationType.ALL_WITH_NL_ASSERTIONS}:
         env_reward_info = EnvEvaluator.calculate_reward(
@@ -279,6 +288,7 @@ def evaluate_simulation(
             full_trajectory=trajectory,
             tool_types=tool_types,
             confidentiality_db=confidentiality_db,
+            source_corpus=source_corpus,
         )
         communicate_reward_info = CommEvaluator.calculate_reward(
             task=task,
@@ -362,6 +372,7 @@ def evaluate_simulation(
             full_trajectory=trajectory,
             tool_types=tool_types,
             confidentiality_db=confidentiality_db,
+            source_corpus=source_corpus,
         )
         communicate_reward_info = CommEvaluator.calculate_reward(
             task=task,

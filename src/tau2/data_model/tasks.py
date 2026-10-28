@@ -892,9 +892,17 @@ class EvaluationCriteria(BaseModel):
         default=None,
         description="Resolve shared banking privacy rules from the initialized scenario DB; legacy tasks keep their stored patterns.",
     )
+    banking_source_read_contract: Literal["knowledge_v1"] | None = Field(
+        default=None,
+        description="Verify full file_read/cat/read_document against the scenario corpus for ACTION matching; preserve the raw trace.",
+    )
 
     @model_validator(mode="after")
     def validate_banking_contract_version(self):
+        if self.banking_source_read_contract and self.banking_contract_version is None:
+            raise ValueError(
+                "Knowledge read equivalence requires a migrated banking contract"
+            )
         if (
             self.db_state_checks
             or self.reward_business_contract
