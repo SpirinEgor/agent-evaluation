@@ -1,0 +1,160 @@
+{
+  "id": "Bank 53",
+  "description": {
+    "purpose": "Сравнить одну цель полного погашения кредита за счёт вклада сегодня и в дату окончания, без преждевременных операций.",
+    "relevant_policies": "/policies/general.md; /policies/identity.md; /knowledge/kb_340.md–kb_349.md (либо полные сборники)",
+    "notes": "completion_only: получить регламенты, ответ идентификации и авторизацию, данные своего вклада и кредита, включая штраф, и источники расчёта. Получить результаты сравнения 7439.40 (либо округлённые 7439) и суммы 96380, затем done. Итоговый клиентский ответ запрещён и не оценивается. Котировки на 28.08 и 01.09.2026 по объявленным договорам; будущая сумма зависит от предпосылок и требует обновления перед исполнением; закрытие, погашение и другие изменения запрещены. Источники18: необязательные дублирующие регламенты и навигационные обзоры не заменяют обязательные полные правила; полный сборник текущих текстов равноценен отдельным статьям."
+  },
+  "user_scenario": {
+    "persona": "Петров Дмитрий Сергеевич, клиент банка с одним обращением.",
+    "instructions": {
+      "domain": "banking_ru",
+      "reason_for_call": "Я Петров Дмитрий Сергеевич, мой телефон +7 906 512-03-77. Здравствуйте. Хочу закрыть кредит досрочно за счёт вклада «Накопительный» на 300 тысяч рублей. Но не хочу потерять больше на вкладе, чем сэкономлю на кредите. Прежде чем что-либо закрывать, сравните два варианта: расторгнуть вклад и погасить кредит сегодня либо дождаться окончания вклада. Объясните выплаты, потери и полную сумму кредита с процентами и штрафами. Пока прошу только расчёт: операции не выполняйте, решение приму после вашего объяснения.",
+      "known_info": "Я Петров Дмитрий Сергеевич, мой телефон +7 906 512-03-77. Здравствуйте. Хочу закрыть кредит досрочно за счёт вклада «Накопительный» на 300 тысяч рублей. Но не хочу потерять больше на вкладе, чем сэкономлю на кредите. Прежде чем что-либо закрывать, сравните два варианта: расторгнуть вклад и погасить кредит сегодня либо дождаться окончания вклада. Объясните выплаты, потери и полную сумму кредита с процентами и штрафами. Пока прошу только расчёт: операции не выполняйте, решение приму после вашего объяснения. Кодовое слово — кедр; дата рождения — 1988-11-03. Только по запросу идентификации.",
+      "unknown_info": "Внутренние ID неизвестны; статусы и суммы проверяются по своим источникам.",
+      "task_instructions": "Не добавлять независимых поручений. Дополнительные сведения только из фиксированных ответов клиента."
+    }
+  },
+  "initial_state": {
+    "initialization_data": {
+      "agent_data": {
+        "deposits": {
+          "dep_5120": {
+            "id": "dep_5120",
+            "customer_id": "petrov_d_5120",
+            "name": "Накопительный",
+            "amount": 300000.0,
+            "rate": 0.11,
+            "early_rate": 0.01,
+            "opened_at": "2026-06-01",
+            "matures_at": "2026-09-01",
+            "payout_account_id": "acc_5120",
+            "early_withdrawal_payout": 300723.29,
+            "maturity_payout": 308317.81,
+            "status": "active",
+            "closed_at": null,
+            "comparison_terms": {
+              "as_of": "2026-08-28",
+              "currency": "RUB",
+              "day_count": "ACT/365",
+              "interest_method": "simple",
+              "penalty_basis": null,
+              "interest_paid_before_as_of": 0,
+              "scheduled_payments": [],
+              "minimum_notice_days": 0,
+              "tax_scope": "before_individual_annual_tax",
+              "contract_id": "deposit-contract-5120",
+              "contract_date": "2026-06-01",
+              "assumptions": [
+                "No top-ups, withdrawals, capitalization or prior interest payouts",
+                "Interest: elapsed days [opened_at, calculation_date), ACT/365",
+                "Principal and interest available on quote.available_on; no calendar postponement"
+              ]
+            },
+            "comparison_quotes": [
+              {
+                "id": "deposit-5120-today",
+                "date": "2026-08-28",
+                "available_on": "2026-08-28",
+                "principal": 300000.0,
+                "interest_due": 723.29,
+                "payout": 300723.29,
+                "source": "deposit_system"
+              },
+              {
+                "id": "deposit-5120-maturity",
+                "date": "2026-09-01",
+                "available_on": "2026-09-01",
+                "principal": 300000.0,
+                "interest_due": 8317.81,
+                "payout": 308317.81,
+                "source": "deposit_system"
+              }
+            ]
+          }
+        },
+        "loans": {
+          "ln_5120": {
+            "id": "ln_5120",
+            "customer_id": "petrov_d_5120",
+            "principal": 95000.0,
+            "accrued_interest": 640.0,
+            "rate": 0.149,
+            "monthly_payment": 9500.0,
+            "days_overdue": 0,
+            "next_payment_date": "2026-09-05",
+            "penalties": [
+              {
+                "id": "pen_5120_1",
+                "amount": 740.0,
+                "accrued_at": "2026-07-06",
+                "reason": "Остаток законной неустойки за историческую просрочку платежа 9500 руб. с 13.02 по 06.07.2026 (143 дня); просроченный платёж погашен 06.07.2026",
+                "waived": false,
+                "paid": false
+              }
+            ],
+            "waivers_used": 0,
+            "max_waivers": 1,
+            "status": "active",
+            "contract_date": "2025-10-01",
+            "comparison_terms": {
+              "as_of": "2026-08-28",
+              "currency": "RUB",
+              "day_count": "ACT/365",
+              "interest_method": "simple",
+              "penalty_basis": {
+                "penalty_id": "pen_5120_1",
+                "overdue_amount": 9500.0,
+                "accrued_from": "2026-02-13",
+                "accrued_to": "2026-07-06",
+                "annual_rate": 0.2,
+                "interest_accrued": true,
+                "statutory_cap": 744.38,
+                "assessed_amount": 740.0,
+                "overdue_cured_on": "2026-07-06",
+                "authority": "353-FZ article 5 part 21; bank confirmed assessment below cap"
+              },
+              "interest_paid_before_as_of": 0,
+              "scheduled_payments": [],
+              "minimum_notice_days": 0,
+              "tax_scope": "before_individual_annual_tax",
+              "contract_id": "loan-contract-5120",
+              "contract_date": "2025-10-01",
+              "assumptions": [
+                "No scheduled payments before 2026-09-01; next payment 2026-09-05",
+                "Principal 95000 and rate 0.149 unchanged; incremental interest on principal only",
+                "Bank confirmed penalty basis; 740 unchanged, no new sanctions or fees",
+                "Contract permits same-day full repayment without advance notice",
+                "Future quote must be refreshed before execution; consultation only"
+              ]
+            },
+            "comparison_quotes": [
+              {
+                "id": "loan-5120-today",
+                "date": "2026-08-28",
+                "principal": 95000.0,
+                "interest": 640.0,
+                "penalties": 740.0,
+                "fees": 0,
+                "total": 96380.0,
+                "penalty_basis_confirmed": true,
+                "source": "credit_system"
+              },
+              {
+                "id": "loan-5120-maturity",
+                "date": "2026-09-01",
+                "principal": 95000.0,
+                "interest": 795.12,
+                "penalties": 740.0,
+                "fees": 0,
+                "total": 96535.12,
+                "penalty_basis_confirmed": true,
+                "source": "credit_system"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

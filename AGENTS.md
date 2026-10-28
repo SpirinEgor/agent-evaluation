@@ -35,8 +35,7 @@ AGENTS.md                         — эта карта для разработ�
  docs/                            — концепт и документация
  data/tau2/domains/banking_ru/
    tasks.json                     — упорядоченный индекс задач
-   tasks/bank_*.json               — объединённые задания (58 задач)
-   tasks/bank_{002,040,041}/       — ticket.md, scenario.json, evaluation.json Bank 2/40/41
+   tasks/bank_NNN/                — ticket.md, scenario.json, evaluation.json каждой из 61 задачи
    db.json, intake_answers.json    — исходные данные и ответы клиента
    manifest.json                  — хеши исходных данных и корпуса
    corpus/                        — общие политики, знания и агентский startup
