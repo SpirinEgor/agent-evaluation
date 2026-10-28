@@ -841,6 +841,13 @@ class CaseReferralContract(BaseModel):
     amount: PositiveContractAmount
 
 
+class CaseReviewContract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    customer_id: NonemptyContractID
+    case_id: NonemptyContractID
+
+
 class PendingLimitGuard(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -854,6 +861,7 @@ class BankingBusinessContract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     case_referral: CaseReferralContract | None = None
+    case_review: CaseReviewContract | None = None
     pending_limit_changes: list[PendingLimitGuard] = Field(default_factory=list)
     fee_refunds: dict[NonemptyContractID, PositiveContractAmount] = Field(
         default_factory=dict
@@ -868,6 +876,7 @@ class BankingBusinessContract(BaseModel):
             or self.document_delivery
             or self.allowed_mutations
             or self.case_referral
+            or self.case_review
             or self.pending_limit_changes
         ):
             raise ValueError("Business contract must declare a guarded operation")

@@ -3040,6 +3040,17 @@
   ],
   "actions": [
     {
+      "action_id": "bank2:v6:review-policy",
+      "name": "file_read",
+      "arguments": {
+        "path": "/policies/fees_rewards.md"
+      },
+      "required_for_reward": false,
+      "compare_args": [
+        "path"
+      ]
+    },
+    {
       "action_id": "find_customer_1",
       "requestor": "assistant",
       "name": "find_customer",
@@ -3538,6 +3549,22 @@
       "compare_args": [
         "case_id"
       ]
+    },
+    {
+      "action_id": "bank2:v6:submit",
+      "name": "submit_cashback_review",
+      "arguments": {
+        "case_id": "case_610903",
+        "expected_version": 2
+      },
+      "compare_args": [
+        "case_id"
+      ],
+      "required_for_reward": true,
+      "result_contains": [
+        "\"review_status\": \"registered\""
+      ],
+      "attempt_requires_result": true
     }
   ],
   "env_assertions": [],
@@ -4176,7 +4203,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_case_amendment.md",
         "complete": true,
-        "sha256": "2fcd0cfa76eae0fb2647d7e2720d544b051568d0d356feef8737b6aa0447b339"
+        "sha256": "0722014386a6dc5a7541928fc93978582a27a5f0a35ae3377a834ffea3ac9b15"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4198,7 +4225,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_case_amendment.md",
         "complete": true,
-        "sha256": "2fcd0cfa76eae0fb2647d7e2720d544b051568d0d356feef8737b6aa0447b339"
+        "sha256": "0722014386a6dc5a7541928fc93978582a27a5f0a35ae3377a834ffea3ac9b15"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5248,7 +5275,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_execution.md",
         "complete": true,
-        "sha256": "78ed29d937877f08ed47e25656c88970031aac9595026e340dae091b89a0cb3f"
+        "sha256": "b24d79035abe215d81eb56db9b70aa4d9ce1ec1b53b89f61013306d2372cccdd"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5407,6 +5434,19 @@
       "before_action_id": "bank2:v4:amend"
     },
     {
+      "evidence_id": "bank2:v6:received-review-policy",
+      "tool_names": [
+        "file_read"
+      ],
+      "record_id": "bank-policy-fees_rewards",
+      "expected_fields": {
+        "path": "/policies/fees_rewards.md",
+        "complete": true,
+        "sha256": "b201150aeae326b0067d853d17e54877891888b9ef011f18f298a2df6e3a2389"
+      },
+      "before_action_id": "bank2:v6:submit"
+    },
+    {
       "evidence_id": "common_discovery_Bank 2",
       "tool_names": [
         "find_customer"
@@ -5459,5 +5499,11 @@
     }
   },
   "banking_confidentiality_contract": "banking_v1",
-  "banking_source_read_contract": "knowledge_v1"
+  "banking_source_read_contract": "knowledge_v1",
+  "banking_business_contract": {
+    "case_review": {
+      "customer_id": "gromov_a_1187",
+      "case_id": "case_610903"
+    }
+  }
 }

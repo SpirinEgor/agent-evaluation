@@ -266,3 +266,74 @@ def test_successful_forbidden_mutation_stays_failed_after_correct_repair():
     assert banking_business_failures(trace([wrong, right]), policy)
     conflict = (wrong[0], wrong[1], {"status": "state_changed"}, False)
     assert not banking_business_failures(trace([conflict, right]), policy)
+
+
+def test_case_review_uses_received_version_and_accepts_idempotent_receipts():
+    policy = {"case_review": {"customer_id": "owner", "case_id": "case"}}
+    row = {"id": "case", "customer_id": "owner", "version": 2, "review_status": "draft"}
+    submission = (
+        "submit_cashback_review",
+        {"case_id": "case", "expected_version": 2},
+        {
+            **row,
+            "version": 3,
+            "review_source_version": 2,
+            "review_status": "registered",
+        },
+        False,
+    )
+    rows = [
+        ("amend_cashback_investigation", {"case_id": "case"}, row, False),
+        submission,
+    ]
+    assert banking_business_failures(trace(rows), policy) == []
+    # An ordinary re-read of the case is an equivalent version source.
+    listed = [
+        ("get_cashback_investigations", {"customer_id": "owner"}, [row], False),
+        submission,
+    ]
+    assert banking_business_failures(trace(listed), policy) == []
+    assert banking_business_failures(trace([submission]), policy) == [
+        "0:review_version_not_received"
+    ]
+    late = trace(rows)
+    late.observed[0] = late.observed[0].model_copy(update={"result_position": 4})
+    assert banking_business_failures(late, policy) == ["1:review_version_not_received"]
+    assert banking_business_failures(trace(rows + [submission]), policy) == []
+    # The current version from the previous registered receipt is also valid.
+    repeat = (
+        submission[0],
+        {"case_id": "case", "expected_version": 3},
+        submission[2],
+        False,
+    )
+    assert banking_business_failures(trace(rows + [repeat]), policy) == []
+    # A stale read delivered last cannot invalidate a received newer version.
+    old = (
+        "get_cashback_investigations",
+        {"customer_id": "owner"},
+        [{**row, "version": 1}],
+        False,
+    )
+    reordered = trace([old, *rows])
+    reordered.observed[0] = reordered.observed[0].model_copy(
+        update={"result_position": 3}
+    )
+    assert banking_business_failures(reordered, policy) == []
+    foreign = [
+        (rows[0][0], rows[0][1], {**row, "customer_id": "foreign"}, False),
+        submission,
+    ]
+    assert banking_business_failures(trace(foreign), policy) == [
+        "1:review_version_not_received"
+    ]
+    conflict = (
+        submission[0],
+        {"case_id": "case", "expected_version": 0},
+        {"status": "version_conflict", "current_version": 2},
+        False,
+    )
+    assert (
+        banking_business_failures(trace(rows[:1] + [conflict, submission]), policy)
+        == []
+    )

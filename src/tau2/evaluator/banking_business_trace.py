@@ -208,6 +208,44 @@ def _document_failures(observed, policy):
     return failures
 
 
+def _review_failures(observed, policy):
+    """Version provenance for successful review submission, not terminal state."""
+    failures = []
+    sources = {
+        "get_cashback_investigations",
+        "amend_cashback_investigation",
+        "submit_cashback_review",
+    }
+    for target in observed:
+        if (
+            target.call.name != "submit_cashback_review"
+            or target.call.arguments.get("case_id") != policy["case_id"]
+            or payload(target).get("review_status") != "registered"
+        ):
+            continue
+        # An older read may arrive after a newer mutation receipt. Any matching
+        # received version proves provenance; the backend validates concurrency.
+        versions = []
+        for source in observed:
+            if source.call.name not in sources or not _received(source, target):
+                continue
+            for known in records(payload(source)):
+                if (
+                    known.get("id") != policy["case_id"]
+                    or known.get("customer_id") != policy["customer_id"]
+                ):
+                    continue
+                versions.append(known.get("version"))
+                if known.get("review_status") == "registered":
+                    versions.append(known.get("review_source_version"))
+        value = target.call.arguments.get("expected_version")
+        if type(value) not in {int, float} or value not in [
+            v for v in versions if type(v) in {int, float}
+        ]:
+            failures.append(target.call.id + ":review_version_not_received")
+    return failures
+
+
 def _equal(actual, expected):
     if isinstance(actual, list) and isinstance(expected, list):
         # Item order and integer/float spelling do not change the monetary
@@ -229,6 +267,8 @@ def banking_business_failures(trace, policy, *, initial_db=None):
     policy = _mapping(policy)
     observed = trace.observed
     failures = []
+    if policy.get("case_review"):
+        failures.extend(_review_failures(observed, policy["case_review"]))
     if policy.get("fee_refunds"):
         failures.extend(_fee_failures(observed, policy["fee_refunds"]))
     if policy.get("document_delivery"):
