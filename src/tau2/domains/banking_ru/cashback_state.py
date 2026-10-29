@@ -5,6 +5,8 @@ from copy import deepcopy
 from tau2.domains.banking_ru.reward_funding import (
     reserve_key,
     reserve_members,
+    reserve_operations,
+    shared_held,
     shared_spent,
 )
 from tau2.domains.banking_ru.reward_workflows import (
@@ -158,6 +160,11 @@ def funding_replacement(tools, offer, update):
             if (
                 reserve_key(replacement) != reserve_key(offer)
                 or any(shared_spent(tools.db, offer).values())
+                or any(shared_held(tools.db, offer).values())
+                or any(
+                    row["status"] == "execution_unknown"
+                    for row in reserve_operations(tools.db, offer)
+                )
                 or any(
                     row.version != offer.version
                     or row.selection_budget != offer.selection_budget

@@ -109,6 +109,7 @@ TOOL_OWNERS = {
     "get_reward_resolution_offers": "loyalty",
     "get_reward_resolution_components": "loyalty",
     "execute_reward_resolution": "loyalty",
+    "get_reward_resolution_status": "loyalty",
     "get_cashback_adjustment_permissions": "loyalty",
     "execute_cashback_adjustment": "loyalty",
     "refresh_cashback_settlement": "loyalty",

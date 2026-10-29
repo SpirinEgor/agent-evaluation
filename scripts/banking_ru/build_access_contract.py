@@ -12,7 +12,7 @@ from pathlib import Path
 
 from build_confidentiality_contract import DATA, TASK_FILE, render_contract
 
-from tau2.domains.banking_ru.component_eligibility import COMMON_READ_ACCESS
+from tau2.domains.banking_ru.component_eligibility import COMMON_TOOL_ACCESS
 from tau2.domains.banking_ru.task_store import (
     is_task_index,
     read_task_text,
@@ -49,6 +49,8 @@ ARGUMENT_COLLECTIONS = {
     "request_id": "bank_operations",
     "operation_id": "cashback_adjustment_operations",
     "offer_id": "reward_resolution_offers",
+    "resolution_operation_id": "reward_resolution_executions",
+    "fallback_operation_id": "reward_resolution_executions",
 }
 PUBLIC_ID_ARGUMENTS = {
     "article_id",
@@ -177,6 +179,9 @@ def protected_arguments() -> dict[str, dict[str, str]]:
         "transactions"
     )
     result["ask_client"]["request.contact_id"] = "document_contacts"
+    result["ask_client"]["request.fallback_operation_id"] = (
+        "reward_resolution_executions"
+    )
     result["ask_client"]["request.offer_id"] = "reward_resolution_offers"
     result["ask_client"]["request.case_id"] = "cases"
     result["ask_client"]["request.payouts.*.transaction_id"] = "transactions"
@@ -298,15 +303,22 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
     """Attach access policy without changing reference actions or ticket content."""
     catalog, arguments = resource_catalog(db), protected_arguments()
     validate_protected_arguments(arguments)
-    for name, fields in COMMON_READ_ACCESS.items():
-        if arguments.get(name) != fields:
+    for name, fields in COMMON_TOOL_ACCESS.items():
+        if any(
+            arguments.get(name, {}).get(field) != collection
+            for field, collection in fields.items()
+        ):
             raise ValueError(f"Shared read access/schema mismatch: {name}")
     # These customer-only selectors are applied by the common banking evaluator.
     # Do not duplicate their identical definition in all scenario files.
     arguments = {
-        name: fields
+        name: {
+            field: collection
+            for field, collection in fields.items()
+            if field not in COMMON_TOOL_ACCESS.get(name, {})
+        }
         for name, fields in arguments.items()
-        if name not in COMMON_READ_ACCESS
+        if set(fields) - set(COMMON_TOOL_ACCESS.get(name, {}))
     }
     for task in tasks:
         criteria = task["evaluation_criteria"]
@@ -330,7 +342,9 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
             "policy_id": "banking_private_access",
             "allowed_customer_ids": [customer_id],
             "authentication_action_ids": auth,
-            "resources_by_customer": catalog,
+            "resources_by_customer": {
+                k: v for k, v in catalog.items() if k != "reward_resolution_executions"
+            },
             "tool_arguments": arguments,
             "pre_auth_tools": PRE_AUTH_TOOLS,
             "pre_auth_argument_values": {"ask_client": {"request.type": "identity"}},

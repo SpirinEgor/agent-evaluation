@@ -8,7 +8,7 @@ from tau2.data_model.message import AssistantMessage, ToolCall, ToolMessage
 from tau2.evaluator.trace_evidence import evidence_from_messages
 
 
-def trace_of(rows):
+def trace_of(rows, mode="half"):
     messages = []
     for i, (name, args, result, error) in enumerate(rows):
         messages += [
@@ -20,6 +20,21 @@ def trace_of(rows):
                 role="tool", id=str(i), content=json.dumps(result), error=error
             ),
         ]
+    if mode == "full":
+        from tau2.data_model.message import Tick
+        from tau2.evaluator.trace_evidence import evidence_from_ticks
+
+        return evidence_from_ticks(
+            [
+                Tick(
+                    tick_id=i,
+                    timestamp="2026-10-14T00:00:00",
+                    agent_tool_calls=[messages[2 * i].tool_calls[0]],
+                    agent_tool_results=[messages[2 * i + 1]],
+                )
+                for i in range(len(rows))
+            ]
+        )
     return evidence_from_messages(messages)
 
 
@@ -33,10 +48,10 @@ POLICY = {
 }
 
 
-def failures(rows):
+def failures(rows, mode="half"):
     from tau2.evaluator.reward_business_trace import reward_business_failures
 
-    return reward_business_failures(trace_of(rows), POLICY)
+    return reward_business_failures(trace_of(rows, mode), POLICY)
 
 
 def test_successful_extra_creation_fails_even_after_legal_amendment():
@@ -966,3 +981,314 @@ def test_payment_receipt_can_come_from_equivalent_successful_replay(
     }:
         expected = True
     assert bool(receipt_problems) is expected, problems
+
+
+def unknown_resolution_rows(final="failed_final", replay=False):
+    from copy import deepcopy
+
+    rows = shared_reserve_rows(capacity=12)
+    first = rows[:3]
+    second = rows[3:]
+    first[-1] = (
+        first[-1][0],
+        first[-1][1],
+        {
+            "id": "op",
+            "operation_id": "op",
+            "customer_id": "own",
+            "case_id": "case",
+            "period": "2026-07",
+            "offer_id": "offer",
+            "offer_version": 1,
+            "status": "execution_unknown",
+            "funding_hold": {"reserve_id": "budget", "bank": 6, "partner": 6},
+            "state_revision": 3,
+        },
+        False,
+    )
+    terminal = {**first[-1][2], "status": final, "state_revision": 4}
+    terminal.pop("funding_hold")
+    terminal["released_funding" if final == "failed_final" else "funding_charge"] = {
+        "reserve_id": "budget",
+        "bank": 6,
+        "partner": 6,
+    }
+    transition = (
+        ("execute_reward_resolution", deepcopy(first[-1][1]), terminal, False)
+        if replay
+        else (
+            "get_reward_resolution_status",
+            {"resolution_operation_id": "op"},
+            terminal,
+            False,
+        )
+    )
+    second[0][2]["data"]["state_revision"] = 4
+    second[1][1]["expected_revision"] = 4
+    return first, transition, second
+
+
+@pytest.mark.parametrize("replay", [False, True])
+def test_unknown_resolution_hold_released_or_charged_once(replay):
+    first, final, second = unknown_resolution_rows(replay=replay)
+    assert failures(first + [final] + second) == []
+    first, final, second = unknown_resolution_rows(final="succeeded", replay=replay)
+    assert failures(first + [final] + second) == []
+    # Safe rejected retry changes no business state.
+    denied = (
+        first[-1][0],
+        {**first[-1][1], "idempotency_key": "new"},
+        {"error": "pending"},
+        True,
+    )
+    assert failures(first + [denied, final] + second) == []
+
+
+@pytest.mark.parametrize("replay", [False, True])
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_fallback_requires_exact_failed_predecessor_received_before_consent(
+    replay, mode
+):
+    from copy import deepcopy
+
+    first, final, _ = unknown_resolution_rows(replay=replay)
+    fallback = deepcopy(first)
+    offer = fallback[0][2][0]
+    offer.update(id="fallback", fallback_for_offer_id="offer")
+    fallback[0][2][:] = [offer]
+    fallback[1][2].update(confirmation_id="fallback-consent")
+    fallback[1][2]["data"].update(
+        offer_id="fallback", fallback_operation_id="op", state_revision=4
+    )
+    fallback[2][1].update(
+        offer_id="fallback",
+        confirmation_id="fallback-consent",
+        idempotency_key="fallback-key",
+        fallback_operation_id="op",
+        expected_revision=4,
+    )
+    fallback[2] = (
+        fallback[2][0],
+        fallback[2][1],
+        {
+            "status": "succeeded",
+            "funding_charge": {"reserve_id": "budget", "bank": 6, "partner": 6},
+        },
+        False,
+    )
+    assert failures(first + [final] + fallback, mode) == []
+    assert any(
+        "fallback" in p
+        for p in failures(first + fallback[:2] + [final, fallback[2]], mode)
+    )
+    bad = deepcopy(final)
+    bad[2]["offer_id"] = "arbitrary"
+    assert any("fallback" in p for p in failures(first + [bad] + fallback, mode))
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize("replay", [False, True])
+def test_resolution_unknown_requires_received_terminal_before_dependent_change(
+    mode, replay
+):
+    from tau2.data_model.message import Tick
+    from tau2.evaluator.cashback_state import cashback_state_failures
+    from tau2.evaluator.trace_evidence import evidence_from_ticks
+
+    first, final, _ = unknown_resolution_rows(replay=replay)
+    rules = (
+        "get_cashback_rules",
+        {"customer_id": "own"},
+        {
+            "customer_id": "own",
+            "period": "2026-07",
+            "state_revision": 2,
+            "settlements": [],
+        },
+        False,
+    )
+    amendment = (
+        "amend_cashback_investigation",
+        {
+            "case_id": "case",
+            "expected_revision": 4,
+            "items": [{"transaction_id": "t1", "amount": 8}],
+        },
+        {"id": "case"},
+        False,
+    )
+    rows = [rules, *first, final, amendment]
+    messages = []
+    for i, (name, args, result, error) in enumerate(rows):
+        messages.extend(
+            [
+                AssistantMessage(
+                    role="assistant",
+                    tool_calls=[ToolCall(id=str(i), name=name, arguments=args)],
+                ),
+                ToolMessage(
+                    role="tool", id=str(i), content=json.dumps(result), error=error
+                ),
+            ]
+        )
+
+    def evidence(messages):
+        if mode == "half":
+            return evidence_from_messages(messages)
+        return evidence_from_ticks(
+            [
+                Tick(
+                    tick_id=i,
+                    timestamp="2026-10-14T00:00:00",
+                    agent_tool_calls=message.tool_calls
+                    if isinstance(message, AssistantMessage)
+                    else [],
+                    agent_tool_results=[message]
+                    if isinstance(message, ToolMessage)
+                    else [],
+                )
+                for i, message in enumerate(messages)
+            ]
+        )
+
+    scope = {"customer_id": "own", "period": "2026-07"}
+    assert cashback_state_failures(evidence(messages).observed, scope) == []
+    delayed = list(messages)
+    delayed.append(delayed.pop(-3))
+    assert any(
+        "unknown_execution_not_resolved" in p
+        for p in cashback_state_failures(evidence(delayed).observed, scope)
+    )
+
+
+@pytest.mark.parametrize(
+    "final_status,expected",
+    [(None, True), ("failed_final", False), ("succeeded", True)],
+)
+def test_unknown_hold_counts_against_later_independent_consent(final_status, expected):
+    first, final, second = unknown_resolution_rows(final=final_status or "failed_final")
+    for offer in first[0][2]:
+        offer["selection_budget"].update(bank=10, partner=10)
+        offer["funding_reserve"].update(
+            bank=10, partner=10, remaining_bank=10, remaining_partner=10
+        )
+    transitions = [final] if final_status else []
+    if not final_status:
+        second[0][2]["data"]["state_revision"] = second[1][1]["expected_revision"] = 3
+    assert (
+        any(
+            "shared_funding_exceeded" in p
+            for p in failures(first + transitions + second)
+        )
+        is expected
+    )
+
+
+@pytest.mark.parametrize("final_status", ["failed_final", "succeeded"])
+def test_snapshot_operations_bootstrap_hold_when_original_receipt_is_late(final_status):
+    from copy import deepcopy
+
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    first, final, second = unknown_resolution_rows(final=final_status)
+    snapshot = deepcopy(first[0])
+    for offer in snapshot[2]:
+        offer["funding_reserve"].update(
+            remaining_bank=6,
+            remaining_partner=6,
+            held_bank=6,
+            held_partner=6,
+            operations=[
+                {"id": "op", "status": "execution_unknown", "bank": 6, "partner": 6}
+            ],
+        )
+    trace = trace_of(first + [snapshot, final] + second)
+    trace.observed[2] = trace.observed[2].model_copy(update={"result_position": 1000})
+    assert reward_business_failures(trace, POLICY) == []
+
+
+def test_late_unknown_receipt_cannot_roll_terminal_funding_back():
+    from copy import deepcopy
+
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    first, final, second = unknown_resolution_rows()
+    snapshot = deepcopy(first[0])
+    for offer in snapshot[2]:
+        offer["funding_reserve"]["operations"] = [
+            {"id": "op", "status": "failed_final", "bank": 0, "partner": 0}
+        ]
+    trace = trace_of(first + [final, snapshot] + second)
+    trace.observed[2] = trace.observed[2].model_copy(
+        update={"result_position": trace.observed[5].call_position - 1}
+    )
+    assert reward_business_failures(trace, POLICY) == []
+
+
+def test_resolution_packet_normalizes_absent_fallback_but_binds_present_predecessor():
+    from tau2.evaluator.reward_business_trace import _execution_packet
+
+    args = composite_rows()[-1][1]
+    packet = _execution_packet("execute_reward_resolution", args)
+    assert (
+        _execution_packet(
+            "execute_reward_resolution", {**args, "fallback_operation_id": None}
+        )
+        == packet
+    )
+    assert (
+        _execution_packet(
+            "execute_reward_resolution", {**args, "fallback_operation_id": ""}
+        )
+        == packet
+    )
+    assert (
+        _execution_packet(
+            "execute_reward_resolution", {**args, "fallback_operation_id": "op"}
+        )
+        != packet
+    )
+
+
+def test_old_consent_cannot_use_later_received_resolution_revision():
+    first, final, second = unknown_resolution_rows()
+    second[0][2]["data"]["state_revision"] = second[1][1]["expected_revision"] = 2
+    assert any(
+        "resolution_consent_stale" in p for p in failures(first + [final] + second)
+    )
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_equivalent_replay_resolves_original_unknown_with_delayed_receipt(mode):
+    from tau2.evaluator.cashback_state import cashback_state_failures
+
+    first, final, _ = unknown_resolution_rows(replay=True)
+    rules = (
+        "get_cashback_rules",
+        {"customer_id": "own"},
+        {
+            "customer_id": "own",
+            "period": "2026-07",
+            "state_revision": 2,
+            "settlements": [],
+        },
+        False,
+    )
+    amendment = (
+        "amend_cashback_investigation",
+        {
+            "case_id": "case",
+            "expected_revision": 4,
+            "items": [{"transaction_id": "t1", "amount": 8}],
+        },
+        {"id": "case"},
+        False,
+    )
+    trace = trace_of([rules, *first, final, amendment], mode)
+    trace.observed[3] = trace.observed[3].model_copy(update={"result_position": 1000})
+    assert (
+        cashback_state_failures(
+            trace.observed, {"customer_id": "own", "period": "2026-07"}
+        )
+        == []
+    )

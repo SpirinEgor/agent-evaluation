@@ -529,3 +529,48 @@ ERROR_SCENARIOS.update(
         for name in ("get_service_incidents", "get_partner_confirmations")
     }
 )
+
+
+def resolution_status(env):
+    from tau2.domains.banking_ru.reward_resolution_models import (
+        RewardResolutionExecution,
+    )
+
+    identify(env, "gromov_a_1187")
+    env.tools.db.reward_resolution_executions["resolution-api"] = (
+        RewardResolutionExecution(
+            id="resolution-api",
+            customer_id="gromov_a_1187",
+            case_id="case-api",
+            period="2026-07",
+            transaction_ids=["txn-api"],
+            idempotency_key="api-key",
+            packet={"offer_id": "offer-api"},
+            result={
+                "id": "resolution-api",
+                "operation_id": "resolution-api",
+                "customer_id": "gromov_a_1187",
+                "status": "failed_final",
+                "ledger": [],
+                "released_funding": {
+                    "reserve_id": "reserve-api",
+                    "bank": 9,
+                    "partner": 9,
+                },
+            },
+        )
+    )
+    result = _read(
+        env, "get_reward_resolution_status", resolution_operation_id="resolution-api"
+    )
+    assert result["status"] == "failed_final" and result["ledger"] == []
+    assert result["released_funding"]["bank"] == 9
+
+
+SUCCESS_SCENARIOS["get_reward_resolution_status"] = resolution_status
+ERROR_SCENARIOS["get_reward_resolution_status"] = lambda env: reject(
+    env,
+    "get_reward_resolution_status",
+    "ERR_NOT_FOUND",
+    resolution_operation_id="missing-resolution",
+)

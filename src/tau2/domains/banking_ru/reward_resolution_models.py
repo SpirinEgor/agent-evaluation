@@ -96,6 +96,7 @@ class RewardResolutionOffer(BaseModel):
     valid_to: str
     components: list[RewardResolutionComponent] = Field(default_factory=list)
     selection_budget: RewardResolutionBudget | None = None
+    fallback_for_offer_id: str | None = None
 
 
 class RewardResolutionPreferences(BaseModel):
@@ -111,6 +112,15 @@ class RewardResolutionPreferences(BaseModel):
     text: str
 
 
+class RewardResolutionSettlement(BaseModel):
+    """Already validated posting intent; resolving never revalidates a new payment."""
+
+    final_status: Literal["failed_final", "succeeded"]
+    ledger: list[dict]
+    total_amount: float
+    funding_charge: dict | None = None
+
+
 class RewardResolutionExecution(BaseModel):
     id: str
     customer_id: str
@@ -120,3 +130,4 @@ class RewardResolutionExecution(BaseModel):
     idempotency_key: str
     packet: dict
     result: dict
+    pending_settlement: RewardResolutionSettlement | None = None

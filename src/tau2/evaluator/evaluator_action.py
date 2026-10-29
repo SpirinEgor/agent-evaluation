@@ -323,9 +323,23 @@ def _tool_access_failures(
         }
         for collection, grouped in policy.resources_by_customer.items()
     }
+    from tau2.domains.banking_ru.component_eligibility import (
+        COMMON_RESULT_COLLECTIONS,
+        COMMON_TOOL_ACCESS,
+    )
+
+    result_collections = dict(policy.result_resource_collections)
+    if policy.policy_id == "banking_private_access":
+        for name, collections in COMMON_RESULT_COLLECTIONS.items():
+            result_collections[name] = list(
+                set(result_collections.get(name, [])) | set(collections)
+            )
+        for fields in COMMON_TOOL_ACCESS.values():
+            for collection in fields.values():
+                owners.setdefault(collection, {})
     allowed = set(policy.allowed_customer_ids)
     authenticated: dict[str, _ObservedCall] = {}
-    dynamic_sources: dict[tuple[str, str], _ObservedCall] = {}
+    dynamic_sources: dict[tuple[str, str], list[_ObservedCall]] = {}
     by_id = {action.action_id: action for action in actions}
     auth_actions = [
         by_id[name] for name in policy.authentication_action_ids if name in by_id
@@ -384,9 +398,9 @@ def _tool_access_failures(
             continue
         fields = policy.tool_arguments.get(call.name)
         if policy.policy_id == "banking_private_access":
-            from tau2.domains.banking_ru.component_eligibility import COMMON_READ_ACCESS
-
-            fields = COMMON_READ_ACCESS.get(call.name, fields)
+            shared = COMMON_TOOL_ACCESS.get(call.name)
+            if shared is not None:
+                fields = {**(fields or {}), **shared}
         if fields is None:
             continue
         before_failures = len(failures)
@@ -415,8 +429,10 @@ def _tool_access_failures(
                 target_owners.add(owner)
                 if owner not in allowed:
                     violation(item, "foreign_owner", field, owner)
-                source = dynamic_sources.get((collection, selector))
-                if source is not None and not _result_available_before(source, item):
+                sources = dynamic_sources.get((collection, selector))
+                if sources is not None and not any(
+                    _result_available_before(source, item) for source in sources
+                ):
                     violation(item, "resource_result_not_received", field, owner)
         pre_auth = call.name in policy.pre_auth_tools
         selectors = policy.pre_auth_argument_values.get(call.name)
@@ -451,7 +467,7 @@ def _tool_access_failures(
         # introduce the new ID; the receipt boundary remains in dynamic_sources.
         if (
             call.name == "refund_fee"
-            and "transactions" in policy.result_resource_collections.get(call.name, [])
+            and "transactions" in result_collections.get(call.name, [])
             and fields.get("transaction_id") == "transactions"
             and item.result.id == call.id
             and item.result.requestor == "assistant"
@@ -472,9 +488,47 @@ def _tool_access_failures(
                 and refund not in owners["transactions"]
             ):
                 owners["transactions"][refund] = owner
-                dynamic_sources[("transactions", refund)] = item
-        for collection in policy.result_resource_collections.get(call.name, []):
-            for record in records(payload):
+                dynamic_sources[("transactions", refund)] = [item]
+        for collection in result_collections.get(call.name, []):
+            candidates = records(payload)
+            if (
+                policy.policy_id == "banking_private_access"
+                and collection == "reward_resolution_executions"
+            ):
+                # Operation roots are authoritative. Nested ledger/offer IDs
+                # belong to other collections and must never become operation IDs.
+                candidates = [payload] if isinstance(payload, dict) else []
+                if call.name == "get_reward_resolution_offers":
+                    offers = payload if isinstance(payload, list) else []
+                    own_offers = {
+                        offer.get("id"): offer
+                        for offer in offers
+                        if isinstance(offer, dict)
+                        and offer.get("customer_id") in target_owners & allowed
+                        and offer.get("customer_id")
+                        == call.arguments.get("customer_id")
+                        and offer.get("case_id") == call.arguments.get("case_id")
+                    }
+                    candidates = []
+                    for offer in own_offers.values():
+                        reserve = offer.get("funding_reserve")
+                        if not isinstance(reserve, dict):
+                            continue
+                        for operation in reserve.get("operations", []):
+                            if not isinstance(operation, dict):
+                                continue
+                            origin = own_offers.get(operation.get("offer_id"))
+                            if (
+                                origin is not None
+                                and all(
+                                    operation.get(key) == origin.get(key)
+                                    for key in ("customer_id", "case_id", "period")
+                                )
+                                and operation.get("transaction_ids")
+                                == origin.get("transaction_ids")
+                            ):
+                                candidates.append(operation)
+            for record in candidates:
                 resource = record.get(policy.result_id_field)
                 owner = record.get(policy.result_owner_field)
                 if owner is None:
@@ -486,7 +540,14 @@ def _tool_access_failures(
                     continue
                 if resource not in owners[collection]:
                     owners[collection][resource] = owner
-                    dynamic_sources[(collection, resource)] = item
+                    dynamic_sources[(collection, resource)] = [item]
+                elif (
+                    owners[collection][resource] == owner
+                    and (collection, resource) in dynamic_sources
+                ):
+                    # An unreceived first execution must not poison a later
+                    # received equivalent status, replay or scoped snapshot.
+                    dynamic_sources[(collection, resource)].append(item)
     return failures
 
 

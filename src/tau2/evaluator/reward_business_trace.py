@@ -37,6 +37,8 @@ def _execution_packet(name, args):
         packet["component_ids"] = sorted(args["component_ids"])
     if args.get("eligibility_evidence"):
         packet["eligibility_evidence"] = args["eligibility_evidence"]
+    if args.get("fallback_operation_id"):
+        packet["fallback_operation_id"] = args["fallback_operation_id"]
     return packet
 
 
@@ -116,6 +118,148 @@ def _component_amounts(offer, args, sources, grounds):
     return total, expected, costs
 
 
+def _resolution_receipts(observed, target, policy):
+    """Received operation transitions with exact scope and immutable terminal state."""
+    states = {}
+    for source in sorted(
+        observed,
+        key=lambda row: row.result_position
+        if row.result_position is not None
+        else float("inf"),
+    ):
+        if (
+            source.result_position is None
+            or source.result_position >= target.call_position
+        ):
+            continue
+        if source.call.name not in {
+            "execute_reward_resolution",
+            "get_reward_resolution_status",
+        }:
+            continue
+        result = payload(source)
+        if not isinstance(result, dict) or result.get("status") not in {
+            "execution_unknown",
+            "failed_final",
+            "succeeded",
+        }:
+            continue
+        operation = result.get("operation_id", result.get("id"))
+        if not operation or any(
+            result.get(field) != policy[field]
+            for field in ("customer_id", "case_id", "period")
+        ):
+            continue
+        origins = [
+            row
+            for row in observed
+            if row.call.name == "execute_reward_resolution"
+            and row.call_position <= source.call_position
+            and row.call.arguments.get("offer_id") == result.get("offer_id")
+            and row.call.arguments.get("case_id") == policy["case_id"]
+            and isinstance(payload(row), dict)
+            and payload(row).get("operation_id", payload(row).get("id")) == operation
+        ]
+        if not origins:
+            continue
+        origin = min(origins, key=lambda row: row.call_position)
+        if source.call.name == "get_reward_resolution_status":
+            if source.call.arguments.get("resolution_operation_id") != operation:
+                continue
+        elif _execution_packet(
+            source.call.name, source.call.arguments
+        ) != _execution_packet(
+            origin.call.name, origin.call.arguments
+        ) or source.call.arguments.get("idempotency_key") != origin.call.arguments.get(
+            "idempotency_key"
+        ):
+            continue
+        if str(result.get("offer_version")) != str(
+            origin.call.arguments.get("offer_version")
+        ):
+            continue
+        previous = states.get(operation)
+        if previous and previous[0]["status"] in {"failed_final", "succeeded"}:
+            continue
+        states[operation] = (result, origin, source)
+    return states
+
+
+def _remaining_funding(observed, boundary, offer_source, reserve, policy):
+    """Apply received obligation changes to a received reserve snapshot once."""
+    remaining = {
+        kind: _money(reserve.get("remaining_" + kind)) for kind in ("bank", "partner")
+    }
+    baseline = {
+        row["id"]: {kind: _money(row.get(kind, 0)) for kind in remaining}
+        for row in reserve.get("operations", [])
+        if isinstance(row, dict) and row.get("id")
+    }
+    # Legacy snapshots lack operation IDs; receipt time still prevents counting
+    # a charge already reflected in a refreshed snapshot twice.
+    transitions = _resolution_receipts(observed, boundary, policy)
+    for operation, (result, origin, source) in transitions.items():
+        if source.result_position <= offer_source.result_position:
+            continue
+        status = result["status"]
+        costs = (
+            result.get(
+                "funding_hold" if status == "execution_unknown" else "funding_charge"
+            )
+            or {}
+        )
+        released = result.get("released_funding") or {}
+        if costs.get("reserve_id", released.get("reserve_id")) != reserve["id"]:
+            continue
+        previous = baseline.get(operation)
+        if previous is None:
+            previous = {kind: Decimal(0) for kind in remaining}
+            # If an unknown receipt preceded the snapshot, its hold was already
+            # deducted even in older snapshots that did not enumerate operations.
+            for earlier in observed:
+                value = payload(earlier)
+                if (
+                    earlier.result_position is not None
+                    and earlier.result_position <= offer_source.result_position
+                    and isinstance(value, dict)
+                    and value.get("operation_id", value.get("id")) == operation
+                    and value.get("status") == "execution_unknown"
+                ):
+                    previous = {
+                        kind: _money((value.get("funding_hold") or {}).get(kind, 0))
+                        for kind in remaining
+                    }
+        for kind in remaining:
+            current = (
+                Decimal(0) if status == "failed_final" else _money(costs.get(kind, 0))
+            )
+            remaining[kind] -= current - previous[kind]
+    # Backward compatible successful receipts without operation metadata.
+    keys = set()
+    for row in observed:
+        value = payload(row)
+        if (
+            row.call.name != "execute_reward_resolution"
+            or not isinstance(value, dict)
+            or value.get("operation_id", value.get("id"))
+            or value.get("status") != "succeeded"
+            or row.result_position is None
+            or not offer_source.result_position
+            < row.result_position
+            < boundary.call_position
+        ):
+            continue
+        key = row.call.arguments.get("idempotency_key") or row.call.id
+        if key in keys:
+            continue
+        keys.add(key)
+        charge = value.get("funding_charge") or {}
+        if charge.get("reserve_id") == reserve["id"]:
+            for kind in remaining:
+                remaining[kind] -= _money(charge.get(kind, 0))
+    return remaining
+
+
 def reward_business_failures(trace, policy):
     """Validate every successful protected mutation, including later repaired ones."""
     if not policy:
@@ -125,7 +269,6 @@ def reward_business_failures(trace, policy):
     observed = sorted(trace.observed, key=lambda row: row.execution_index)
     failures, executions, spent = [], {}, {}
     payments = []
-    funding_charges = []
     selected = set(policy["transaction_ids"])
     initial = policy["initial_case_items"]
 
@@ -150,6 +293,7 @@ def reward_business_failures(trace, policy):
                 "consent_stale",
                 "funding_pending",
                 "offer_changed",
+                "failed_final",
             }
         ):
             continue
@@ -302,6 +446,8 @@ def reward_business_failures(trace, policy):
                     == sorted(args.get("component_ids") or [])
                     and (data.get("eligibility_evidence") or {})
                     == (args.get("eligibility_evidence") or {})
+                    and (data.get("fallback_operation_id") or None)
+                    == (args.get("fallback_operation_id") or None)
                 ):
                     confirmed = True
                     consent_source = source
@@ -395,6 +541,65 @@ def reward_business_failures(trace, policy):
                     or len(by_tx) != len(payouts)
                 ):
                     failures.append(f"{ident}:resolution_amount_outside_offer")
+            if consent_source is not None:
+                for source in observed:
+                    row = payload(source)
+                    if (
+                        source.call.name
+                        in {"execute_reward_resolution", "get_reward_resolution_status"}
+                        and source.result_position is not None
+                        and source.result_position < target.call_position
+                        and isinstance(row, dict)
+                        and all(
+                            row.get(field) == policy[field]
+                            for field in ("customer_id", "case_id", "period")
+                        )
+                        and row.get("state_revision") is not None
+                        and _money(row["state_revision"])
+                        > _money(args.get("expected_revision"))
+                    ):
+                        failures.append(f"{ident}:resolution_consent_stale")
+                        break
+            predecessor = (offer or {}).get("fallback_for_offer_id")
+            if predecessor or args.get("fallback_operation_id"):
+                proof = _resolution_receipts(
+                    observed, consent_source or target, policy
+                ).get(args.get("fallback_operation_id"))
+                valid = False
+                if predecessor and proof:
+                    terminal, origin, _ = proof
+                    hold = payload(origin).get("funding_hold") or {}
+                    release = terminal.get("released_funding") or {}
+                    valid = (
+                        terminal.get("status") == "failed_final"
+                        and terminal.get("offer_id") == predecessor
+                        and {
+                            row.get("transaction_id")
+                            for row in origin.call.arguments.get("payouts", [])
+                        }
+                        == tids
+                        and bool(release)
+                        and not terminal.get("ledger")
+                        and not terminal.get("funding_hold")
+                        and not terminal.get("funding_charge")
+                        and all(
+                            _money(hold.get(kind)).is_finite()
+                            and _money(hold.get(kind)) >= 0
+                            for kind in ("bank", "partner")
+                        )
+                        and sum(
+                            (_money(hold.get(kind)) for kind in ("bank", "partner")),
+                            Decimal(0),
+                        )
+                        > 0
+                        and all(
+                            _money(release.get(kind)) == _money(hold.get(kind))
+                            for kind in ("bank", "partner")
+                        )
+                        and release.get("reserve_id") == hold.get("reserve_id")
+                    )
+                if not valid:
+                    failures.append(f"{ident}:fallback_failure_not_received")
             budget = (offer or {}).get("selection_budget") or {}
             if str(budget.get("shared", False)).lower() == "true":
                 reserve = offer.get("funding_reserve") or {}
@@ -410,44 +615,51 @@ def reward_business_failures(trace, policy):
                 ):
                     failures.append(f"{ident}:shared_funding_not_received")
                 else:
-                    charge = result.get("funding_charge") or {}
+                    charge = (
+                        result.get(
+                            "funding_hold"
+                            if result.get("status") == "execution_unknown"
+                            else "funding_charge"
+                        )
+                        or {}
+                    )
                     if charge.get("reserve_id") != reserve["id"] or any(
                         _money(charge.get(source)) != component_costs[source]
                         for source in ("bank", "partner")
                     ):
                         failures.append(f"{ident}:shared_funding_charge_mismatch")
-                    key = (
-                        offer["customer_id"],
-                        offer["case_id"],
-                        offer["period"],
-                        reserve["id"],
+                    remaining = _remaining_funding(
+                        observed,
+                        consent_source or target,
+                        offer_source,
+                        reserve,
+                        policy,
                     )
-                    for source in ("bank", "partner"):
-                        remaining = _money(reserve.get("remaining_" + source))
-                        since_snapshot = sum(
-                            (
-                                costs[source]
-                                for previous_key, position, costs in funding_charges
-                                if previous_key == key
-                                and position > offer_source.execution_index
-                            ),
-                            Decimal(0),
-                        )
-                        if (
-                            not remaining.is_finite()
-                            or remaining < 0
-                            or remaining > _money(reserve.get(source))
-                            or component_costs[source] + since_snapshot > remaining
-                        ):
-                            failures.append(f"{ident}:shared_funding_exceeded")
-                            break
-                    funding_charges.append(
-                        (key, target.execution_index, component_costs)
-                    )
+                    if any(
+                        not remaining[source].is_finite()
+                        or remaining[source] < 0
+                        or remaining[source] > _money(reserve.get(source))
+                        or component_costs[source] > remaining[source]
+                        for source in ("bank", "partner")
+                    ):
+                        failures.append(f"{ident}:shared_funding_exceeded")
+            for operation, (state, origin, _) in _resolution_receipts(
+                observed, target, policy
+            ).items():
+                if state["status"] not in {"execution_unknown", "succeeded"}:
+                    continue
+                if tids.intersection(
+                    row.get("transaction_id")
+                    for row in origin.call.arguments.get("payouts", [])
+                ):
+                    failures.append(f"{ident}:overlapping_reward_execution")
+                    break
+            if result.get("status") == "execution_unknown":
+                continue
             if tids & (
                 spent.get("resolution_transactions", set())
                 | spent.get("adjustment_transactions", set())
             ):
                 failures.append(f"{ident}:overlapping_reward_execution")
             spent.setdefault("resolution_transactions", set()).update(tids)
-    return failures
+    return list(dict.fromkeys(failures))

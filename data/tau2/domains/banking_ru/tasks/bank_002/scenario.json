@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Получить максимальную допустимую выплату, дополнить существующее дело остатками и передать полный состав на рассмотрение, сохранив права и остальные позиции.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "2026-10-29-bank2-sharedreserve-v10; completion_only; shared final reserve 23/20; X+Y 40 RUB, review 45 RUB; model difficulty not measured"
+    "notes": "2026-10-29-bank2-unknown-v11; completion_only; X unknown then failed_final; R+Y 39 RUB, review 46 RUB; shared final charge 21/18; model difficulty not measured"
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -320,6 +320,46 @@
               "partner": 20,
               "shared": true
             }
+          },
+          "offer_610751": {
+            "id": "offer_610751",
+            "customer_id": "gromov_a_1187",
+            "case_id": "case_610903",
+            "period": "2026-07",
+            "transaction_ids": [
+              "txn_804219"
+            ],
+            "version": 1,
+            "amount": 17,
+            "amount_basis": "incremental",
+            "status": "approved",
+            "rights": "preserve",
+            "terms_id": "reward_resolution_rights",
+            "allocation_terms_id": "reward_resolution_amounts",
+            "allocation_first_transaction_id": "txn_804219",
+            "allocation_first_amount": 17,
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "components": [
+              {
+                "id": "R",
+                "exclusive_group": "single",
+                "amount": 17,
+                "settlement_deduction": 0,
+                "bank_cost": 8,
+                "partner_cost": 9,
+                "allocation_first_amount": 17,
+                "incompatible_with": [],
+                "required_companions": []
+              }
+            ],
+            "selection_budget": {
+              "id": "budget_610735",
+              "bank": 20,
+              "partner": 20,
+              "shared": true
+            },
+            "fallback_for_offer_id": "offer_610741"
           }
         },
         "transactions": {
@@ -399,9 +439,12 @@
             "enrollment_card_id": "card_804217",
             "status": "accepted"
           }
+        },
+        "reward_resolution_execution_profiles": {
+          "offer_610741": "failed_final"
         }
       }
     }
   },
-  "scenario_version": "2026-10-29-bank2-sharedreserve-v10"
+  "scenario_version": "2026-10-29-bank2-unknown-v11"
 }

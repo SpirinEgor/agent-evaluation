@@ -4,9 +4,23 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 # Shared private reads are declared once, rather than copied into every task.
-COMMON_READ_ACCESS = {
+COMMON_TOOL_ACCESS = {
     "get_service_incidents": {"customer_id": "customers"},
     "get_partner_confirmations": {"customer_id": "customers"},
+    "get_reward_resolution_status": {
+        "resolution_operation_id": "reward_resolution_executions"
+    },
+    "execute_reward_resolution": {
+        "fallback_operation_id": "reward_resolution_executions"
+    },
+    "ask_client": {"request.fallback_operation_id": "reward_resolution_executions"},
+}
+
+
+COMMON_RESULT_COLLECTIONS = {
+    "get_reward_resolution_offers": ["reward_resolution_executions"],
+    "execute_reward_resolution": ["reward_resolution_executions"],
+    "get_reward_resolution_status": ["reward_resolution_executions"],
 }
 
 

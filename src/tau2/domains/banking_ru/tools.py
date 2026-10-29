@@ -245,14 +245,34 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         snapshot.pop("cashback_revision_states", None)
         snapshot.pop("cashback_adjustment_operations", None)
         snapshot.pop("reward_resolution_executions", None)
+        if not snapshot.get("reward_resolution_execution_profiles"):
+            snapshot.pop("reward_resolution_execution_profiles", None)
+        for offer_row in snapshot["reward_resolution_offers"].values():
+            if offer_row.get("fallback_for_offer_id") is None:
+                offer_row.pop("fallback_for_offer_id", None)
         # Request IDs/order are not business state; actual reserve consumption is.
-        from tau2.domains.banking_ru.reward_funding import reserve_key, shared_spent
+        from tau2.domains.banking_ru.reward_funding import (
+            reserve_key,
+            shared_held,
+            shared_spent,
+        )
 
         funding = {}
         for offer in self.db.reward_resolution_offers.values():
             key = reserve_key(offer)
             if key is not None:
-                funding["|".join(key)] = shared_spent(self.db, offer)
+                usage = shared_spent(self.db, offer)
+                held = shared_held(self.db, offer)
+                if any(held.values()):
+                    usage = {**usage, "held": held}
+                funding["|".join(key)] = usage
+        pending = sorted(
+            (o.customer_id, o.case_id, o.period, o.packet["offer_id"])
+            for o in self.db.reward_resolution_executions.values()
+            if o.result.get("status") == "execution_unknown"
+        )
+        if pending:
+            snapshot["pending_reward_resolutions"] = pending
         if funding:
             snapshot["shared_reward_funding_usage"] = funding
         from tau2.domains.banking_ru.reward_workflows import standard_cycle
@@ -1276,6 +1296,16 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
             return DiscoveryResponse(
                 dict(status="version_conflict", current_version=case.version)
+            )
+        if any(
+            operation.customer_id == case.customer_id
+            and operation.result.get("status") == "execution_unknown"
+            and set(operation.transaction_ids)
+            & {item.transaction_id for item in case.reward_items}
+            for operation in self.db.reward_resolution_executions.values()
+        ):
+            raise ToolExecutionRejected(
+                "ERR_RESOLUTION_PENDING: Дождитесь окончательного статуса урегулирования"
             )
         case.review_source_version = case.version
         case.review_items = [x.model_copy(deep=True) for x in case.reward_items]
@@ -3142,6 +3172,14 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
         return list_components(self, offer_id, offset, limit)
 
+    @is_tool(ToolType.READ, mutates_state=True)
+    def get_reward_resolution_status(self, resolution_operation_id: str) -> dict:
+        """Получить окончательный банковский статус ранее принятого урегулирования."""
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+        from tau2.domains.banking_ru.reward_resolution import get_status
+
+        return CashbackStateResult(get_status(self, resolution_operation_id))
+
     @is_tool(ToolType.WRITE)
     def execute_reward_resolution(
         self,
@@ -3155,12 +3193,15 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         idempotency_key: str,
         component_ids: Optional[list[str]] = None,
         eligibility_evidence: Optional[dict[str, EligibilityEvidence]] = None,
+        fallback_operation_id: Optional[str] = None,
     ) -> dict:
         """Исполнить согласованное предложение. payouts — новые проводки по покупкам;
         expected_revision — ожидаемая ревизия периода; idempotency_key — ключ повтора.
         component_ids — выбранные части составного банковского предложения.
         eligibility_evidence — ссылки на договор и запись основания для условных частей.
-        Возвращает статус и проведённые записи. Не меняет суммы CRM-дела.
+        fallback_operation_id — окончательно отклонённая операция основного предложения.
+        Возвращает фактический статус; execution_unknown требует проверки статуса
+        или точного повтора с тем же ключом. Не меняет суммы CRM-дела.
         """
         from tau2.domains.banking_ru.data_model import CashbackStateResult
         from tau2.domains.banking_ru.reward_resolution import execute
@@ -3178,6 +3219,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
                 idempotency_key,
                 component_ids,
                 eligibility_evidence,
+                fallback_operation_id,
             )
         )
 

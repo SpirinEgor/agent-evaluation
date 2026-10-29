@@ -3631,6 +3631,15 @@
       ]
     },
     {
+      "action_id": "bank2:v11:status",
+      "name": "get_reward_resolution_status",
+      "arguments": {
+        "resolution_operation_id": "resolution:case_610903:offer_610741"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
       "action_id": "bank2:v10:offers-after-first",
       "name": "get_reward_resolution_offers",
       "arguments": {
@@ -3642,6 +3651,91 @@
         "customer_id",
         "case_id"
       ]
+    },
+    {
+      "action_id": "bank2:v11:consent-replacement",
+      "name": "ask_client",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "request": {
+          "type": "reward_resolution_confirmation",
+          "offer_id": "offer_610751",
+          "offer_version": 2,
+          "payouts": [
+            {
+              "transaction_id": "txn_804219",
+              "amount": 17
+            }
+          ],
+          "total_amount": 17,
+          "case_id": "case_610903",
+          "resulting_claims": [
+            {
+              "transaction_id": "txn_804219",
+              "amount": 8
+            },
+            {
+              "transaction_id": "txn_804227",
+              "amount": 53
+            },
+            {
+              "transaction_id": "txn_804205",
+              "amount": 7
+            }
+          ],
+          "state_revision": 4,
+          "component_ids": [
+            "R"
+          ],
+          "eligibility_evidence": {},
+          "fallback_operation_id": "resolution:case_610903:offer_610741"
+        }
+      },
+      "required_for_reward": false,
+      "compare_args": [
+        "customer_id"
+      ],
+      "argument_values": {
+        "request.type": "reward_resolution_confirmation"
+      }
+    },
+    {
+      "action_id": "bank2:v11:pay-replacement",
+      "name": "execute_reward_resolution",
+      "arguments": {
+        "offer_id": "offer_610751",
+        "offer_version": 2,
+        "payouts": [
+          {
+            "transaction_id": "txn_804219",
+            "amount": 17
+          }
+        ],
+        "total_amount": 17,
+        "case_id": "case_610903",
+        "confirmation_id": "resolution-confirmation-2",
+        "expected_revision": 4,
+        "idempotency_key": "bank2-resolution-r",
+        "component_ids": [
+          "R"
+        ],
+        "eligibility_evidence": {},
+        "fallback_operation_id": "resolution:case_610903:offer_610741"
+      },
+      "required_for_reward": false,
+      "compare_args": [
+        "case_id"
+      ]
+    },
+    {
+      "action_id": "bank2:v11:offers-after-replacement",
+      "name": "get_reward_resolution_offers",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "case_id": "case_610903"
+      },
+      "required_for_reward": false,
+      "compare_args": []
     },
     {
       "action_id": "bank2:v10:consent-second",
@@ -3663,7 +3757,7 @@
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 7
+              "amount": 8
             },
             {
               "transaction_id": "txn_804227",
@@ -3674,7 +3768,7 @@
               "amount": 7
             }
           ],
-          "state_revision": 3,
+          "state_revision": 5,
           "component_ids": [
             "Y"
           ],
@@ -3708,8 +3802,8 @@
         ],
         "total_amount": 22,
         "case_id": "case_610903",
-        "confirmation_id": "resolution-confirmation-2",
-        "expected_revision": 3,
+        "confirmation_id": "resolution-confirmation-3",
+        "expected_revision": 5,
         "idempotency_key": "bank2-resolution-y",
         "component_ids": [
           "Y"
@@ -3734,14 +3828,14 @@
         "items": [
           {
             "transaction_id": "txn_804219",
-            "amount": 7
+            "amount": 8
           },
           {
             "transaction_id": "txn_804227",
             "amount": 31
           }
         ],
-        "expected_revision": 4
+        "expected_revision": 6
       },
       "required_for_reward": true,
       "compare_args": [
@@ -5541,7 +5635,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_amounts.md",
         "complete": true,
-        "sha256": "96a08c42a035c35dddc68907871187e4ee1c275633bb8e7f518a9264e5c20ddb"
+        "sha256": "dbd8cc6b2e1d0bbe36147927ee36f957ad5b4ad1a9acec1afba47b2b8a9c0f93"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5560,7 +5654,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_rights.md",
         "complete": true,
-        "sha256": "320cb40c55e7bd2b0f5956ac99ca048239356d648ce2cbbdc1d26827a8150bd1"
+        "sha256": "cde22a42d027fb2f98b6c1adc3be9ed8698e0e1c27c173710f64590e47c9268c"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5579,7 +5673,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_execution.md",
         "complete": true,
-        "sha256": "4e132c1bf2e302a1a0e900e3db85b1730836e05263e21991640d9aee5fc425dd"
+        "sha256": "5bc1370e1d29deccaa8361c1b783d553b51452302ece5ba12ea466e4511599d3"
       },
       "recoverable_result_statuses": [
         "settlement_pending",

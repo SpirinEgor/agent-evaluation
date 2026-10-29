@@ -1147,6 +1147,9 @@ class BankingDB(DB):
     reward_resolution_preferences: dict[str, RewardResolutionPreferences] = Field(
         default_factory=dict
     )
+    reward_resolution_execution_profiles: dict[
+        str, Literal["failed_final", "succeeded"]
+    ] = Field(default_factory=dict)
     reward_resolution_executions: dict[str, RewardResolutionExecution] = Field(
         default_factory=dict
     )

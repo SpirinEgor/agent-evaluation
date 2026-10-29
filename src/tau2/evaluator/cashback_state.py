@@ -32,17 +32,9 @@ def payload(call):
 
 def signature(args):
     if "offer_id" in args:
-        return tuple(
-            json.dumps(args.get(k), sort_keys=True)
-            for k in (
-                "offer_id",
-                "offer_version",
-                "case_id",
-                "payouts",
-                "total_amount",
-                "confirmation_id",
-            )
-        )
+        from tau2.evaluator.reward_business_trace import _execution_packet
+
+        return _execution_packet("execute_reward_resolution", args)
     return (
         args.get("permission_id"),
         args.get("transaction_id"),
@@ -87,10 +79,25 @@ def cashback_state_failures(observed, policy):
         for c in observed
         if isinstance(payload(c), dict)
         and payload(c).get("status") == "execution_unknown"
-        and c.call.name == "execute_cashback_adjustment"
+        and c.call.name in {"execute_cashback_adjustment", "execute_reward_resolution"}
     ]
 
     def resolved(prior, target):
+        if prior.call.name == "execute_reward_resolution":
+            from tau2.evaluator.reward_business_trace import _resolution_receipts
+
+            scope = {
+                "customer_id": customer,
+                "period": period,
+                "case_id": prior.call.arguments.get("case_id"),
+            }
+            result = _resolution_receipts(observed, target, scope).get(
+                payload(prior).get("operation_id", payload(prior).get("id"))
+            )
+            return result is not None and result[0]["status"] in {
+                "succeeded",
+                "failed_final",
+            }
         operation = payload(prior).get("operation_id")
         args = prior.call.arguments
         for source in observed:
@@ -127,6 +134,8 @@ def cashback_state_failures(observed, policy):
     for target in observed:
         name, args = target.call.name, target.call.arguments
         result = payload(target)
+        if name == "execute_reward_resolution" and not result:
+            continue
         if (
             name == "execute_reward_resolution"
             and isinstance(result, dict)
@@ -144,13 +153,20 @@ def cashback_state_failures(observed, policy):
                 name in ["execute_cashback_adjustment", "execute_reward_resolution"]
                 and args.get("idempotency_key") is not None
                 and any(
-                    received(p, target)
+                    (
+                        received(p, target)
+                        or (
+                            name == "execute_reward_resolution"
+                            and p.call_position < target.call_position
+                        )
+                    )
                     and p.call.name == name
                     and p.call.arguments.get("idempotency_key")
                     == args.get("idempotency_key")
                     and signature(p.call.arguments) == signature(args)
                     and isinstance(payload(p), dict)
-                    and payload(p).get("status") in ["succeeded", "execution_unknown"]
+                    and payload(p).get("status")
+                    in ["succeeded", "execution_unknown", "failed_final"]
                     for p in observed
                 )
             )
@@ -193,7 +209,7 @@ def cashback_state_failures(observed, policy):
                 ):
                     continue
                 if (
-                    name == "execute_cashback_adjustment"
+                    name == prior.call.name
                     and retry
                     and signature(prior.call.arguments) == signature(args)
                     and prior.call.arguments.get("idempotency_key")
@@ -203,11 +219,32 @@ def cashback_state_failures(observed, policy):
                 if name == "amend_cashback_investigation" and (
                     not any(
                         x.get("transaction_id")
-                        == prior.call.arguments.get("transaction_id")
+                        in (
+                            {
+                                row.get("transaction_id")
+                                for row in prior.call.arguments.get("payouts", [])
+                            }
+                            if prior.call.name == "execute_reward_resolution"
+                            else {prior.call.arguments.get("transaction_id")}
+                        )
                         for x in args.get("items", [])
                     )
                     or args.get("reserved_adjustments")
                 ):
+                    continue
+                if name == "execute_reward_resolution" and not (
+                    {row.get("transaction_id") for row in args.get("payouts", [])}
+                    & (
+                        {
+                            row.get("transaction_id")
+                            for row in prior.call.arguments.get("payouts", [])
+                        }
+                        if prior.call.name == "execute_reward_resolution"
+                        else {prior.call.arguments.get("transaction_id")}
+                    )
+                ):
+                    continue
+                if not result:
                     continue
                 failures.append(f"{target.call.id}:unknown_execution_not_resolved")
         if name == "done":
@@ -228,6 +265,7 @@ def cashback_state_failures(observed, policy):
                     and prior.call_position < target.call_position
                     and payload(prior)
                     and not received(prior, target)
+                    and not (prior in unknowns and resolved(prior, target))
                 ):
                     failures.append(
                         f"{target.call.id}:operation_result_not_received:{prior.call.id}"

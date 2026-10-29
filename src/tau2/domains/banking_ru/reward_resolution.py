@@ -15,7 +15,10 @@ from tau2.domains.banking_ru.reward_funding import (
     reserve_members,
     reserve_snapshot,
 )
-from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionExecution
+from tau2.domains.banking_ru.reward_resolution_models import (
+    RewardResolutionExecution,
+    RewardResolutionSettlement,
+)
 from tau2.domains.banking_ru.reward_workflows import (
     cents,
     money,
@@ -36,6 +39,75 @@ def owned_offer(tools, offer_id, case_id):
     if case.customer_id != offer.customer_id or offer.case_id != case_id:
         raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Предложение и дело не связаны")
     return offer, case
+
+
+def validate_fallback(tools, offer, operation_id):
+    """A fallback is conditional on the exact released predecessor scope."""
+    if not offer.fallback_for_offer_id:
+        if operation_id is not None:
+            raise ToolExecutionRejected(
+                "ERR_FALLBACK_NOT_AVAILABLE: Предложение не резервное"
+            )
+        return
+    op = tools.db.reward_resolution_executions.get(operation_id)
+    if (
+        op is None
+        or op.customer_id != offer.customer_id
+        or op.case_id != offer.case_id
+        or op.period != offer.period
+        or set(op.transaction_ids) != set(offer.transaction_ids)
+        or op.packet.get("offer_id") != offer.fallback_for_offer_id
+        or op.result.get("status") != "failed_final"
+        or not op.result.get("released_funding")
+        or op.result.get("funding_charge")
+        or op.result.get("funding_hold")
+    ):
+        raise ToolExecutionRejected(
+            "ERR_FALLBACK_NOT_AVAILABLE: Нет окончательного отказа и освобождения резерва"
+        )
+
+
+def _post_credits(tools, credits):
+    # Every credit and destination was validated before accepting the intent.
+    for credit in credits:
+        tools.db.transactions[credit.id] = credit
+        account = tools.db.accounts[credit.account_id]
+        account.balance = money(cents(account.balance) + cents(credit.amount))
+        tools.db.transactions[credit.original_transaction_id].cashback_granted = True
+
+
+def _settle(tools, operation):
+    if operation.result.get("status") != "execution_unknown":
+        return deepcopy(operation.result)
+    from tau2.domains.banking_ru.data_model import Transaction
+
+    plan = operation.pending_settlement
+    result = {
+        k: deepcopy(v) for k, v in operation.result.items() if k != "funding_hold"
+    }
+    result.update(status=plan.final_status, ledger=[])
+    if plan.final_status == "succeeded":
+        credits = [Transaction.model_validate(row) for row in plan.ledger]
+        _post_credits(tools, credits)
+        result.update(total_amount=plan.total_amount, ledger=deepcopy(plan.ledger))
+        if plan.funding_charge is not None:
+            result["funding_charge"] = deepcopy(plan.funding_charge)
+    elif plan.funding_charge is not None:
+        result["released_funding"] = deepcopy(plan.funding_charge)
+    result["state_revision"] = advance(
+        tools.db, operation.customer_id, operation.period
+    )
+    operation.result = result
+    operation.pending_settlement = None
+    return deepcopy(result)
+
+
+def get_status(tools, resolution_operation_id):
+    operation = tools.db.reward_resolution_executions.get(resolution_operation_id)
+    if operation is None:
+        raise ToolExecutionRejected("ERR_NOT_FOUND: Операция урегулирования не найдена")
+    tools._require_verified(operation.customer_id)
+    return _settle(tools, operation)
 
 
 def normalized(items):
@@ -152,6 +224,8 @@ def list_offers(tools, customer_id, case_id):
         if offer.customer_id != customer_id or offer.case_id != case_id:
             continue
         row = offer.model_dump()
+        if row["fallback_for_offer_id"] is None:
+            row.pop("fallback_for_offer_id")
         row.update(
             state_revision=revision(tools.db, customer_id, offer.period),
             funding_status="pending" if pending_funding(tools.db, offer) else "final",
@@ -189,7 +263,10 @@ def confirm(tools, customer_id, request):
     offer, case = owned_offer(tools, request.offer_id, request.case_id)
     if customer_id != offer.customer_id:
         raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужое предложение")
+    validate_fallback(tools, offer, request.fallback_operation_id)
     packet = request.model_dump(exclude={"type"})
+    if packet["fallback_operation_id"] is None:
+        packet.pop("fallback_operation_id")
     if not packet["eligibility_evidence"]:
         packet.pop("eligibility_evidence")
     if offer.components or packet["component_ids"]:
@@ -239,6 +316,7 @@ def execute(
     idempotency_key,
     component_ids=None,
     eligibility_evidence=None,
+    fallback_operation_id=None,
 ):
     """Execute one chosen offer; never choose or advertise the optimal offer."""
     offer, case = owned_offer(tools, offer_id, case_id)
@@ -257,6 +335,8 @@ def execute(
         total_amount=total_amount,
         case_id=case_id,
     )
+    if fallback_operation_id is not None:
+        packet["fallback_operation_id"] = fallback_operation_id
     if offer.components or component_ids:
         packet["component_ids"] = sorted(component_ids or [])
     evidence = {
@@ -271,13 +351,19 @@ def execute(
             continue
         if op.idempotency_key == idempotency_key:
             if op.packet != {**packet, "confirmation_id": confirmation_id}:
-                reject("Ключ использован с другим пакетом")
-            return deepcopy(op.result)
-        if (
+                raise ToolExecutionRejected(
+                    "ERR_IDEMPOTENCY_CONFLICT: Ключ использован с другим пакетом"
+                )
+            return _settle(tools, op)
+        if op.packet.get("offer_id") == offer_id or (
             set(op.transaction_ids) & set(offer.transaction_ids)
             and op.period == offer.period
+            and op.result.get("status") != "failed_final"
         ):
-            reject("Уже выбран способ урегулирования этих покупок")
+            raise ToolExecutionRejected(
+                "ERR_RESOLUTION_ALREADY_SELECTED: Уже выбран способ урегулирования этих покупок"
+            )
+    validate_fallback(tools, offer, fallback_operation_id)
     if not idempotency_key.strip():
         reject("Пустой ключ")
     if pending_funding(tools.db, offer):
@@ -333,6 +419,12 @@ def execute(
         ):
             reject("Ручная корректировка уже выбрана")
     consent = tools._resolution_consents.get(confirmation_id)
+    if offer.fallback_for_offer_id and (
+        not consent or consent.get("fallback_operation_id") != fallback_operation_id
+    ):
+        raise ToolExecutionRejected(
+            "ERR_FALLBACK_NOT_AVAILABLE: Нет согласия на точное основание резерва"
+        )
     if consent and consent.get("eligibility_evidence", {}) != evidence:
         raise ToolExecutionRejected(
             "ERR_COMPONENT_NOT_APPLICABLE: Основания не соответствуют согласованному пакету"
@@ -459,7 +551,8 @@ def execute(
             **{source: money(value) for source, value in costs.items()},
         }
     execution_id = "resolution:" + case_id
-    if funding_charge is not None:
+    profile = tools.db.reward_resolution_execution_profiles.get(offer_id)
+    if funding_charge is not None or profile is not None:
         execution_id += ":" + offer_id
     if execution_id in tools.db.reward_resolution_executions:
         reject("Повтор записи урегулирования")
@@ -488,11 +581,8 @@ def execute(
                 channel="online",
             )
         )
-    for credit in credits:
-        tools.db.transactions[credit.id] = credit
-        account = tools._get_account(credit.account_id)
-        account.balance = money(cents(account.balance) + cents(credit.amount))
-        tools.db.transactions[credit.original_transaction_id].cashback_granted = True
+    if profile is None:
+        _post_credits(tools, credits)
     current = advance(tools.db, offer.customer_id, offer.period)
     result = dict(
         id=execution_id,
@@ -506,7 +596,20 @@ def execute(
         offer_id=offer_id,
         offer_version=offer_version,
     )
-    if funding_charge is not None:
+    settlement = None
+    if profile is not None:
+        settlement = RewardResolutionSettlement(
+            final_status=profile,
+            ledger=[x.model_dump() for x in credits],
+            total_amount=money(total),
+            funding_charge=funding_charge,
+        )
+        result.update(operation_id=execution_id, status="execution_unknown")
+        result.pop("total_amount")
+        result.pop("ledger")
+        if funding_charge is not None:
+            result["funding_hold"] = funding_charge
+    elif funding_charge is not None:
         result["funding_charge"] = funding_charge
     tools.db.reward_resolution_executions[result["id"]] = RewardResolutionExecution(
         id=result["id"],
@@ -517,5 +620,6 @@ def execute(
         idempotency_key=idempotency_key,
         packet={**packet, "confirmation_id": confirmation_id},
         result=result,
+        pending_settlement=settlement,
     )
     return result

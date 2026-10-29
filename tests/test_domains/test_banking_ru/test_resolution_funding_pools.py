@@ -173,6 +173,8 @@ def shared_pay(e, name, *, key=None, revision=None):
 def test_shared_reserve_keeps_both_payments_and_actual_unamended_claims(order):
     from tau2.domains.banking_ru.reward_resolution import list_offers
     from tests.test_domains.test_banking_ru.test_cashback_settlement_state import (
+        PERIOD,
+        RA,
         RB,
         RCASE,
         C,
@@ -212,6 +214,32 @@ def test_shared_reserve_keeps_both_payments_and_actual_unamended_claims(order):
         "partner": 20,
         "remaining_bank": 1,
         "remaining_partner": 2,
+        "held_bank": 0,
+        "held_partner": 0,
+        "operations": [
+            {
+                "id": f"resolution:{RCASE}:X",
+                "customer_id": C,
+                "case_id": RCASE,
+                "period": PERIOD,
+                "offer_id": "X",
+                "transaction_ids": [RA],
+                "status": "succeeded",
+                "bank": 9,
+                "partner": 9,
+            },
+            {
+                "id": f"resolution:{RCASE}:Y",
+                "customer_id": C,
+                "case_id": RCASE,
+                "period": PERIOD,
+                "offer_id": "Y",
+                "transaction_ids": [RB],
+                "status": "succeeded",
+                "bank": 13,
+                "partner": 9,
+            },
+        ],
     }
 
 

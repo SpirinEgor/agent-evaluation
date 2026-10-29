@@ -27,12 +27,18 @@ def reserve_snapshot(db, offer):
     if any(row.selection_budget != budget for row in reserve_members(db, offer)):
         raise ValueError("ERR_INVALID_OFFER_DECISION: Несогласованный общий резерв")
     used = shared_spent(db, offer)
+    held = shared_held(db, offer)
     return {
         "id": budget.id,
         "bank": budget.bank,
         "partner": budget.partner,
+        "held_bank": money(held["bank"]),
+        "held_partner": money(held["partner"]),
+        "operations": reserve_operations(db, offer),
         **{
-            f"remaining_{source}": money(cents(getattr(budget, source)) - used[source])
+            f"remaining_{source}": money(
+                cents(getattr(budget, source)) - used[source] - held[source]
+            )
             for source in used
         },
     }
@@ -54,3 +60,50 @@ def shared_spent(db, offer):
             for source in used:
                 used[source] += cents(charge[source])
     return used
+
+
+def reserve_operations(db, offer):
+    """Current obligations, including zero obligations of final failed attempts."""
+    key = reserve_key(offer)
+    if key is None:
+        return []
+    rows = []
+    for op in db.reward_resolution_executions.values():
+        if (op.customer_id, op.case_id, op.period) != key[:3]:
+            continue
+        status = op.result.get("status")
+        field = {
+            "succeeded": "funding_charge",
+            "execution_unknown": "funding_hold",
+            "failed_final": "released_funding",
+        }.get(status)
+        amount = op.result.get(field, {}) if field else {}
+        if amount.get("reserve_id") != key[3]:
+            continue
+        rows.append(
+            {
+                "id": op.id,
+                "customer_id": op.customer_id,
+                "case_id": op.case_id,
+                "period": op.period,
+                "offer_id": op.packet["offer_id"],
+                "transaction_ids": list(op.transaction_ids),
+                "status": status,
+                **{
+                    source: amount[source] if status != "failed_final" else 0
+                    for source in ("bank", "partner")
+                },
+            }
+        )
+    return sorted(rows, key=lambda row: row["id"])
+
+
+def shared_held(db, offer):
+    """Pending obligations in integer cents; final outcomes never retain a hold."""
+    rows = reserve_operations(db, offer)
+    return {
+        source: sum(
+            cents(row[source]) for row in rows if row["status"] == "execution_unknown"
+        )
+        for source in ("bank", "partner")
+    }

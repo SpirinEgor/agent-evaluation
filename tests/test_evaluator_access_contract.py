@@ -283,3 +283,143 @@ def test_shared_component_reads_enforce_owner_and_identity(mode, name):
         [AUTH],
         policy,
     )
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize("foreign", [False, True])
+def test_common_resolution_operation_access_learns_received_ids(mode, foreign):
+    policy = POLICY.model_copy(deep=True)
+    policy.policy_id = "banking_private_access"
+    policy.resources_by_customer["reward_resolution_executions"] = {
+        "other": ["foreign-op"]
+    }
+    policy.tool_arguments["execute_reward_resolution"] = {"customer_id": "customers"}
+    auth = pair("verify_identity", {"customer_id": "own"}, id="a")
+    execution = pair(
+        "execute_reward_resolution",
+        {"customer_id": "own"},
+        id="e",
+        content=json.dumps(
+            {
+                "id": "foreign-op" if foreign else "new-op",
+                "customer_id": "own",
+                "status": "execution_unknown",
+            }
+        ),
+    )
+    status = pair(
+        "get_reward_resolution_status",
+        {"resolution_operation_id": "foreign-op" if foreign else "new-op"},
+        id="s",
+        content="{}",
+    )
+    rows = observed([([c], [r]) for c, r in [auth, execution, status]], mode)
+    problems = _tool_access_failures(rows, [AUTH], policy)
+    assert any(p["reason"] == "foreign_owner" for p in problems) is foreign
+    if not foreign:
+        assert problems == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize(
+    "variant",
+    [
+        "snapshot",
+        "replay",
+        "status",
+        "no_equivalent",
+        "guessed",
+        "offer_id",
+        "wrong_owner",
+        "wrong_scope",
+        "foreign_known",
+    ],
+)
+def test_resolution_operation_equivalent_receipts_before_fallback(mode, variant):
+    policy = POLICY.model_copy(deep=True)
+    policy.policy_id = "banking_private_access"
+    policy.resources_by_customer["reward_resolution_executions"] = {
+        "other": ["foreign-op"]
+    }
+    policy.tool_arguments.update(
+        {
+            "execute_reward_resolution": {"customer_id": "customers"},
+            "get_reward_resolution_offers": {"customer_id": "customers"},
+        }
+    )
+    auth = pair("verify_identity", {"customer_id": "own"}, id="auth")
+    ident = "foreign-op" if variant == "foreign_known" else "new-op"
+    operation = {
+        "id": ident,
+        "customer_id": "own",
+        "case_id": "case",
+        "period": "period",
+        "offer_id": "offer",
+        "transaction_ids": ["txn"],
+        "status": "execution_unknown",
+    }
+    execute, original = pair(
+        "execute_reward_resolution",
+        {"customer_id": "own"},
+        id="first",
+        content=json.dumps(operation),
+    )
+    batches = [([auth[0]], [auth[1]])]
+    if variant not in {"guessed", "offer_id", "wrong_owner", "wrong_scope"}:
+        batches.append(([execute], []))
+    if variant in {
+        "snapshot",
+        "wrong_owner",
+        "wrong_scope",
+        "offer_id",
+        "foreign_known",
+    }:
+        row = {
+            "id": "offer",
+            "customer_id": "own",
+            "case_id": "case",
+            "period": "period",
+            "transaction_ids": ["txn"],
+        }
+        if variant == "wrong_owner":
+            operation["customer_id"] = "other"
+        if variant == "wrong_scope":
+            operation["case_id"] = "another-case"
+        row["funding_reserve"] = {"operations": [operation]}
+        receipt = pair(
+            "get_reward_resolution_offers",
+            {"customer_id": "own", "case_id": "case"},
+            id="snapshot",
+            content=json.dumps([row]),
+        )
+        batches.append(([receipt[0]], [receipt[1]]))
+    if variant in {"status", "replay"}:
+        receipt = pair(
+            "execute_reward_resolution"
+            if variant == "replay"
+            else "get_reward_resolution_status",
+            {"customer_id": "own"}
+            if variant == "replay"
+            else {"resolution_operation_id": ident},
+            id="equivalent",
+            content=json.dumps({**operation, "status": "failed_final"}),
+        )
+        # The status request needs an earlier ID receipt; this unit isolates
+        # whether its result can replace the late original before fallback.
+        if variant == "status":
+            batches[-1][1].append(original)
+        batches.append(([receipt[0]], [receipt[1]]))
+    target = pair(
+        "ask_client",
+        {
+            "request": {
+                "fallback_operation_id": "offer" if variant == "offer_id" else ident
+            }
+        },
+        id="fallback",
+    )
+    batches.append(([target[0]], [target[1]]))
+    if variant not in {"guessed", "offer_id", "wrong_owner", "wrong_scope", "status"}:
+        batches.append(([], [original]))
+    failures = _tool_access_failures(observed(batches, mode), [AUTH], policy)
+    assert bool(failures) is (variant not in {"snapshot", "replay", "status"}), failures
