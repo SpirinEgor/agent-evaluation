@@ -652,3 +652,107 @@ def test_bank2_eligibility_changes_actual_optimum_and_whole_grade(
         RewardType.ACTION: 1,
     }
     assert db.cases["case_610903"].review_amount == review
+
+
+@pytest.mark.parametrize("source", ["article", "rules", "missing", "late_rules"])
+def test_bank2_category_source_equivalence(source):
+    """The MCC fact may come from the article or received historical rules."""
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
+    deferred = []
+    for action in task.evaluation_criteria.actions:
+        if (
+            source != "article"
+            and action.name == "file_read"
+            and action.arguments["path"] == "/knowledge/reward_merchant_categories.md"
+        ):
+            continue
+        if action.name == "get_cashback_rules" and source in {"missing", "late_rules"}:
+            deferred.append(action)
+            continue
+        result = session.call(action.name, action.arguments)
+        assert not result.is_error, result.content
+    if source == "late_rules":
+        assert deferred
+        session.replay_actions(deferred)
+    session.call("done", {})
+    category_ids = {
+        item.evidence_id
+        for item in task.evaluation_criteria.result_evidence
+        if "doc:reward_merchant_categories:" in item.evidence_id
+    }
+    assert len(category_ids) == 2
+    for grade in (session.grade(), grade_full_session(session).reward_info):
+        assert grade.reward_breakdown[RewardType.DB] == 1
+        assert grade.reward == (1 if source in {"article", "rules"} else 0)
+        failures = set((grade.info.get("action") or {}).get("result_evidence", []))
+        assert (
+            category_ids.isdisjoint(failures)
+            if source in {"article", "rules"}
+            else category_ids <= failures
+        )
+
+
+@pytest.mark.parametrize("invalid", ["mcc", "period", "product", "split_records"])
+def test_bank2_category_rules_require_one_matching_historical_record(invalid):
+    from tau2.data_model.message import AssistantMessage, ToolCall, ToolMessage
+    from tau2.evaluator.evaluator_action import _result_evidence_failures
+    from tau2.evaluator.trace_evidence import evidence_from_messages
+
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    session = PlatformSession(task, get_environment)
+    payload = session.env.tools.db.cashback_rules["gromov_a_1187"].model_dump(
+        mode="json"
+    )
+    evidence = [
+        item
+        for item in task.evaluation_criteria.result_evidence
+        if "doc:reward_merchant_categories:" in item.evidence_id
+    ]
+    assert len(evidence) == 2
+    targets = [
+        next(
+            a
+            for a in task.evaluation_criteria.actions
+            if a.action_id == item.before_action_id
+        )
+        for item in evidence
+    ]
+
+    def failures(data):
+        read = ToolCall(
+            id="rules",
+            name="get_cashback_rules",
+            arguments={"customer_id": "gromov_a_1187"},
+        )
+        messages = [
+            AssistantMessage(role="assistant", tool_calls=[read]),
+            ToolMessage(role="tool", id="rules", content=json.dumps(data)),
+        ]
+        for index, action in enumerate(targets):
+            call = ToolCall(
+                id=f"target-{index}", name=action.name, arguments=action.arguments
+            )
+            messages.append(AssistantMessage(role="assistant", tool_calls=[call]))
+        return _result_evidence_failures(
+            evidence_from_messages(messages).observed,
+            task.evaluation_criteria.actions,
+            evidence,
+        )
+
+    assert not failures(payload)
+    record = next(
+        row for row in payload["categories_history"] if row["id"] == "cafe-rate-july"
+    )
+    if invalid == "mcc":
+        record["categories"][0]["mcc_codes"] = ["5411"]
+    elif invalid == "period":
+        record["effective_from"] = "2026-08-01"
+    elif invalid == "product":
+        record["product_code"] = "other_rewards"
+    else:
+        other = deepcopy(record)
+        other["id"] = "different-record"
+        record["categories"][0]["mcc_codes"] = ["5411"]
+        payload["categories_history"].append(other)
+    assert set(failures(payload)) == {item.evidence_id for item in evidence}

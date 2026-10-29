@@ -4101,7 +4101,32 @@
         "txn_804219"
       ],
       "only_if_target_attempted": true,
-      "before_action_id": "bank2:v4:amend"
+      "before_action_id": "bank2:v4:amend",
+      "alternatives": [
+        {
+          "tool_names": [
+            "get_cashback_rules"
+          ],
+          "record_id": "cafe-rate-july",
+          "expected_fields": {
+            "product_code": "cafe_rewards",
+            "program": "standard_cashback",
+            "effective_from": "2026-07-01",
+            "effective_to": "2026-07-31",
+            "categories": [
+              {
+                "name": "Рестораны и кафе",
+                "rate": 0.05,
+                "mcc_codes": [
+                  "5812",
+                  "5813",
+                  "5814"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "evidence_id": "bank2:v4:doc:reward_merchant_categories:bank2:v4:amend:resolution",
@@ -4122,7 +4147,32 @@
         "offer_changed"
       ],
       "only_if_target_attempted": true,
-      "before_action_id": "bank2:v5:pay"
+      "before_action_id": "bank2:v5:pay",
+      "alternatives": [
+        {
+          "tool_names": [
+            "get_cashback_rules"
+          ],
+          "record_id": "cafe-rate-july",
+          "expected_fields": {
+            "product_code": "cafe_rewards",
+            "program": "standard_cashback",
+            "effective_from": "2026-07-01",
+            "effective_to": "2026-07-31",
+            "categories": [
+              {
+                "name": "Рестораны и кафе",
+                "rate": 0.05,
+                "mcc_codes": [
+                  "5812",
+                  "5813",
+                  "5814"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "evidence_id": "bank2:v4:doc:reward_partner_offer:bank2:v4:amend",
