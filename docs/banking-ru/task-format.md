@@ -188,3 +188,12 @@ reward_resolution_offer_updates с привязкой к принятому за
 previous_version, new_version, new_amount, new_selection_budget. Старый формат
 решения одобрения under_review сохраняется. Подробности — в
 [пересмотре финансирования](evaluation.md#bank-2-пересмотр-финансирования--29-октября-2026).
+
+
+Bank2 v9 задаёт service_incidents и partner_confirmations в начальном состоянии.
+Условие компонента eligibility имеет kind=service_incident/partner_confirmation,
+transaction_id и incident_kind для инцидента. В согласии и исполнении опциональное
+eligibility_evidence отображает выбранный условный component_id в contract_id и
+record_id. Поле не задаёт готовую применимость и не ищет максимум за агента.
+Пустое поле совместимо с прежними соглашениями. См.
+[применимость компонентов](evaluation.md#bank-2-применимость-компонентов--29-октября-2026).

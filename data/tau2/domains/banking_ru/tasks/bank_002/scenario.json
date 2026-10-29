@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Получить максимальную допустимую выплату, дополнить существующее дело остатками и передать полный состав на рассмотрение, сохранив права и остальные позиции.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "2026-10-29-bank2-funding-v8; completion_only; final B+D+E+G: 42 RUB, review 43 RUB; model difficulty not measured"
+    "notes": "2026-10-29-bank2-eligibility-v9; completion_only; E inapplicable, G applicable; final A+C+G: 36 RUB, review 49 RUB; model difficulty not measured"
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -101,7 +101,11 @@
                   [
                     "B"
                   ]
-                ]
+                ],
+                "eligibility": {
+                  "kind": "service_incident",
+                  "transaction_id": "txn_804227"
+                }
               },
               {
                 "id": "F",
@@ -128,7 +132,11 @@
                     "C",
                     "D"
                   ]
-                ]
+                ],
+                "eligibility": {
+                  "kind": "partner_confirmation",
+                  "transaction_id": "txn_804227"
+                }
               },
               {
                 "id": "H",
@@ -175,9 +183,63 @@
               "partner": 20
             }
           }
+        },
+        "reward_contracts": {
+          "rc_610407": {
+            "id": "rc_610407",
+            "customer_id": "gromov_a_1187",
+            "account_id": "acc_1187",
+            "product_code": "legacy_cafe_rewards",
+            "card_ids": [
+              "card_1187",
+              "card_804217"
+            ],
+            "effective_from": "2026-01-01",
+            "effective_to": "2026-05-31",
+            "rules_revision": "multi-program-v1",
+            "replaced_card_id": null,
+            "replacement_card_id": null,
+            "replacement_effective_from": null
+          }
+        },
+        "service_incidents": {
+          "inc_620411": {
+            "id": "inc_620411",
+            "customer_id": "gromov_a_1187",
+            "contract_id": "rc_610407",
+            "kind": "activation_sync_failure",
+            "starts_at": "2026-07-26T11:00:00+03:00",
+            "ends_at": "2026-07-26T13:00:00+03:00"
+          },
+          "inc_620427": {
+            "id": "inc_620427",
+            "customer_id": "gromov_a_1187",
+            "contract_id": "rc_610482",
+            "kind": "activation_sync_failure",
+            "starts_at": "2026-07-27T09:00:00+03:00",
+            "ends_at": "2026-07-27T11:00:00+03:00"
+          }
+        },
+        "partner_confirmations": {
+          "pc_740613": {
+            "id": "pc_740613",
+            "customer_id": "gromov_a_1187",
+            "contract_id": "rc_610482",
+            "receipt_id": "CF-2607-1188",
+            "enrollment_card_id": "card_1187",
+            "status": "accepted"
+          },
+          "pc_740619": {
+            "id": "pc_740619",
+            "customer_id": "gromov_a_1187",
+            "contract_id": "rc_610482",
+            "receipt_id": "CF-2607-1199",
+            "enrollment_card_id": "card_804217",
+            "status": "accepted"
+          }
         }
       }
     }
   },
-  "scenario_version": "2026-10-29-bank2-funding-v8"
+  "scenario_version": "2026-10-29-bank2-eligibility-v9"
 }

@@ -661,3 +661,141 @@ def test_funding_refresh_requires_received_acceptance_and_safe_pending_needs_no_
             )
             == []
         )
+
+
+def conditional_rows():
+    rows = composite_rows()
+    rows[0][2][0]["components"][1]["eligibility"] = {
+        "kind": "partner_confirmation",
+        "transaction_id": "t2",
+    }
+    evidence = {"y": {"contract_id": "contract", "record_id": "partner"}}
+    rows[1][2]["data"]["eligibility_evidence"] = evidence
+    rows[2][1]["eligibility_evidence"] = evidence
+    sources = [
+        (
+            "get_transaction_details",
+            {"transaction_id": "t2"},
+            {
+                "id": "t2",
+                "customer_id": "own",
+                "account_id": "account",
+                "card_id": "new",
+                "receipt_id": "wanted",
+                "kind": "purchase",
+                "status": "posted",
+                "purchased_at": "2026-07-26T12:00:00+03:00",
+            },
+            False,
+        ),
+        (
+            "get_reward_contracts",
+            {"customer_id": "own"},
+            [
+                {
+                    "id": "contract",
+                    "customer_id": "own",
+                    "account_id": "account",
+                    "card_ids": ["old", "new"],
+                    "effective_from": "2026-06-01",
+                    "effective_to": None,
+                    "replaced_card_id": "old",
+                    "replacement_card_id": "new",
+                    "replacement_effective_from": "2026-07-20",
+                }
+            ],
+            False,
+        ),
+        (
+            "get_partner_confirmations",
+            {"customer_id": "own"},
+            {
+                "complete": True,
+                "records": [
+                    {
+                        "id": "partner",
+                        "customer_id": "own",
+                        "contract_id": "contract",
+                        "receipt_id": "wanted",
+                        "enrollment_card_id": "old",
+                        "status": "accepted",
+                    }
+                ],
+            },
+            False,
+        ),
+    ]
+    return rows, sources
+
+
+def test_conditional_success_needs_received_matching_grounds_before_consent():
+    from copy import deepcopy
+
+    rows, sources = conditional_rows()
+    assert failures([rows[0], *sources, *rows[1:]]) == []
+    assert failures([rows[0], *rows[1:]])
+    assert failures([rows[0], rows[1], *sources, rows[2]])
+    wrong = deepcopy(sources)
+    wrong[-1][2]["records"][0]["receipt_id"] = "other"
+    assert failures([rows[0], *wrong, *rows[1:]])
+    changed = deepcopy(rows)
+    changed[2][1]["eligibility_evidence"] = {
+        "y": {"contract_id": "contract", "record_id": "other"}
+    }
+    assert failures([changed[0], *sources, *changed[1:]])
+    # A safe rejection followed by a properly evidenced consent may recover.
+    denied = (rows[2][0], rows[2][1], {"error": "no grounds"}, True)
+    assert failures([rows[0], rows[1], denied, *sources, *rows[1:]]) == []
+
+
+def test_conditional_ground_in_same_batch_is_not_received_before_consent():
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows, sources = conditional_rows()
+    trace = trace_of([rows[0], *sources, *rows[1:]])
+    partner = trace.observed[3]
+    consent = trace.observed[4]
+    trace.observed[3] = partner.model_copy(
+        update={"result_position": consent.call_position}
+    )
+    assert reward_business_failures(trace, POLICY)
+
+
+def test_service_incident_evidence_uses_same_contract_and_purchase_time():
+    rows, sources = conditional_rows()
+    rows[0][2][0]["components"][1]["eligibility"]["kind"] = "service_incident"
+    rows[2][1]["eligibility_evidence"]["y"]["record_id"] = "incident"
+    sources[-1] = (
+        "get_service_incidents",
+        {"customer_id": "own"},
+        {
+            "complete": True,
+            "records": [
+                {
+                    "id": "incident",
+                    "customer_id": "own",
+                    "contract_id": "contract",
+                    "kind": "activation_sync_failure",
+                    "starts_at": "2026-07-26T11:00:00+03:00",
+                    "ends_at": "2026-07-26T13:00:00+03:00",
+                }
+            ],
+        },
+        False,
+    )
+    assert failures([rows[0], *sources, *rows[1:]]) == []
+    sources[-1][2]["records"][0]["contract_id"] = "archived"
+    assert failures([rows[0], *sources, *rows[1:]])
+
+
+def test_harmless_operation_summary_cannot_erase_received_purchase_facts():
+    rows, sources = conditional_rows()
+    summary = (
+        "get_operations",
+        {"customer_id": "own"},
+        [{"id": "t2", "date": "2026-07-26", "amount": 100, "merchant": "Cafe"}],
+        False,
+    )
+    assert failures([rows[0], *sources, summary, *rows[1:]]) == []
+    # Summary alone remains insufficient to justify conditional authority.
+    assert failures([rows[0], summary, *sources[1:], *rows[1:]])

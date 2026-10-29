@@ -9,6 +9,7 @@ from tau2.domains.banking_ru.business_assertions import BankingBusinessAssertion
 from tau2.domains.banking_ru.closure_signature import closure_document, document_hash
 from tau2.domains.banking_ru.data_model import CashbackInvestigationItem, Customer
 from tau2.domains.banking_ru.file_pilot import FileBankingTools, FileResponse
+from tau2.domains.banking_ru.reward_resolution_models import EligibilityEvidence
 from tau2.environment.tool import ToolExecutionRejected
 from tau2.environment.toolkit import ToolType, is_tool
 
@@ -133,6 +134,7 @@ class RewardResolutionConfirmationRequest(BaseModel):
     resulting_claims: list[CashbackInvestigationItem] = Field(min_length=1)
     state_revision: int
     component_ids: list[str] = Field(default_factory=list)
+    eligibility_evidence: dict[str, EligibilityEvidence] = Field(default_factory=dict)
 
 
 class FeeRefundConfirmationRequest(BaseModel):

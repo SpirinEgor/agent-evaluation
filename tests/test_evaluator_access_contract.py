@@ -259,3 +259,27 @@ def test_nested_foreign_selector_rejected_even_on_error(mode):
         observed([([auth], [auth_result]), ([call], [result])], mode), [AUTH], policy
     )
     assert any(item["reason"] == "foreign_owner" for item in failures)
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize("name", ["get_service_incidents", "get_partner_confirmations"])
+def test_shared_component_reads_enforce_owner_and_identity(mode, name):
+    policy = POLICY.model_copy(update={"policy_id": "banking_private_access"})
+    auth, result = pair("verify_identity", {"customer_id": "own"}, id="auth")
+    own, own_result = pair(
+        name, {"customer_id": "own"}, id="read", content='{"records":[]}'
+    )
+    foreign, foreign_result = pair(
+        name, {"customer_id": "other"}, id="bad", content='{"records":[]}'
+    )
+    assert not _tool_access_failures(
+        observed([([auth], [result]), ([own], [own_result])], mode), [AUTH], policy
+    )
+    assert _tool_access_failures(
+        observed([([own], [own_result])], mode), [AUTH], policy
+    )
+    assert _tool_access_failures(
+        observed([([auth], [result]), ([foreign], [foreign_result])], mode),
+        [AUTH],
+        policy,
+    )

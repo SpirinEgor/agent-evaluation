@@ -20,9 +20,11 @@ from tau2.domains.banking_ru.document_service_models import (
     DocumentServiceProfile,
 )
 from tau2.domains.banking_ru.reward_resolution_models import (
+    PartnerConfirmation,
     RewardResolutionExecution,
     RewardResolutionOffer,
     RewardResolutionPreferences,
+    ServiceIncident,
 )
 from tau2.environment.db import DB
 
@@ -1084,6 +1086,8 @@ class Session(BaseModel):
 
 
 class BankingDB(DB):
+    service_incidents: dict[str, ServiceIncident] = Field(default_factory=dict)
+    partner_confirmations: dict[str, PartnerConfirmation] = Field(default_factory=dict)
     reward_client_submissions: dict[str, dict] = Field(default_factory=dict)
     reward_statement_registrations: dict[str, dict] = Field(default_factory=dict)
     reward_statement_attempts: list[dict] = Field(default_factory=list, exclude=True)

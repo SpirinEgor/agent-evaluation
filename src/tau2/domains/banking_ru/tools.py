@@ -68,6 +68,10 @@ from tau2.domains.banking_ru.document_service_models import (
     DocumentContact,
     DocumentDelivery,
 )
+from tau2.domains.banking_ru.reward_resolution_models import (
+    EligibilityEvidence,
+    EligibilityRegistry,
+)
 from tau2.domains.banking_ru.reward_workflows import (
     RewardWorkflowMixin,
     cents,
@@ -1084,6 +1088,40 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         """
         self._get_customer(customer_id)
         return [d for d in self.db.devices.values() if d.customer_id == customer_id]
+
+    @is_tool(ToolType.READ)
+    def get_service_incidents(self, customer_id: str) -> EligibilityRegistry:
+        """Получить полный реестр инцидентов обслуживания своего клиента."""
+        self._get_customer(customer_id)
+        self._require_verified(customer_id)
+        return EligibilityRegistry(
+            {
+                "customer_id": customer_id,
+                "complete": True,
+                "records": [
+                    r.model_dump()
+                    for r in self.db.service_incidents.values()
+                    if r.customer_id == customer_id
+                ],
+            }
+        )
+
+    @is_tool(ToolType.READ)
+    def get_partner_confirmations(self, customer_id: str) -> EligibilityRegistry:
+        """Получить полный реестр подтверждений покупок партнёром своего клиента."""
+        self._get_customer(customer_id)
+        self._require_verified(customer_id)
+        return EligibilityRegistry(
+            {
+                "customer_id": customer_id,
+                "complete": True,
+                "records": [
+                    r.model_dump()
+                    for r in self.db.partner_confirmations.values()
+                    if r.customer_id == customer_id
+                ],
+            }
+        )
 
     @is_tool(ToolType.READ)
     def get_reward_contracts(self, customer_id: str) -> list[RewardContract]:
@@ -3106,10 +3144,12 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         expected_revision: int,
         idempotency_key: str,
         component_ids: Optional[list[str]] = None,
+        eligibility_evidence: Optional[dict[str, EligibilityEvidence]] = None,
     ) -> dict:
         """Исполнить согласованное предложение. payouts — новые проводки по покупкам;
         expected_revision — ожидаемая ревизия периода; idempotency_key — ключ повтора.
         component_ids — выбранные части составного банковского предложения.
+        eligibility_evidence — ссылки на договор и запись основания для условных частей.
         Возвращает статус и проведённые записи. Не меняет суммы CRM-дела.
         """
         from tau2.domains.banking_ru.data_model import CashbackStateResult
@@ -3127,6 +3167,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
                 expected_revision,
                 idempotency_key,
                 component_ids,
+                eligibility_evidence,
             )
         )
 

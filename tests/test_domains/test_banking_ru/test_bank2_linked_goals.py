@@ -31,6 +31,11 @@ from tests.utils.banking_full_grade import grade_full_session
         ("recovered_budget", 1),
         ("final_first", 1),
         ("old_optimum", 0),
+        ("ineligible_recovered", 1),
+        ("wrong_partner_recovered", 1),
+        ("proof_changed_recovered", 1),
+        ("payment_repeat", 1),
+        ("late_eligibility", 0),
         ("stale_consent_recovered", 1),
         ("unreceived_acceptance", 0),
     ],
@@ -43,7 +48,7 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
             (34, 14, ["B", "D", "F"], "offer_610735")
             if route == "suboptimal"
             else (
-                (35, 15, ["B", "D", "E"], "offer_610735")
+                (42, 18, ["B", "D", "E", "G"], "offer_610735")
                 if route == "old_optimum"
                 else (24, 11, [], "offer_610723")
             )
@@ -64,6 +69,12 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
                     component_ids=components,
                     payouts=payouts,
                     total_amount=total,
+                    eligibility_evidence={}
+                    if route != "old_optimum"
+                    else {
+                        "E": {"contract_id": "rc_610482", "record_id": "inc_620411"},
+                        "G": {"contract_id": "rc_610482", "record_id": "pc_740613"},
+                    },
                     resulting_claims=items
                     + [{"transaction_id": "txn_804205", "amount": 7}],
                 )
@@ -74,9 +85,27 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
                     component_ids=components,
                     payouts=payouts,
                     total_amount=total,
+                    eligibility_evidence={}
+                    if route != "old_optimum"
+                    else {
+                        "E": {"contract_id": "rc_610482", "record_id": "inc_620411"},
+                        "G": {"contract_id": "rc_610482", "record_id": "pc_740613"},
+                    },
                 )
             elif action.name == "amend_cashback_investigation":
                 action.arguments["items"] = items
+    if route == "late_eligibility":
+        source = actions.pop(
+            next(
+                i
+                for i, a in enumerate(actions)
+                if a.name == "get_partner_confirmations"
+            )
+        )
+        pi = next(
+            i for i, a in enumerate(actions) if a.name == "execute_reward_resolution"
+        )
+        actions.insert(pi, source)
     if route == "final_first":
         actions = [a for a in actions if a.action_id != "bank2:v8:preliminary-offers"]
     if route == "split":
@@ -115,6 +144,47 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
     case_id = submit.arguments["case_id"]
     if route == "reference":
         s.replay_actions(task.evaluation_criteria.actions)
+    elif route in {"proof_changed_recovered", "payment_repeat"}:
+        ci = next(i for i, a in enumerate(actions) if a.action_id == "bank2:v5:consent")
+        s.replay_actions(actions[:ci])
+        consent, pay = actions[ci : ci + 2]
+        if route == "proof_changed_recovered":
+            empty = deepcopy(consent.arguments)
+            empty["request"]["eligibility_evidence"] = {}
+            receipt = payload(call(consent.name, empty))
+            denied = call(
+                pay.name,
+                {**pay.arguments, "confirmation_id": receipt["confirmation_id"]},
+            )
+            assert (
+                denied.is_error and "COMPONENT_NOT_APPLICABLE" in denied.content[0].text
+            )
+        receipt = payload(call(consent.name, consent.arguments))
+        args = {**pay.arguments, "confirmation_id": receipt["confirmation_id"]}
+        if route == "proof_changed_recovered":
+            missing = deepcopy(args)
+            missing.pop("eligibility_evidence")
+            denied = call(pay.name, missing)
+            assert (
+                denied.is_error and "COMPONENT_NOT_APPLICABLE" in denied.content[0].text
+            )
+        paid = payload(call(pay.name, args))
+        if route == "payment_repeat":
+            assert payload(call(pay.name, args)) == paid
+        s.replay_actions(actions[ci + 2 :])
+        case = json.loads(s.log[-1][1].content)
+        payload(
+            call(submit.name, {"case_id": case_id, "expected_version": case["version"]})
+        )
+    elif route == "old_optimum":
+        pi = next(
+            i for i, a in enumerate(actions) if a.name == "execute_reward_resolution"
+        )
+        s.replay_actions(actions[:pi])
+        rejected = call(actions[pi].name, actions[pi].arguments)
+        assert (
+            rejected.is_error and "COMPONENT_NOT_APPLICABLE" in rejected.content[0].text
+        )
     elif route == "unreceived_acceptance":
         ai = next(
             i
@@ -191,7 +261,11 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
         payload(
             call(submit.name, {"case_id": case_id, "expected_version": case["version"]})
         )
-    elif route == "recovered_budget":
+    elif route in {
+        "recovered_budget",
+        "ineligible_recovered",
+        "wrong_partner_recovered",
+    }:
         consent_index = next(
             i for i, a in enumerate(actions) if a.action_id == "bank2:v5:consent"
         )
@@ -199,29 +273,61 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
         consent, pay = actions[consent_index : consent_index + 2]
         bad = deepcopy(consent.arguments)
         bad["request"].update(
-            component_ids=["B", "C", "E", "G"],
-            total_amount=43,
+            component_ids=["B", "C", "G"],
+            total_amount=34,
             payouts=[
-                {"transaction_id": "txn_804219", "amount": 18},
-                {"transaction_id": "txn_804227", "amount": 25},
+                {"transaction_id": "txn_804219", "amount": 14},
+                {"transaction_id": "txn_804227", "amount": 20},
             ],
             resulting_claims=[
-                {"transaction_id": "txn_804219", "amount": 7},
-                {"transaction_id": "txn_804227", "amount": 28},
+                {"transaction_id": "txn_804219", "amount": 11},
+                {"transaction_id": "txn_804227", "amount": 33},
                 {"transaction_id": "txn_804205", "amount": 7},
             ],
         )
+        if route == "ineligible_recovered":
+            bad["request"].update(
+                component_ids=["B", "D", "E", "G"],
+                total_amount=42,
+                payouts=[
+                    {"transaction_id": "txn_804219", "amount": 18},
+                    {"transaction_id": "txn_804227", "amount": 24},
+                ],
+                resulting_claims=[
+                    {"transaction_id": "txn_804219", "amount": 7},
+                    {"transaction_id": "txn_804227", "amount": 29},
+                    {"transaction_id": "txn_804205", "amount": 7},
+                ],
+                eligibility_evidence={
+                    "E": {"contract_id": "rc_610482", "record_id": "inc_620411"},
+                    "G": {"contract_id": "rc_610482", "record_id": "pc_740613"},
+                },
+            )
+        if route == "wrong_partner_recovered":
+            bad = deepcopy(consent.arguments)
+            bad["request"]["eligibility_evidence"]["G"]["record_id"] = "pc_740619"
         receipt = payload(call(consent.name, bad))
         bad_pay = {
             **pay.arguments,
             **{
                 k: bad["request"][k]
-                for k in ("component_ids", "total_amount", "payouts")
+                for k in (
+                    "component_ids",
+                    "total_amount",
+                    "payouts",
+                    "eligibility_evidence",
+                )
             },
             "confirmation_id": receipt["confirmation_id"],
         }
         rejected = call(pay.name, bad_pay)
-        assert rejected.is_error and "бюджет" in rejected.content[0].text
+        assert (
+            rejected.is_error
+            and (
+                "бюджет" if route == "recovered_budget" else "COMPONENT_NOT_APPLICABLE"
+            )
+            in rejected.content[0].text
+        )
         receipt = payload(call(consent.name, consent.arguments))
         payload(
             call(
@@ -298,9 +404,11 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
     reward = s.grade() if mode == "half" else grade_full_session(s).reward_info
     assert reward.final_reward == want, reward.info
     assert set(reward.reward_breakdown) == {RewardType.DB, RewardType.ACTION}
-    if route in {"unreceived_version", "unreceived_acceptance"}:
+    if route in {"unreceived_version", "unreceived_acceptance", "late_eligibility"}:
         assert reward.reward_breakdown == {RewardType.DB: 1, RewardType.ACTION: 0}
-        if route == "unreceived_acceptance":
+        if route == "late_eligibility":
+            assert "resolution_components_invalid_or_not_received" in str(reward.info)
+        elif route == "unreceived_acceptance":
             assert "funding_acceptance_not_received" in str(reward.info)
         else:
             assert any(
@@ -309,7 +417,7 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
             )
     if route in {"early", "no_submit"}:
         assert reward.reward_breakdown[RewardType.DB] == 0
-    if route in {"suboptimal", "previous_offer", "old_optimum"}:
+    if route in {"suboptimal", "previous_offer"}:
         assert reward.reward_breakdown == {RewardType.DB: 0, RewardType.ACTION: 1}, (
             reward.info
         )
@@ -317,8 +425,8 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
         case = s.env.tools.db.cases[case_id]
         assert case.review_status == "registered"
         assert case.responsible_unit == "rewards_review"
-        assert case.review_amount == case.amount == 43
-        expected = {"txn_804219": 7, "txn_804227": 29, "txn_804205": 7}
+        assert case.review_amount == case.amount == 49
+        expected = {"txn_804219": 10, "txn_804227": 32, "txn_804205": 7}
         assert {r.transaction_id: r.amount for r in case.review_items} == expected
         assert {r.transaction_id: r.amount for r in case.reward_items} == expected
 
@@ -374,7 +482,7 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want):
         ),
     ],
 )
-def test_bank2_component_menu_has_one_hand_calculated_optimum(
+def test_bank2_structural_menu_optimum_before_eligibility(
     bank, cap, count, total, subset, allocation
 ):
     from itertools import combinations
@@ -400,3 +508,147 @@ def test_bank2_component_menu_has_one_hand_calculated_optimum(
     assert selected_amounts(offer, ["B", "E", "H"])[0] == 2900
     assert selected_amounts(offer, ["B", "D", "F"])[0] == 3400
     assert "offer_610735" not in get_environment().tools.db.reward_resolution_offers
+
+
+@pytest.mark.parametrize(
+    "variant,total,first,components,review",
+    [
+        ("main", 36, 15, ["A", "C", "G"], 49),
+        ("both", 42, 18, ["B", "D", "E", "G"], 43),
+        ("neither", 34, 14, ["B", "D", "F"], 51),
+    ],
+)
+def test_bank2_eligibility_changes_actual_optimum_and_whole_grade(
+    variant, total, first, components, review
+):
+    from itertools import combinations
+
+    from tau2.domains.banking_ru.reward_resolution import (
+        selected_amounts,
+        validate_eligibility,
+    )
+
+    task = next(t for t in get_tasks() if t.id == "Bank 2").model_copy(deep=True)
+    data = task.initial_state.initialization_data.agent_data
+    if variant == "both":
+        data["service_incidents"]["inc_620411"]["contract_id"] = "rc_610482"
+    if variant == "neither":
+        data["partner_confirmations"]["pc_740613"]["status"] = "registered"
+    proof = {
+        k: {
+            "contract_id": "rc_610482",
+            "record_id": "inc_620411" if k == "E" else "pc_740613",
+        }
+        for k in components
+        if k in {"E", "G"}
+    }
+    payouts = [
+        {"transaction_id": "txn_804219", "amount": first},
+        {"transaction_id": "txn_804227", "amount": total - first},
+    ]
+    items = [
+        {"transaction_id": "txn_804219", "amount": 25 - first},
+        {"transaction_id": "txn_804227", "amount": 53 - total + first},
+    ]
+    for a in task.evaluation_criteria.actions:
+        if a.action_id == "bank2:v5:consent":
+            a.arguments["request"].update(
+                component_ids=components,
+                payouts=payouts,
+                total_amount=total,
+                eligibility_evidence=proof,
+                resulting_claims=items
+                + [{"transaction_id": "txn_804205", "amount": 7}],
+            )
+        if a.name == "execute_reward_resolution":
+            a.arguments.update(
+                component_ids=components,
+                payouts=payouts,
+                total_amount=total,
+                eligibility_evidence=proof,
+            )
+        if a.name == "amend_cashback_investigation":
+            a.arguments["items"] = items
+    s = PlatformSession(task, get_environment, mcp_layout="directory")
+    db = s.env.tools.db
+    offer = db.reward_resolution_offers["offer_610735"]
+    # Financial v2 conditions are published after acceptance; use their sealed
+    # proposed limits for the author-only enumeration, without calling a model.
+    final = offer.model_copy(deep=True)
+    final.amount = 45
+    final.selection_budget.bank = 23
+    available = {}
+    for part in final.components:
+        if part.eligibility is None:
+            continue
+        collection = (
+            db.service_incidents
+            if part.eligibility.kind == "service_incident"
+            else db.partner_confirmations
+        )
+        for contract_id in db.reward_contracts:
+            for record_id in collection:
+                candidate = {
+                    part.id: {"contract_id": contract_id, "record_id": record_id}
+                }
+                try:
+                    validate_eligibility(
+                        final,
+                        [part.id],
+                        candidate,
+                        transactions=db.transactions,
+                        contracts=db.reward_contracts,
+                        incidents=db.service_incidents,
+                        confirmations=db.partner_confirmations,
+                    )
+                except ValueError:
+                    continue
+                available[part.id] = candidate[part.id]
+    assert set(available) == (
+        {"E", "G"} if variant == "both" else {"G"} if variant == "main" else set()
+    )
+    legal = []
+    for length in range(1, len(final.components) + 1):
+        for subset in combinations([c.id for c in final.components], length):
+            required = {
+                p.id
+                for p in final.components
+                if p.id in subset and p.eligibility is not None
+            }
+            if not required <= available.keys():
+                continue
+            grounds = {k: available[k] for k in required}
+            try:
+                validate_eligibility(
+                    final,
+                    list(subset),
+                    grounds,
+                    transactions=db.transactions,
+                    contracts=db.reward_contracts,
+                    incidents=db.service_incidents,
+                    confirmations=db.partner_confirmations,
+                )
+                value, allocation = selected_amounts(final, list(subset))
+            except ValueError:
+                continue
+            legal.append((value, subset, allocation))
+    assert max(legal) == (
+        total * 100,
+        tuple(components),
+        {"txn_804219": first * 100, "txn_804227": (total - first) * 100},
+    )
+    assert sum(value == total * 100 for value, _, _ in legal) == 1
+    s.replay_actions(task.evaluation_criteria.actions)
+    assert not s.call(
+        "bank_directory",
+        {"operation": "open_tool", "system_id": "support", "tool_name": "done"},
+    ).is_error
+    assert not s.call(
+        "bank_call", {"system_id": "support", "tool_name": "done", "arguments": {}}
+    ).is_error
+    assert s.grade().reward_breakdown == {RewardType.DB: 1, RewardType.ACTION: 1}
+    assert grade_full_session(s).reward_info.reward_breakdown == {
+        RewardType.DB: 1,
+        RewardType.ACTION: 1,
+    }
+    assert db.cases["case_610903"].review_amount == review

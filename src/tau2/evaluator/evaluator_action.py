@@ -383,6 +383,10 @@ def _tool_access_failures(
                 violation(item, reason)
             continue
         fields = policy.tool_arguments.get(call.name)
+        if policy.policy_id == "banking_private_access":
+            from tau2.domains.banking_ru.component_eligibility import COMMON_READ_ACCESS
+
+            fields = COMMON_READ_ACCESS.get(call.name, fields)
         if fields is None:
             continue
         before_failures = len(failures)

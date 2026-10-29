@@ -35,10 +35,12 @@ def _execution_packet(name, args):
     )
     if args.get("component_ids"):
         packet["component_ids"] = sorted(args["component_ids"])
+    if args.get("eligibility_evidence"):
+        packet["eligibility_evidence"] = args["eligibility_evidence"]
     return packet
 
 
-def _component_amounts(offer, args, sources):
+def _component_amounts(offer, args, sources, grounds):
     """Validate received terms, without searching for an optimal selection."""
     from tau2.domains.banking_ru.reward_resolution import selected_amounts
     from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionOffer
@@ -78,6 +80,26 @@ def _component_amounts(offer, args, sources):
     typed = RewardResolutionOffer.model_validate(raw)
     if typed.amount_basis != "incremental" or not typed.components:
         raise ValueError("Composite offer must be incremental")
+    from tau2.domains.banking_ru.component_eligibility import validate_eligibility
+
+    def snapshot(names):
+        return {
+            row["id"]: row
+            for source in grounds
+            if source.call.name in names
+            for row in records(payload(source))
+            if isinstance(row.get("id"), str)
+        }
+
+    validate_eligibility(
+        typed,
+        args.get("component_ids") or [],
+        args.get("eligibility_evidence") or {},
+        transactions=snapshot({"get_transaction_details", "get_transactions"}),
+        contracts=snapshot({"get_reward_contracts"}),
+        incidents=snapshot({"get_service_incidents"}),
+        confirmations=snapshot({"get_partner_confirmations"}),
+    )
     return selected_amounts(typed, args.get("component_ids") or [])
 
 
@@ -233,6 +255,8 @@ def reward_business_failures(trace, policy):
                     and data.get("state_revision") == args.get("expected_revision")
                     and sorted(data.get("component_ids") or [])
                     == sorted(args.get("component_ids") or [])
+                    and (data.get("eligibility_evidence") or {})
+                    == (args.get("eligibility_evidence") or {})
                 ):
                     confirmed = True
                     consent_source = source
@@ -281,6 +305,14 @@ def reward_business_failures(trace, policy):
                         received(
                             consent_source or target, "get_reward_resolution_components"
                         ),
+                        [
+                            source
+                            for source in observed
+                            if source.result_position is not None
+                            and source.result_position
+                            < (consent_source or target).call_position
+                            and payload(source)
+                        ],
                     )
                     actual = {
                         x.get("transaction_id"): _money(x.get("amount"))

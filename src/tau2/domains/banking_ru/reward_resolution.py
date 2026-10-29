@@ -9,6 +9,7 @@ from tau2.domains.banking_ru.cashback_state import (
     revision,
     state_guard,
 )
+from tau2.domains.banking_ru.component_eligibility import validate_eligibility
 from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionExecution
 from tau2.domains.banking_ru.reward_workflows import (
     cents,
@@ -170,6 +171,8 @@ def confirm(tools, customer_id, request):
     if customer_id != offer.customer_id:
         raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужое предложение")
     packet = request.model_dump(exclude={"type"})
+    if not packet["eligibility_evidence"]:
+        packet.pop("eligibility_evidence")
     if offer.components or packet["component_ids"]:
         packet["component_ids"] = sorted(packet["component_ids"])
     else:
@@ -216,6 +219,7 @@ def execute(
     expected_revision,
     idempotency_key,
     component_ids=None,
+    eligibility_evidence=None,
 ):
     """Execute one chosen offer; never choose or advertise the optimal offer."""
     offer, case = owned_offer(tools, offer_id, case_id)
@@ -236,6 +240,12 @@ def execute(
     )
     if offer.components or component_ids:
         packet["component_ids"] = sorted(component_ids or [])
+    evidence = {
+        k: (v.model_dump() if hasattr(v, "model_dump") else deepcopy(v))
+        for k, v in (eligibility_evidence or {}).items()
+    }
+    if evidence:
+        packet["eligibility_evidence"] = evidence
     # A replay is matched before revisions/consumption, but still after ownership.
     for op in tools.db.reward_resolution_executions.values():
         if op.customer_id != offer.customer_id:
@@ -304,7 +314,11 @@ def execute(
         ):
             reject("Ручная корректировка уже выбрана")
     consent = tools._resolution_consents.get(confirmation_id)
-    if not consent or any(consent[k] != v for k, v in packet.items()):
+    if consent and consent.get("eligibility_evidence", {}) != evidence:
+        raise ToolExecutionRejected(
+            "ERR_COMPONENT_NOT_APPLICABLE: Основания не соответствуют согласованному пакету"
+        )
+    if not consent or any(consent.get(k) != v for k, v in packet.items()):
         reject("Нет согласия на точный пакет")
     # Staleness is a recoverable condition, not an unlawful payment.
     blocked = state_guard(tools.db, offer.customer_id, offer.period, expected_revision)
@@ -317,6 +331,18 @@ def execute(
         }
     if set(x["transaction_id"] for x in rows) != set(offer.transaction_ids):
         reject("Область выплаты отличается от предложения")
+    try:
+        validate_eligibility(
+            offer,
+            component_ids or [],
+            evidence,
+            transactions=tools.db.transactions,
+            contracts=tools.db.reward_contracts,
+            incidents=tools.db.service_incidents,
+            confirmations=tools.db.partner_confirmations,
+        )
+    except ValueError as exc:
+        raise ToolExecutionRejected(str(exc)) from exc
     obligations = reward_obligations(tools.db, offer.customer_id, offer.period)
     gaps = standard_gaps(tools.db, offer.customer_id, offer.period)
     paid = sum(

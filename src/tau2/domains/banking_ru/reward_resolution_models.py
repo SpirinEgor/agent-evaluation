@@ -2,7 +2,44 @@
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, RootModel
+
+
+class EligibilityRegistry(RootModel[dict]):
+    """Preserve JSON scalar types of complete read-only registry responses."""
+
+
+class ComponentEligibility(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["service_incident", "partner_confirmation"]
+    transaction_id: str = Field(min_length=1)
+    incident_kind: str = "activation_sync_failure"
+
+
+class EligibilityEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    contract_id: str = Field(min_length=1)
+    record_id: str = Field(min_length=1)
+
+
+class ServiceIncident(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    customer_id: str
+    contract_id: str
+    kind: str
+    starts_at: str
+    ends_at: str
+
+
+class PartnerConfirmation(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    customer_id: str
+    contract_id: str
+    receipt_id: str
+    enrollment_card_id: str
+    status: Literal["registered", "accepted", "rejected"]
 
 
 class RewardResolutionComponent(BaseModel):
@@ -20,6 +57,7 @@ class RewardResolutionComponent(BaseModel):
     incompatible_with: list[str] = Field(default_factory=list)
     required_companions: list[list[str]] = Field(default_factory=list)
     pool_costs: dict[str, float] = Field(default_factory=dict)
+    eligibility: ComponentEligibility | None = None
 
 
 class RewardFundingPool(BaseModel):

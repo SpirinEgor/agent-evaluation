@@ -481,3 +481,51 @@ ERROR_SCENARIOS.update(
         "get_cashback_adjustment_status": missing_adjustment_status,
     }
 )
+
+
+def component_incident_registry(env):
+    from tau2.domains.banking_ru.reward_resolution_models import ServiceIncident
+
+    identify(env, "gromov_a_1187")
+    record = ServiceIncident(
+        id="incident-api",
+        customer_id="gromov_a_1187",
+        contract_id="rc_610482",
+        kind="activation_sync_failure",
+        starts_at="2026-07-26T11:00:00+03:00",
+        ends_at="2026-07-26T13:00:00+03:00",
+    )
+    env.tools.db.service_incidents[record.id] = record
+    result = succeed(env, "get_service_incidents", customer_id="gromov_a_1187")
+    assert result["complete"] is True and result["records"] == [record.model_dump()]
+
+
+def component_partner_registry(env):
+    from tau2.domains.banking_ru.reward_resolution_models import PartnerConfirmation
+
+    identify(env, "gromov_a_1187")
+    record = PartnerConfirmation(
+        id="partner-api",
+        customer_id="gromov_a_1187",
+        contract_id="rc_610482",
+        receipt_id="CF-2607-1188",
+        enrollment_card_id="card_1187",
+        status="accepted",
+    )
+    env.tools.db.partner_confirmations[record.id] = record
+    result = succeed(env, "get_partner_confirmations", customer_id="gromov_a_1187")
+    assert result["complete"] is True and result["records"] == [record.model_dump()]
+
+
+SUCCESS_SCENARIOS.update(
+    {
+        "get_service_incidents": component_incident_registry,
+        "get_partner_confirmations": component_partner_registry,
+    }
+)
+ERROR_SCENARIOS.update(
+    {
+        name: _missing_customer(name)
+        for name in ("get_service_incidents", "get_partner_confirmations")
+    }
+)

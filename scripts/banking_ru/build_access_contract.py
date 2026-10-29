@@ -12,6 +12,7 @@ from pathlib import Path
 
 from build_confidentiality_contract import DATA, TASK_FILE, render_contract
 
+from tau2.domains.banking_ru.component_eligibility import COMMON_READ_ACCESS
 from tau2.domains.banking_ru.task_store import (
     is_task_index,
     read_task_text,
@@ -297,6 +298,16 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
     """Attach access policy without changing reference actions or ticket content."""
     catalog, arguments = resource_catalog(db), protected_arguments()
     validate_protected_arguments(arguments)
+    for name, fields in COMMON_READ_ACCESS.items():
+        if arguments.get(name) != fields:
+            raise ValueError(f"Shared read access/schema mismatch: {name}")
+    # These customer-only selectors are applied by the common banking evaluator.
+    # Do not duplicate their identical definition in all scenario files.
+    arguments = {
+        name: fields
+        for name, fields in arguments.items()
+        if name not in COMMON_READ_ACCESS
+    }
     for task in tasks:
         criteria = task["evaluation_criteria"]
         subjects = {

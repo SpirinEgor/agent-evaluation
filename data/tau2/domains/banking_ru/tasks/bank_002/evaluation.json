@@ -3536,6 +3536,28 @@
       ]
     },
     {
+      "action_id": "bank2:v9:incidents",
+      "name": "get_service_incidents",
+      "arguments": {
+        "customer_id": "gromov_a_1187"
+      },
+      "required_for_reward": false,
+      "compare_args": [
+        "customer_id"
+      ]
+    },
+    {
+      "action_id": "bank2:v9:partner",
+      "name": "get_partner_confirmations",
+      "arguments": {
+        "customer_id": "gromov_a_1187"
+      },
+      "required_for_reward": false,
+      "compare_args": [
+        "customer_id"
+      ]
+    },
+    {
       "action_id": "bank2:v5:consent",
       "name": "ask_client",
       "arguments": {
@@ -3547,23 +3569,23 @@
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 18
+              "amount": 15
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 24
+              "amount": 21
             }
           ],
-          "total_amount": 42,
+          "total_amount": 36,
           "case_id": "case_610903",
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 7
+              "amount": 10
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 29
+              "amount": 32
             },
             {
               "transaction_id": "txn_804205",
@@ -3572,11 +3594,16 @@
           ],
           "state_revision": 2,
           "component_ids": [
-            "B",
-            "D",
-            "E",
+            "A",
+            "C",
             "G"
-          ]
+          ],
+          "eligibility_evidence": {
+            "G": {
+              "contract_id": "rc_610482",
+              "record_id": "pc_740613"
+            }
+          }
         }
       },
       "required_for_reward": false,
@@ -3596,24 +3623,29 @@
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 18
+            "amount": 15
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 24
+            "amount": 21
           }
         ],
-        "total_amount": 42,
+        "total_amount": 36,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-1",
         "expected_revision": 2,
         "idempotency_key": "bank2-resolution",
         "component_ids": [
-          "B",
-          "D",
-          "E",
+          "A",
+          "C",
           "G"
-        ]
+        ],
+        "eligibility_evidence": {
+          "G": {
+            "contract_id": "rc_610482",
+            "record_id": "pc_740613"
+          }
+        }
       },
       "required_for_reward": true,
       "compare_args": [
@@ -3628,11 +3660,11 @@
         "items": [
           {
             "transaction_id": "txn_804219",
-            "amount": 7
+            "amount": 10
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 29
+            "amount": 32
           }
         ],
         "expected_revision": 3
@@ -4230,7 +4262,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_card_reissue.md",
         "complete": true,
-        "sha256": "10bf356ac89f48bb8868cdf78efbf7feff4d397554d91433a1d513c2a32e49cb"
+        "sha256": "918af37ebc8c9b0cdfbf9d172aa219f89140c2443d984d000d4c214cda1c4866"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -4251,7 +4283,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_card_reissue.md",
         "complete": true,
-        "sha256": "10bf356ac89f48bb8868cdf78efbf7feff4d397554d91433a1d513c2a32e49cb"
+        "sha256": "918af37ebc8c9b0cdfbf9d172aa219f89140c2443d984d000d4c214cda1c4866"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5404,7 +5436,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_rights.md",
         "complete": true,
-        "sha256": "3bf2043c321f0a1519ed2ae43f7478aadd23e45c305d4a08d542cadcbe19d199"
+        "sha256": "f77f9cdc7a7d0846b8e9de38cd57360fc15dbe27f33d6895fe9294818d1070e1"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5423,7 +5455,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_execution.md",
         "complete": true,
-        "sha256": "b50e6546bad3b148c5ea278b186083181a6888b2c6f52f152d64fa56bbe11e05"
+        "sha256": "7261add42e431c6767f9516da7d92f8cbc777fd8003b713a596c2abb6f7534c2"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
