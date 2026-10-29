@@ -5769,7 +5769,20 @@
         "complete": true,
         "sha256": "b201150aeae326b0067d853d17e54877891888b9ef011f18f298a2df6e3a2389"
       },
-      "before_action_id": "bank2:v6:submit"
+      "before_action_id": "bank2:v6:submit",
+      "alternatives": [
+        {
+          "tool_names": [
+            "file_read"
+          ],
+          "record_id": "reward_case_amendment",
+          "expected_fields": {
+            "path": "/knowledge/reward_case_amendment.md",
+            "complete": true,
+            "sha256": "0722014386a6dc5a7541928fc93978582a27a5f0a35ae3377a834ffea3ac9b15"
+          }
+        }
+      ]
     },
     {
       "evidence_id": "common_discovery_Bank 2",

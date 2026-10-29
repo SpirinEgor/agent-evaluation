@@ -627,3 +627,98 @@ def test_bank2_category_rules_require_one_matching_historical_record(invalid):
         record["categories"][0]["mcc_codes"] = ["5411"]
         payload["categories_history"].append(other)
     assert set(failures(payload)) == {item.evidence_id for item in evidence}
+
+
+@pytest.mark.parametrize("source", ["policy", "knowledge", "missing", "late_knowledge"])
+def test_bank2_review_rules_allow_equivalent_received_source(source):
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
+    delayed = None
+    for action in task.evaluation_criteria.actions:
+        if action.name == "file_read":
+            path = action.arguments["path"]
+            if path == "/policies/fees_rewards.md" and source != "policy":
+                continue
+            if path == "/knowledge/reward_case_amendment.md" and source in {
+                "missing",
+                "late_knowledge",
+            }:
+                delayed = action
+                continue
+        result = session.call(action.name, action.arguments)
+        assert not result.is_error, result.content
+    if source == "late_knowledge":
+        assert delayed is not None
+        session.replay_actions([delayed])
+    session.call("done", {})
+    for grade in (session.grade(), grade_full_session(session).reward_info):
+        assert grade.reward_breakdown[RewardType.DB] == 1
+        assert grade.reward == (1 if source in {"policy", "knowledge"} else 0), (
+            grade.info
+        )
+        missing = (grade.info.get("action") or {}).get("result_evidence", [])
+        assert ("bank2:v6:received-review-policy" in missing) == (
+            source in {"missing", "late_knowledge"}
+        )
+
+
+@pytest.mark.parametrize("invalid", ["partial", "hash", "search_only"])
+def test_bank2_review_rules_reject_incomplete_or_unrelated_evidence(invalid):
+    from tau2.data_model.message import AssistantMessage, ToolCall, ToolMessage
+    from tau2.evaluator.evaluator_action import _result_evidence_failures
+    from tau2.evaluator.trace_evidence import evidence_from_messages
+
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    rule = next(
+        e
+        for e in task.evaluation_criteria.result_evidence
+        if e.evidence_id == "bank2:v6:received-review-policy"
+    )
+    target = next(
+        a
+        for a in task.evaluation_criteria.actions
+        if a.action_id == rule.before_action_id
+    )
+    s = PlatformSession(task, get_environment)
+    for path in ["/policies/fees_rewards.md", "/knowledge/reward_case_amendment.md"]:
+        payload = json.loads(s.call("file_read", {"path": path}).content[0].text)
+
+        def failures(data, name="file_read"):
+            trace = evidence_from_messages(
+                [
+                    AssistantMessage(
+                        role="assistant",
+                        tool_calls=[
+                            ToolCall(id="source", name=name, arguments={"path": path})
+                        ],
+                    ),
+                    ToolMessage(role="tool", id="source", content=json.dumps(data)),
+                    AssistantMessage(
+                        role="assistant",
+                        tool_calls=[
+                            ToolCall(
+                                id="target",
+                                name=target.name,
+                                arguments=target.arguments,
+                            )
+                        ],
+                    ),
+                    ToolMessage(
+                        role="tool",
+                        id="target",
+                        content=json.dumps({"review_status": "registered"}),
+                    ),
+                ]
+            )
+            return _result_evidence_failures(
+                trace.observed, task.evaluation_criteria.actions, [rule]
+            )
+
+        assert not failures(payload), path
+        if invalid == "partial":
+            payload["complete"] = False
+        elif invalid == "hash":
+            payload["sha256"] = "outdated-revision"
+        assert failures(
+            payload, "file_search" if invalid == "search_only" else "file_read"
+        ) == [rule.evidence_id]
