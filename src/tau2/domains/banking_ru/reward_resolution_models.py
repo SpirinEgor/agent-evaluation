@@ -73,6 +73,7 @@ class RewardResolutionBudget(BaseModel):
     bank: float = Field(ge=0, allow_inf_nan=False)
     partner: float = Field(ge=0, allow_inf_nan=False)
     pools: list[RewardFundingPool] = Field(default_factory=list)
+    shared: bool = False
 
 
 class RewardResolutionOffer(BaseModel):

@@ -2,6 +2,11 @@
 
 from copy import deepcopy
 
+from tau2.domains.banking_ru.reward_funding import (
+    reserve_key,
+    reserve_members,
+    shared_spent,
+)
 from tau2.domains.banking_ru.reward_workflows import (
     cashback_period,
     cents,
@@ -86,8 +91,9 @@ def state_guard(db, customer_id, period, expected_revision):
 
 def pending_funding(db, offer):
     """Only metadata is public until the accepted statement is reconciled."""
+    member_ids = {row.id for row in reserve_members(db, offer)} or {offer.id}
     return any(
-        update["offer_id"] == offer.id
+        update["offer_id"] in member_ids
         and update["customer_id"] == offer.customer_id
         and update["period"] == offer.period
         and update["status"] == "pending"
@@ -147,6 +153,20 @@ def funding_replacement(tools, offer, update):
         )
         if replacement.selection_budget is None:
             raise ValueError("Отсутствует бюджет финансирования")
+        if reserve_key(offer) is not None:
+            members = reserve_members(tools.db, offer)
+            if (
+                reserve_key(replacement) != reserve_key(offer)
+                or any(shared_spent(tools.db, offer).values())
+                or any(
+                    row.version != offer.version
+                    or row.selection_budget != offer.selection_budget
+                    for row in members
+                )
+            ):
+                raise ValueError("Неверный общий резерв финансирования")
+        elif replacement.selection_budget.shared:
+            raise ValueError("Решение не может менять область резерва")
         return replacement
     except (KeyError, ValueError) as exc:
         raise ValueError(
@@ -215,7 +235,26 @@ def refresh(tools, customer_id, period):
         if not offer or offer.customer_id != customer_id or offer.period != period:
             raise ValueError("ERR_INVALID_OFFER_DECISION")
         if "previous_version" in update:
-            replacements[offer.id] = funding_replacement(tools, offer, update)
+            replacement = funding_replacement(tools, offer, update)
+            group = reserve_members(tools.db, offer) or [offer]
+            for member in group:
+                if member.id in replacements:
+                    raise ValueError(
+                        "ERR_INVALID_OFFER_DECISION: Повтор решения для резерва"
+                    )
+                replacements[member.id] = (
+                    replacement
+                    if member.id == offer.id
+                    else member.model_copy(
+                        deep=True,
+                        update={
+                            "version": replacement.version,
+                            "selection_budget": replacement.selection_budget.model_copy(
+                                deep=True
+                            ),
+                        },
+                    )
+                )
         elif offer.status != "under_review":
             raise ValueError("ERR_INVALID_OFFER_DECISION")
     capture_revision(tools.db, customer_id, period)
@@ -225,6 +264,7 @@ def refresh(tools, customer_id, period):
         account.balance = money(cents(account.balance) + cents(t.amount))
     for s in batches:
         s.update(status="settled", ledger_ids=[row["id"] for row in s["credits"]])
+    tools.db.reward_resolution_offers.update(replacements)
     for update in updates:
         if update["offer_id"] in replacements:
             tools.db.reward_resolution_offers[update["offer_id"]] = replacements[
@@ -241,7 +281,9 @@ def refresh(tools, customer_id, period):
         "period": period,
         "previous_revision": previous,
         "current_revision": revision(tools.db, customer_id, period),
-        "changed_offer_ids": [u["offer_id"] for u in updates],
+        "changed_offer_ids": list(
+            dict.fromkeys([u["offer_id"] for u in updates] + list(replacements))
+        ),
         **(
             {
                 "funding_decisions": [

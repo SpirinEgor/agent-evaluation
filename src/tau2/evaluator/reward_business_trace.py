@@ -100,7 +100,20 @@ def _component_amounts(offer, args, sources, grounds):
         incidents=snapshot({"get_service_incidents"}),
         confirmations=snapshot({"get_partner_confirmations"}),
     )
-    return selected_amounts(typed, args.get("component_ids") or [])
+    total, expected = selected_amounts(typed, args.get("component_ids") or [])
+    chosen = set(args.get("component_ids") or [])
+    costs = {
+        source: sum(
+            (
+                _money(getattr(part, source + "_cost"))
+                for part in typed.components
+                if part.id in chosen
+            ),
+            Decimal(0),
+        )
+        for source in ("bank", "partner")
+    }
+    return total, expected, costs
 
 
 def reward_business_failures(trace, policy):
@@ -112,6 +125,7 @@ def reward_business_failures(trace, policy):
     observed = sorted(trace.observed, key=lambda row: row.execution_index)
     failures, executions, spent = [], {}, {}
     payments = []
+    funding_charges = []
     selected = set(policy["transaction_ids"])
     initial = policy["initial_case_items"]
 
@@ -157,6 +171,37 @@ def reward_business_failures(trace, policy):
         if name in {"create_cashback_investigation", "grant_cashback"}:
             failures.append(f"{ident}:forbidden_reward_creation")
         if name == "amend_cashback_investigation":
+            changed_items = {row.get("transaction_id") for row in args.get("items", [])}
+            for prior in observed:
+                prior_result = payload(prior)
+                if (
+                    prior.call.name == "execute_reward_resolution"
+                    and prior.call_position < target.call_position
+                    and prior.call.arguments.get("case_id") == args.get("case_id")
+                    and changed_items.intersection(
+                        row.get("transaction_id")
+                        for row in prior.call.arguments.get("payouts", [])
+                    )
+                    and isinstance(prior_result, dict)
+                    and prior_result.get("status") == "succeeded"
+                    and (
+                        prior.result_position is None
+                        or prior.result_position >= target.call_position
+                    )
+                    and not any(
+                        source.call.arguments.get("idempotency_key")
+                        and source.call.arguments.get("idempotency_key")
+                        == prior.call.arguments.get("idempotency_key")
+                        and _execution_packet(source.call.name, source.call.arguments)
+                        == _execution_packet(prior.call.name, prior.call.arguments)
+                        and isinstance(payload(source), dict)
+                        and payload(source).get("status") == "succeeded"
+                        for source in received(target, "execute_reward_resolution")
+                    )
+                ):
+                    failures.append(
+                        f"{ident}:payment_result_not_received:{prior.call.id}"
+                    )
             if args.get("case_id") != policy["case_id"] or any(
                 x.get("transaction_id") not in selected
                 and (
@@ -263,10 +308,13 @@ def reward_business_failures(trace, policy):
             if not confirmed:
                 failures.append(f"{ident}:resolution_packet_not_confirmed")
             offer = None
+            offer_source = None
+            component_costs = None
             for source in received(target, "get_reward_resolution_offers"):
                 for row in records(payload(source)):
                     if row.get("id") == args.get("offer_id"):
                         offer = row
+                        offer_source = source
             composite = bool(offer) and (
                 offer.get("components")
                 or _money(offer.get("component_count", 0)) > 0
@@ -282,6 +330,7 @@ def reward_business_failures(trace, policy):
                     for row in records(payload(source)):
                         if row.get("id") == args.get("offer_id"):
                             offer = row
+                            offer_source = source
             if (
                 not offer
                 or offer.get("customer_id") != policy["customer_id"]
@@ -299,7 +348,7 @@ def reward_business_failures(trace, policy):
                 failures.append(f"{ident}:resolution_offer_not_received")
             elif composite:
                 try:
-                    total, expected = _component_amounts(
+                    total, expected, component_costs = _component_amounts(
                         offer,
                         args,
                         received(
@@ -346,6 +395,55 @@ def reward_business_failures(trace, policy):
                     or len(by_tx) != len(payouts)
                 ):
                     failures.append(f"{ident}:resolution_amount_outside_offer")
+            budget = (offer or {}).get("selection_budget") or {}
+            if str(budget.get("shared", False)).lower() == "true":
+                reserve = offer.get("funding_reserve") or {}
+                if (
+                    not reserve
+                    or reserve.get("id") != budget.get("id")
+                    or component_costs is None
+                    or offer_source is None
+                    or any(
+                        _money(reserve.get(source)) != _money(budget.get(source))
+                        for source in ("bank", "partner")
+                    )
+                ):
+                    failures.append(f"{ident}:shared_funding_not_received")
+                else:
+                    charge = result.get("funding_charge") or {}
+                    if charge.get("reserve_id") != reserve["id"] or any(
+                        _money(charge.get(source)) != component_costs[source]
+                        for source in ("bank", "partner")
+                    ):
+                        failures.append(f"{ident}:shared_funding_charge_mismatch")
+                    key = (
+                        offer["customer_id"],
+                        offer["case_id"],
+                        offer["period"],
+                        reserve["id"],
+                    )
+                    for source in ("bank", "partner"):
+                        remaining = _money(reserve.get("remaining_" + source))
+                        since_snapshot = sum(
+                            (
+                                costs[source]
+                                for previous_key, position, costs in funding_charges
+                                if previous_key == key
+                                and position > offer_source.execution_index
+                            ),
+                            Decimal(0),
+                        )
+                        if (
+                            not remaining.is_finite()
+                            or remaining < 0
+                            or remaining > _money(reserve.get(source))
+                            or component_costs[source] + since_snapshot > remaining
+                        ):
+                            failures.append(f"{ident}:shared_funding_exceeded")
+                            break
+                    funding_charges.append(
+                        (key, target.execution_index, component_costs)
+                    )
             if tids & (
                 spent.get("resolution_transactions", set())
                 | spent.get("adjustment_transactions", set())

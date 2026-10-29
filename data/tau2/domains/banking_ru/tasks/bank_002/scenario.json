@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Получить максимальную допустимую выплату, дополнить существующее дело остатками и передать полный состав на рассмотрение, сохранив права и остальные позиции.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "2026-10-29-bank2-eligibility-v9; completion_only; E inapplicable, G applicable; final A+C+G: 36 RUB, review 49 RUB; model difficulty not measured"
+    "notes": "2026-10-29-bank2-sharedreserve-v10; completion_only; shared final reserve 23/20; X+Y 40 RUB, review 45 RUB; model difficulty not measured"
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -157,7 +157,168 @@
             "selection_budget": {
               "id": "budget_610735",
               "bank": 20,
-              "partner": 20
+              "partner": 20,
+              "shared": true
+            }
+          },
+          "offer_610741": {
+            "id": "offer_610741",
+            "customer_id": "gromov_a_1187",
+            "case_id": "case_610903",
+            "period": "2026-07",
+            "transaction_ids": [
+              "txn_804219"
+            ],
+            "version": 1,
+            "amount": 18,
+            "amount_basis": "incremental",
+            "status": "approved",
+            "rights": "preserve",
+            "terms_id": "reward_resolution_rights",
+            "allocation_terms_id": "reward_resolution_amounts",
+            "allocation_first_transaction_id": "txn_804219",
+            "allocation_first_amount": 18,
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "components": [
+              {
+                "id": "X",
+                "exclusive_group": "single",
+                "amount": 18,
+                "settlement_deduction": 0,
+                "bank_cost": 9,
+                "partner_cost": 9,
+                "allocation_first_amount": 18,
+                "incompatible_with": [],
+                "required_companions": []
+              }
+            ],
+            "selection_budget": {
+              "id": "budget_610735",
+              "bank": 20,
+              "partner": 20,
+              "shared": true
+            }
+          },
+          "offer_610743": {
+            "id": "offer_610743",
+            "customer_id": "gromov_a_1187",
+            "case_id": "case_610903",
+            "period": "2026-07",
+            "transaction_ids": [
+              "txn_804219"
+            ],
+            "version": 1,
+            "amount": 24,
+            "amount_basis": "incremental",
+            "status": "approved",
+            "rights": "preserve",
+            "terms_id": "reward_resolution_rights",
+            "allocation_terms_id": "reward_resolution_amounts",
+            "allocation_first_transaction_id": "txn_804219",
+            "allocation_first_amount": 24,
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "components": [
+              {
+                "id": "Z",
+                "exclusive_group": "single",
+                "amount": 24,
+                "settlement_deduction": 0,
+                "bank_cost": 10,
+                "partner_cost": 14,
+                "allocation_first_amount": 24,
+                "incompatible_with": [],
+                "required_companions": []
+              }
+            ],
+            "selection_budget": {
+              "id": "budget_610735",
+              "bank": 20,
+              "partner": 20,
+              "shared": true
+            }
+          },
+          "offer_610747": {
+            "id": "offer_610747",
+            "customer_id": "gromov_a_1187",
+            "case_id": "case_610903",
+            "period": "2026-07",
+            "transaction_ids": [
+              "txn_804227"
+            ],
+            "version": 1,
+            "amount": 22,
+            "amount_basis": "incremental",
+            "status": "approved",
+            "rights": "preserve",
+            "terms_id": "reward_resolution_rights",
+            "allocation_terms_id": "reward_resolution_amounts",
+            "allocation_first_transaction_id": "txn_804227",
+            "allocation_first_amount": 22,
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "components": [
+              {
+                "id": "Y",
+                "exclusive_group": "single",
+                "amount": 22,
+                "settlement_deduction": 0,
+                "bank_cost": 13,
+                "partner_cost": 9,
+                "allocation_first_amount": 22,
+                "incompatible_with": [],
+                "required_companions": [],
+                "eligibility": {
+                  "kind": "partner_confirmation",
+                  "transaction_id": "txn_804227"
+                }
+              }
+            ],
+            "selection_budget": {
+              "id": "budget_610735",
+              "bank": 20,
+              "partner": 20,
+              "shared": true
+            }
+          },
+          "offer_610749": {
+            "id": "offer_610749",
+            "customer_id": "gromov_a_1187",
+            "case_id": "case_610903",
+            "period": "2026-07",
+            "transaction_ids": [
+              "txn_804227"
+            ],
+            "version": 1,
+            "amount": 14,
+            "amount_basis": "incremental",
+            "status": "approved",
+            "rights": "preserve",
+            "terms_id": "reward_resolution_rights",
+            "allocation_terms_id": "reward_resolution_amounts",
+            "allocation_first_transaction_id": "txn_804227",
+            "allocation_first_amount": 14,
+            "valid_from": "2026-08-01",
+            "valid_to": "2026-08-31",
+            "components": [
+              {
+                "id": "W",
+                "exclusive_group": "single",
+                "amount": 14,
+                "settlement_deduction": 0,
+                "bank_cost": 9,
+                "partner_cost": 5,
+                "allocation_first_amount": 14,
+                "incompatible_with": [],
+                "required_companions": []
+              }
+            ],
+            "selection_budget": {
+              "id": "budget_610735",
+              "bank": 20,
+              "partner": 20,
+              "shared": true
             }
           }
         },
@@ -180,7 +341,8 @@
             "new_selection_budget": {
               "id": "budget_610735",
               "bank": 23,
-              "partner": 20
+              "partner": 20,
+              "shared": true
             }
           }
         },
@@ -241,5 +403,5 @@
       }
     }
   },
-  "scenario_version": "2026-10-29-bank2-eligibility-v9"
+  "scenario_version": "2026-10-29-bank2-sharedreserve-v10"
 }

@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from tau2.data_model.message import AssistantMessage, ToolCall, ToolMessage
 from tau2.evaluator.trace_evidence import evidence_from_messages
 
@@ -799,3 +801,168 @@ def test_harmless_operation_summary_cannot_erase_received_purchase_facts():
     assert failures([rows[0], *sources, summary, *rows[1:]]) == []
     # Summary alone remains insufficient to justify conditional authority.
     assert failures([rows[0], summary, *sources[1:], *rows[1:]])
+
+
+def shared_reserve_rows(*, refreshed=False, capacity=12):
+    """Two independent scopes spend the same bank/partner reserve."""
+    from copy import deepcopy
+
+    first = composite_rows()
+    first_offer = first[0][2][0]
+    first_offer["selection_budget"].update(shared=True, bank=capacity, partner=capacity)
+    first_offer["funding_reserve"] = {
+        "id": "budget",
+        "bank": capacity,
+        "partner": capacity,
+        "remaining_bank": capacity,
+        "remaining_partner": capacity,
+    }
+    first[2][2]["funding_charge"] = {"reserve_id": "budget", "bank": 6, "partner": 6}
+    second = deepcopy(first)
+    offer = second[0][2][0]
+    offer["id"] = "second"
+    offer["transaction_ids"] = ["t3", "t4"]
+    offer["allocation_first_transaction_id"] = "t3"
+    args = second[2][1]
+    args.update(
+        offer_id="second",
+        confirmation_id="second-consent",
+        idempotency_key="second-key",
+    )
+    args["payouts"][0]["transaction_id"] = "t3"
+    args["payouts"][1]["transaction_id"] = "t4"
+    second[1][2]["confirmation_id"] = "second-consent"
+    second[1][2]["data"].update(offer_id="second", payouts=deepcopy(args["payouts"]))
+    if refreshed:
+        offer["funding_reserve"].update(
+            remaining_bank=capacity - 6, remaining_partner=capacity - 6
+        )
+        return first + second
+    first[0][2].append(offer)
+    return first + second[1:]
+
+
+def test_shared_reserve_cannot_be_spent_twice_from_one_received_snapshot():
+    problems = failures(shared_reserve_rows(capacity=10))
+    assert "4:shared_funding_exceeded" in problems
+
+
+def test_shared_reserve_refresh_does_not_double_count_previous_payment():
+    for refreshed in [False, True]:
+        rows = shared_reserve_rows(refreshed=refreshed)
+        assert failures(rows) == []
+        assert failures(rows + [rows[-1]]) == []
+
+
+def test_shared_reserve_requires_received_snapshot_and_exact_charge():
+    from copy import deepcopy
+
+    rows = shared_reserve_rows()
+    for offer in rows[0][2]:
+        offer.pop("funding_reserve")
+    assert any("shared_funding_not_received" in item for item in failures(rows))
+    rows = shared_reserve_rows()
+    bad = deepcopy(rows)
+    bad[-1][2]["funding_charge"]["partner"] = 0
+    assert any("shared_funding_charge_mismatch" in item for item in failures(bad))
+
+
+def test_shared_payment_result_must_be_received_before_dependent_case_change():
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = shared_reserve_rows()
+    rows.append(
+        (
+            "amend_cashback_investigation",
+            {"case_id": "case", "items": [{"transaction_id": "t1", "amount": 3}]},
+            {"id": "case"},
+            False,
+        )
+    )
+    messages = []
+    for i, (name, args, result, error) in enumerate(rows):
+        messages.extend(
+            [
+                AssistantMessage(
+                    role="assistant",
+                    tool_calls=[ToolCall(id=str(i), name=name, arguments=args)],
+                ),
+                ToolMessage(
+                    role="tool", id=str(i), content=json.dumps(result), error=error
+                ),
+            ]
+        )
+    delayed = messages.pop(5)
+    messages.append(delayed)
+    trace = evidence_from_messages(messages)
+    assert any(
+        "payment_result_not_received" in x
+        for x in reward_business_failures(trace, POLICY)
+    )
+
+
+@pytest.mark.parametrize("delayed", ["original", "repeat"])
+@pytest.mark.parametrize(
+    "equivalence",
+    ["normalized", "changed_key", "changed_packet", "missing_key", "failed", "late"],
+)
+def test_payment_receipt_can_come_from_equivalent_successful_replay(
+    delayed, equivalence
+):
+    from copy import deepcopy
+
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = composite_rows()
+    replay = deepcopy(rows[-1])
+    replay[1]["component_ids"].reverse()
+    replay[1]["payouts"].reverse()
+    replay[1]["total_amount"] = "10.00"
+    replay[1]["payouts"][0]["amount"] = "6.00"
+    replay[1]["expected_revision"] = 99
+    if equivalence == "changed_key":
+        replay[1]["idempotency_key"] = "different"
+    elif equivalence == "changed_packet":
+        replay[1]["confirmation_id"] = "different"
+    elif equivalence == "missing_key":
+        rows[-1][1].pop("idempotency_key")
+        replay[1].pop("idempotency_key")
+    elif equivalence == "failed":
+        replay = (replay[0], replay[1], {"error": "rejected"}, True)
+    rows += [
+        replay,
+        (
+            "amend_cashback_investigation",
+            {"case_id": "case", "items": [{"transaction_id": "t1", "amount": 3}]},
+            {"id": "case"},
+            False,
+        ),
+    ]
+    messages, held = [], []
+    for i, (name, args, result, error) in enumerate(rows):
+        messages.append(
+            AssistantMessage(
+                role="assistant",
+                tool_calls=[ToolCall(id=str(i), name=name, arguments=args)],
+            )
+        )
+        response = ToolMessage(
+            role="tool", id=str(i), content=json.dumps(result), error=error
+        )
+        if i == (2 if delayed == "original" else 3) or (
+            equivalence == "late" and i in {2, 3}
+        ):
+            held.append(response)
+        else:
+            messages.append(response)
+    problems = reward_business_failures(evidence_from_messages(messages + held), POLICY)
+    receipt_problems = [p for p in problems if "payment_result_not_received" in p]
+    expected = delayed == "original" and equivalence != "normalized"
+    if delayed == "repeat" and equivalence in {
+        "changed_key",
+        "changed_packet",
+        "missing_key",
+        "late",
+    }:
+        expected = True
+    assert bool(receipt_problems) is expected, problems

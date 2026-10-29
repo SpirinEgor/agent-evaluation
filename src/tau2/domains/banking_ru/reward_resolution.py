@@ -10,6 +10,11 @@ from tau2.domains.banking_ru.cashback_state import (
     state_guard,
 )
 from tau2.domains.banking_ru.component_eligibility import validate_eligibility
+from tau2.domains.banking_ru.reward_funding import (
+    reserve_key,
+    reserve_members,
+    reserve_snapshot,
+)
 from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionExecution
 from tau2.domains.banking_ru.reward_workflows import (
     cents,
@@ -81,12 +86,21 @@ def selected_amounts(offer, component_ids):
         or sum(cents(p.partner_cost) for p in selected) > cents(budget.partner)
     ):
         raise ValueError("Превышен бюджет составного предложения")
+    singleton = (
+        len(offer.transaction_ids) == 1
+        and offer.transaction_ids[0] == offer.allocation_first_transaction_id
+    )
     if any(
         cents(p.bank_cost) + cents(p.partner_cost) != cents(p.amount)
         or not 0 <= component_deduction_cents(p) < cents(p.amount)
-        or not 0
-        < cents(p.allocation_first_amount)
-        < cents(p.amount) - component_deduction_cents(p)
+        or not 0 < cents(p.allocation_first_amount)
+        or (
+            cents(p.allocation_first_amount)
+            != cents(p.amount) - component_deduction_cents(p)
+            if singleton
+            else cents(p.allocation_first_amount)
+            >= cents(p.amount) - component_deduction_cents(p)
+        )
         for p in selected
     ):
         raise ValueError("Несогласованные банковские условия компонента")
@@ -118,8 +132,10 @@ def selected_amounts(offer, component_ids):
     first_amount = sum(cents(p.allocation_first_amount) for p in selected)
     first = offer.allocation_first_transaction_id
     rest = set(offer.transaction_ids) - {first}
-    if len(rest) != 1 or total > cents(offer.amount):
+    if (not singleton and len(rest) != 1) or total > cents(offer.amount):
         raise ValueError("Неверная область или превышен предел предложения")
+    if singleton:
+        return total, {first: first_amount}
     return total, {first: first_amount, rest.pop(): total - first_amount}
 
 
@@ -144,6 +160,9 @@ def list_offers(tools, customer_id, case_id):
         )
         if not row["components_complete"]:
             row["components"] = []
+        reserve = reserve_snapshot(tools.db, offer)
+        if reserve is not None:
+            row["funding_reserve"] = reserve
         results.append(row)
     return results
 
@@ -396,11 +415,54 @@ def execute(
         if reserved + amount > gaps.get(tid, 0):
             reject("Сумма уже заявлена в расследовании")
     expected_claims = {x.transaction_id: cents(x.amount) for x in case.reward_items}
+    # A shared reserve settles one full claim scope even before CRM records all
+    # purchases. Unrelated existing case positions retain their declared amounts.
+    for member in reserve_members(tools.db, offer):
+        for tid in member.transaction_ids:
+            if tid in gaps:
+                expected_claims[tid] = gaps[tid]
+    # CRM amendment may follow several independent payments. Keep prior paid items
+    # at their real remaining obligation while preserving unrelated case positions.
+    for operation in tools.db.reward_resolution_executions.values():
+        if (
+            operation.customer_id == offer.customer_id
+            and operation.case_id == case_id
+            and operation.period == offer.period
+            and operation.result.get("status") == "succeeded"
+        ):
+            for tid in operation.transaction_ids:
+                if tid in gaps:
+                    expected_claims[tid] = gaps[tid]
     expected_claims.update({tid: gaps[tid] - amt for tid, amt in expected.items()})
     if {
         x["transaction_id"]: cents(x["amount"]) for x in consent["resulting_claims"]
     } != expected_claims:
         reject("Согласованный остаток требований не соответствует проводкам")
+    funding_charge = None
+    if reserve_key(offer) is not None:
+        reserve = reserve_snapshot(tools.db, offer)
+        selected = [p for p in offer.components if p.id in (component_ids or [])]
+        if not selected:
+            reject("Общий резерв требует составного предложения")
+        costs = {
+            source: sum(cents(getattr(p, source + "_cost")) for p in selected)
+            for source in ("bank", "partner")
+        }
+        if any(
+            costs[source] > cents(reserve["remaining_" + source]) for source in costs
+        ):
+            raise ToolExecutionRejected(
+                "ERR_SHARED_FUNDING_EXHAUSTED: Недостаточно общего резерва"
+            )
+        funding_charge = {
+            "reserve_id": reserve["id"],
+            **{source: money(value) for source, value in costs.items()},
+        }
+    execution_id = "resolution:" + case_id
+    if funding_charge is not None:
+        execution_id += ":" + offer_id
+    if execution_id in tools.db.reward_resolution_executions:
+        reject("Повтор записи урегулирования")
     from tau2.domains.banking_ru.data_model import Transaction
 
     credits = []
@@ -433,7 +495,7 @@ def execute(
         tools.db.transactions[credit.original_transaction_id].cashback_granted = True
     current = advance(tools.db, offer.customer_id, offer.period)
     result = dict(
-        id="resolution:" + case_id,
+        id=execution_id,
         customer_id=offer.customer_id,
         case_id=case_id,
         status="succeeded",
@@ -444,6 +506,8 @@ def execute(
         offer_id=offer_id,
         offer_version=offer_version,
     )
+    if funding_charge is not None:
+        result["funding_charge"] = funding_charge
     tools.db.reward_resolution_executions[result["id"]] = RewardResolutionExecution(
         id=result["id"],
         customer_id=offer.customer_id,

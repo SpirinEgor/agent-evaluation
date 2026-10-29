@@ -47,3 +47,41 @@ def test_invalid_selection_rejected(ids):
 
     with pytest.raises(ValueError):
         selected_amounts(menu(), ids)
+
+
+def test_db_hash_keeps_shared_funding_totals_without_request_identity():
+    from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.domains.banking_ru.reward_resolution_models import (
+        RewardResolutionExecution,
+    )
+    from tau2.platform.session import PlatformSession
+
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    tools = PlatformSession(task, get_environment).env.tools
+    before = tools.get_db_hash()
+    operation = RewardResolutionExecution(
+        id="one",
+        customer_id="gromov_a_1187",
+        case_id="case_610903",
+        period="2026-07",
+        transaction_ids=["txn_804219"],
+        idempotency_key="one",
+        packet={"offer_id": "offer_610741"},
+        result={
+            "status": "succeeded",
+            "funding_charge": {"reserve_id": "budget_610735", "bank": 9, "partner": 9},
+        },
+    )
+    tools.db.reward_resolution_executions["one"] = operation
+    charged = tools.get_db_hash()
+    assert charged != before
+    tools.db.reward_resolution_executions = {
+        "different": operation.model_copy(
+            update={
+                "id": "different",
+                "idempotency_key": "different",
+                "packet": {"offer_id": "offer_610741", "confirmation_id": "other"},
+            }
+        )
+    }
+    assert tools.get_db_hash() == charged

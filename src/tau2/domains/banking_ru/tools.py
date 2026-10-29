@@ -245,6 +245,16 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         snapshot.pop("cashback_revision_states", None)
         snapshot.pop("cashback_adjustment_operations", None)
         snapshot.pop("reward_resolution_executions", None)
+        # Request IDs/order are not business state; actual reserve consumption is.
+        from tau2.domains.banking_ru.reward_funding import reserve_key, shared_spent
+
+        funding = {}
+        for offer in self.db.reward_resolution_offers.values():
+            key = reserve_key(offer)
+            if key is not None:
+                funding["|".join(key)] = shared_spent(self.db, offer)
+        if funding:
+            snapshot["shared_reward_funding_usage"] = funding
         from tau2.domains.banking_ru.reward_workflows import standard_cycle
 
         semantic_cases = set()
