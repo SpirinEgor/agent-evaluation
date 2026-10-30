@@ -259,6 +259,93 @@ def list_components(tools, offer_id, offset=0, limit=50):
     )
 
 
+def minimum_snapshot(tools, customer_id, case_id, transaction_ids):
+    """Bind consent to current instructions for this offer's purchases only."""
+    preferences = tools.db.reward_resolution_preferences.get(customer_id)
+    if preferences is None:
+        return {}
+    result = {}
+    for tid in transaction_ids:
+        if tid not in preferences.minimum_payouts:
+            continue
+        key = (customer_id, case_id, tid)
+        result[tid] = (
+            tools._resolution_minimum_overrides.get(
+                key, cents(preferences.minimum_payouts[tid])
+            ),
+            tools._resolution_minimum_revisions.get(key, 0),
+        )
+    return result
+
+
+def change_minimum(tools, customer_id, transaction_id, request):
+    tools._require_verified(customer_id)
+    transaction = tools._get_transaction(transaction_id)
+    case = tools.db.cases.get(request.case_id)
+    if transaction.customer_id != customer_id or (
+        case is not None and case.customer_id != customer_id
+    ):
+        raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужая операция или дело")
+    if case is None:
+        raise ValueError("ERR_NOT_FOUND: Дело не найдено")
+    if not any(
+        offer.customer_id == customer_id
+        and offer.case_id == case.id
+        and transaction_id in offer.transaction_ids
+        for offer in tools.db.reward_resolution_offers.values()
+    ):
+        raise ToolExecutionRejected(
+            "ERR_MINIMUM_SCOPE: Операция вне области урегулирования"
+        )
+    preferences = tools.db.reward_resolution_preferences.get(customer_id)
+    initial = preferences.minimum_payouts.get(transaction_id) if preferences else None
+    key = (customer_id, case.id, transaction_id)
+    current = tools._resolution_minimum_overrides.get(key, cents(initial or 0))
+    requested = cents(request.minimum_amount)
+    # Repeating the latest answer is harmless; an older answer never restores an override.
+    for answer in reversed(tools._resolution_minimum_answers.values()):
+        data = answer["data"]
+        if (data["customer_id"], data["case_id"], data["transaction_id"]) == key:
+            if (
+                cents(data["requested_minimum"]) == requested
+                and cents(data["effective_minimum"]) == current
+            ):
+                return deepcopy(answer)
+            break
+    accepted = initial is not None and (
+        cents(preferences.minimum_payout_reduction_limits.get(transaction_id, initial))
+        <= requested
+        <= cents(initial)
+    )
+    effective = requested if accepted else current
+    answer = dict(
+        customer_id=customer_id,
+        request_type=request.type,
+        status="accepted" if accepted else "declined",
+        answer_id=f"resolution-minimum-answer-{len(tools._resolution_minimum_answers) + 1}",
+        data=dict(
+            customer_id=customer_id,
+            case_id=case.id,
+            transaction_id=transaction_id,
+            previous_minimum=money(current),
+            requested_minimum=money(requested),
+            effective_minimum=money(effective),
+        ),
+    )
+    if accepted and effective != current:
+        tools._resolution_minimum_overrides[key] = effective
+        tools._resolution_minimum_revisions[key] = (
+            tools._resolution_minimum_revisions.get(key, 0) + 1
+        )
+    tools._resolution_minimum_answers[answer["answer_id"]] = deepcopy(answer)
+    return answer
+
+
+def below_minimum(rows, snapshot):
+    amounts = {row["transaction_id"]: cents(row["amount"]) for row in rows}
+    return any(amounts.get(tid, 0) < minimum for tid, (minimum, _) in snapshot.items())
+
+
 def confirm(tools, customer_id, request):
     offer, case = owned_offer(tools, request.offer_id, request.case_id)
     if customer_id != offer.customer_id:
@@ -283,8 +370,13 @@ def confirm(tools, customer_id, request):
     if preferences is None:
         return {"status": "unsupported_context", "data": None}
     # Client accepts the presented package, not its mathematical correctness or bank approval.
-    declined = offer.rights == "full_settlement" and (
-        preferences.preserve_unpaid_claims or preferences.preserve_other_case_items
+    snapshot = minimum_snapshot(tools, customer_id, case.id, offer.transaction_ids)
+    declined = (
+        below_minimum(packet["payouts"], snapshot)
+        or offer.rights == "full_settlement"
+        and (
+            preferences.preserve_unpaid_claims or preferences.preserve_other_case_items
+        )
     )
     base = dict(
         customer_id=customer_id,
@@ -297,10 +389,14 @@ def confirm(tools, customer_id, request):
     if declined:
         return base
     for cid, old in tools._resolution_consents.items():
-        if old == packet:
+        if (
+            old == packet
+            and tools._resolution_consent_minimums.get(cid, {}) == snapshot
+        ):
             return {**base, "confirmation_id": cid}
     cid = f"resolution-confirmation-{len(tools._resolution_consents) + 1}"
     tools._resolution_consents[cid] = packet
+    tools._resolution_consent_minimums[cid] = snapshot
     return {**base, "confirmation_id": cid}
 
 
@@ -410,6 +506,13 @@ def execute(
         )
     ):
         reject("Клиент не разрешал отказ от требований")
+    snapshot = minimum_snapshot(
+        tools, offer.customer_id, case.id, offer.transaction_ids
+    )
+    if below_minimum(rows, snapshot):
+        raise ToolExecutionRejected(
+            "ERR_CUSTOMER_MINIMUM: Выплата ниже минимума клиента"
+        )
     for p in tools.db.cashback_adjustment_permissions.values():
         if (
             p["customer_id"] == offer.customer_id
@@ -431,6 +534,11 @@ def execute(
         )
     if not consent or any(consent.get(k) != v for k, v in packet.items()):
         reject("Нет согласия на точный пакет")
+    if tools._resolution_consent_minimums.get(confirmation_id, {}) != snapshot:
+        return {
+            "status": "consent_stale",
+            "current_revision": revision(tools.db, offer.customer_id, offer.period),
+        }
     # Staleness is a recoverable condition, not an unlawful payment.
     blocked = state_guard(tools.db, offer.customer_id, offer.period, expected_revision)
     if blocked:

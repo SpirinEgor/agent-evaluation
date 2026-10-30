@@ -260,6 +260,131 @@ def _remaining_funding(observed, boundary, offer_source, reserve, policy):
     return remaining
 
 
+def _minimum_snapshot(observed, boundary, policy):
+    """Original customer terms plus exact, received case-scoped acceptances.
+
+    Public preferences remain immutable after a session acceptance. Revisions
+    distinguish a real change and restoration from an idempotent receipt replay.
+    Legacy traces with no minimum data retain their previous contract.
+    """
+    sources, changes = [], []
+    for source in observed:
+        if source.call.name != "ask_client":
+            continue
+        request = source.call.arguments.get("request") or {}
+        result = payload(source)
+        if not isinstance(request, dict) or not isinstance(result, dict):
+            continue
+        data = result.get("data") or {}
+        if isinstance(data, dict) and data.get("minimum_payouts"):
+            sources.append((source, request, result, data))
+        if (
+            result.get("status") == "accepted"
+            and request.get("type") == "reward_resolution_minimum_change"
+        ):
+            changes.append((source, request, result, data))
+    if not sources and not changes:
+        return {}
+    initial = None
+    for source, request, result, data in sorted(
+        sources,
+        key=lambda entry: entry[0].result_position
+        if entry[0].result_position is not None
+        else float("inf"),
+    ):
+        if (
+            source.call.arguments.get("customer_id") == policy["customer_id"]
+            and request.get("type") == "case_clarification"
+            and request.get("topic") == "resolution_preferences"
+            and result.get("request_type") == "case_clarification"
+            and result.get("status") == "answered"
+            and result.get("customer_id") == policy["customer_id"]
+            and data.get("customer_id") == policy["customer_id"]
+            and isinstance(data.get("minimum_payouts"), dict)
+            and source.result_position is not None
+            and source.result_position < boundary.call_position
+        ):
+            initial = {
+                tid: _money(amount)
+                for tid, amount in data["minimum_payouts"].items()
+                if tid in policy["transaction_ids"]
+            }
+            break
+    if initial is None or any(
+        not amount.is_finite() or amount < 0 for amount in initial.values()
+    ):
+        raise ValueError("Customer minimum not received")
+    snapshot = {tid: (amount, 0, -1) for tid, amount in initial.items()}
+    known = dict(initial)
+    answers = {}
+    for source, request, result, data in sorted(
+        changes, key=lambda entry: entry[0].execution_index
+    ):
+        tid = source.call.arguments.get("transaction_id")
+        if (
+            source.execution_index >= boundary.execution_index
+            or tid not in snapshot
+            or not isinstance(data, dict)
+            or source.call.arguments.get("customer_id") != policy["customer_id"]
+            or request.get("case_id") != policy["case_id"]
+            or result.get("customer_id") != policy["customer_id"]
+            or result.get("request_type") != "reward_resolution_minimum_change"
+            or result.get("status") != "accepted"
+            or not isinstance(result.get("answer_id"), str)
+            or not result["answer_id"]
+            or any(
+                data.get(field) != expected
+                for field, expected in (
+                    ("customer_id", policy["customer_id"]),
+                    ("case_id", policy["case_id"]),
+                    ("transaction_id", tid),
+                )
+            )
+        ):
+            continue
+        amount, revision, last_change = snapshot[tid]
+        requested = _money(request.get("minimum_amount"))
+        received = (
+            source.result_position is not None
+            and source.result_position < boundary.call_position
+        )
+        previous = answers.get(result["answer_id"])
+        if previous is not None:
+            # An idempotent replay can deliver an earlier unreceived acceptance
+            # without creating a second transition. Once superseded, even an
+            # identical receipt cannot authorize a later restoration (ABA).
+            if previous == (tid, requested, result, revision) and received:
+                known[tid] = requested
+            continue
+        if (
+            not requested.is_finite()
+            or not 0 <= requested <= initial[tid]
+            or _money(data.get("previous_minimum")) != amount
+            or _money(data.get("requested_minimum")) != requested
+            or _money(data.get("effective_minimum")) != requested
+        ):
+            continue
+        changed = requested != amount
+        snapshot[tid] = (
+            requested,
+            revision + changed,
+            source.execution_index if changed else last_change,
+        )
+        answers[result["answer_id"]] = (tid, requested, result, revision + changed)
+        if changed:
+            # Earlier acceptance evidence belongs to the superseded revision.
+            known[tid] = initial[tid]
+        if received:
+            known[tid] = requested
+    # A receipt may justify the final explicit amount even when an intermediate
+    # answer was delayed. Unreceived changes still cannot authorize a lowering,
+    # and actual changes after consent invalidate its bank-side snapshot.
+    return {
+        tid: (max(known[tid], amount), revision, last_change)
+        for tid, (amount, revision, last_change) in snapshot.items()
+    }
+
+
 def reward_business_failures(trace, policy):
     """Validate every successful protected mutation, including later repaired ones."""
     if not policy:
@@ -453,6 +578,27 @@ def reward_business_failures(trace, policy):
                     consent_source = source
             if not confirmed:
                 failures.append(f"{ident}:resolution_packet_not_confirmed")
+            if consent_source is not None:
+                try:
+                    minimums = _minimum_snapshot(observed, consent_source, policy)
+                    current = _minimum_snapshot(observed, target, policy)
+                    if any(
+                        _money(row.get("amount")) < minimums[row["transaction_id"]][0]
+                        for row in payouts
+                        if row.get("transaction_id") in minimums
+                    ):
+                        failures.append(f"{ident}:resolution_below_customer_minimum")
+                    if any(
+                        minimums.get(tid) != current.get(tid)
+                        and current.get(tid, (None, 0, -1))[2]
+                        > consent_source.execution_index
+                        for tid in tids
+                    ):
+                        failures.append(
+                            f"{ident}:resolution_minimum_changed_after_consent"
+                        )
+                except ValueError:
+                    failures.append(f"{ident}:customer_minimum_not_received")
             offer = None
             offer_source = None
             component_costs = None

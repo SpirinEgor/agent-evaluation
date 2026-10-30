@@ -1,9 +1,9 @@
 {
   "id": "Bank 2",
   "description": {
-    "purpose": "Получить максимальную допустимую выплату, дополнить существующее дело остатками и передать полный состав на рассмотрение, сохранив права и остальные позиции.",
+    "purpose": "Получить максимальную допустимую выплату с учётом ограничения клиента по первой покупке, дополнить дело остатками и передать полный состав на рассмотрение, сохранив права и остальные позиции.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "2026-10-29-bank2-unknown-v11; completion_only; X unknown then failed_final; R+Y 39 RUB, review 46 RUB; shared final charge 21/18; model difficulty not measured"
+    "notes": "2026-10-30-bank2-customer-minimum-v12; completion_only; first-purchase minimum18; X unknown then failed_final; strict Z24+W14=38 RUB, review47; shared final charge19/19; explicit relaxation17 permits R17+Y22=39/case46; control Xsuccess permits40/case45; model difficulty not measured"
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -442,9 +442,27 @@
         },
         "reward_resolution_execution_profiles": {
           "offer_610741": "failed_final"
+        },
+        "reward_resolution_preferences": {
+          "gromov_a_1187": {
+            "id": "resolution-preferences-1187",
+            "customer_id": "gromov_a_1187",
+            "objective": "maximize_additional_guaranteed_cash",
+            "currency": "RUB",
+            "preserve_unpaid_claims": true,
+            "preserve_other_case_items": true,
+            "allow_new_products": false,
+            "customer_reported_offer_id": "offer_610729",
+            "customer_reported_status": "approved",
+            "text": "Хочу максимум дополнительных гарантированных рублей сейчас, прежние выплаты второй раз не считайте. Сохраняю право на всю невозмещённую часть обеих покупок и остальные позиции дела. Новых продуктов не хочу. Мне кажется, предложение на 26 рублей уже одобрено; проверьте статус банка. Итоговый вариант согласуйте со мной. По первой покупке (чек CF-2507-1187) хочу получить сейчас не меньше 18 рублей. Максимизируйте общую дополнительную выплату среди вариантов, которые соблюдают это ограничение. Если предлагаете снизить минимум, отдельно спросите меня; подтверждение конкретного соглашения само по себе минимум не меняет.",
+            "minimum_payouts": {
+              "txn_804219": 18
+            },
+            "minimum_payout_reduction_limits": {}
+          }
         }
       }
     }
   },
-  "scenario_version": "2026-10-29-bank2-unknown-v11"
+  "scenario_version": "2026-10-30-bank2-customer-minimum-v12"
 }

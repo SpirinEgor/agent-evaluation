@@ -138,6 +138,15 @@ class RewardResolutionConfirmationRequest(BaseModel):
     eligibility_evidence: dict[str, EligibilityEvidence] = Field(default_factory=dict)
 
 
+class RewardResolutionMinimumChangeRequest(BaseModel):
+    """Ask to change a purchase minimum independently of settlement consent."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["reward_resolution_minimum_change"]
+    case_id: str = Field(min_length=1)
+    minimum_amount: float = Field(ge=0, multiple_of=0.01, allow_inf_nan=False)
+
+
 class FeeRefundConfirmationRequest(BaseModel):
     """Present an explicit set of fee corrections for client consent."""
 
@@ -191,6 +200,7 @@ ClientRequest = Annotated[
     | TransactionSelectionRequest
     | CaseClarificationRequest
     | RewardResolutionConfirmationRequest
+    | RewardResolutionMinimumChangeRequest
     | FeeRefundConfirmationRequest
     | DocumentChannelConfirmationRequest,
     Field(discriminator="type"),
@@ -274,6 +284,10 @@ class StructuredIdentityBankingTools(
         refunds (transaction_id и amount каждого возврата) и total_amount.
         Ответ confirmed содержит confirmation_id для последующих refund_fee.
         state_versions связывает согласие с версией каждой операции.
+        reward_resolution_minimum_change с case_id и minimum_amount запрашивает
+        изменение минимума выплаты по своей transaction_id, переданной отдельно.
+        Ответ accepted отдельно изменяет клиентское условие; согласие на сам
+        пакет выплаты запрашивается через reward_resolution_confirmation.
         document_channel_confirmation с contact_id моделирует подтверждение
         контакта клиентом; банковский статус доступен в контактах сервиса.
         Все вопросы формируются по явному типу запроса. Свободные question и
@@ -283,7 +297,7 @@ class StructuredIdentityBankingTools(
             customer_id: Идентификатор найденного клиента.
             request: Явный тип запроса из закрытого набора.
             question: Историческое поле; непустое значение не допускается.
-            transaction_id: Своя операция только для operation_confirmation.
+            transaction_id: Своя операция для operation_confirmation или изменения минимума.
             loan_id: Свой кредит только для loan_repayment_confirmation.
             account_id: Свой счёт только для loan_repayment_confirmation.
             payout_account_id: Свой счёт для остатка, только account_closure_signature.
@@ -319,6 +333,21 @@ class StructuredIdentityBankingTools(
             from tau2.domains.banking_ru.reward_resolution import confirm
 
             return FileResponse(confirm(self, customer_id, request))
+        if isinstance(request, RewardResolutionMinimumChangeRequest):
+            self._require_verified(customer_id)
+            if (
+                question
+                or transaction_id is None
+                or any(v is not None for v in (loan_id, account_id, payout_account_id))
+            ):
+                raise ValueError(
+                    "ERR_INVALID_ARGUMENT: Нужны request и отдельный transaction_id"
+                )
+            from tau2.domains.banking_ru.reward_resolution import change_minimum
+
+            return FileResponse(
+                change_minimum(self, customer_id, transaction_id, request)
+            )
         if isinstance(request, CaseClarificationRequest):
             self._require_verified(customer_id)
             if question or any(
@@ -335,7 +364,13 @@ class StructuredIdentityBankingTools(
                         customer_id=customer_id,
                         request_type=request.type,
                         status="answered" if preferences else "unknown",
-                        data=preferences.model_dump() if preferences else None,
+                        data=(
+                            preferences.model_dump(
+                                exclude={"minimum_payout_reduction_limits"}
+                            )
+                            if preferences
+                            else None
+                        ),
                     )
                 )
             sources = [

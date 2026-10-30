@@ -34,14 +34,17 @@ def _payment_route(task, route):
     status = by_id["bank2:v11:status"]
     operation_id = status.arguments["resolution_operation_id"]
     sequence = {
-        "reverse": ["Y", "X", "resolve", "R"],
-        "pending_y": ["X", "Y", "resolve", "R"],
-        "suboptimal": ["Z", "W"],
-        "old_acg": ["ACG"],
+        "reverse": ["X", "resolve", "W", "Z"],
+        "early_y": ["Y", "X", "resolve"],
+        "relaxed": ["X", "resolve", "R", "Y"],
+        "unreceived_minimum": ["X", "resolve", "R", "Y"],
+        "late_minimum": ["X", "resolve", "R", "Y"],
+        "late_minimum_replay": ["X", "resolve", "R", "Y"],
+        "suboptimal": ["Y"],
         "success": ["X", "resolve", "Y"],
         "success_reverse": ["Y", "X", "resolve"],
         "success_pending_y": ["X", "Y", "resolve"],
-    }.get(route, ["X", "resolve", "R", "Y"])
+    }.get(route, ["X", "resolve", "Z", "W"])
     packages = {
         "X": ("offer_610741", ["X"], [("txn_804219", 18)], {}),
         "R": ("offer_610751", ["R"], [("txn_804219", 17)], {}),
@@ -53,12 +56,6 @@ def _payment_route(task, route):
             {"Y": {"contract_id": "rc_610482", "record_id": "pc_740613"}},
         ),
         "W": ("offer_610749", ["W"], [("txn_804227", 14)], {}),
-        "ACG": (
-            "offer_610735",
-            ["A", "C", "G"],
-            [("txn_804219", 15), ("txn_804227", 21)],
-            {"G": {"contract_id": "rc_610482", "record_id": "pc_740613"}},
-        ),
     }
     revision, number = 2, 0
     remaining = {"txn_804219": 25, "txn_804227": 53}
@@ -74,8 +71,8 @@ def _payment_route(task, route):
         number += 1
         c, p = deepcopy(consent), deepcopy(pay)
         c.action_id, p.action_id = (
-            ("bank2:v11:consent-replacement", "bank2:v11:pay-replacement")
-            if key == "R"
+            ("bank2:v12:consent-first", "bank2:v12:pay-first")
+            if key in {"R", "Z"}
             else ("bank2:v10:consent-second", "bank2:v10:pay-second")
             if key in {"Y", "W"}
             else ("bank2:v5:consent", "bank2:v5:pay")
@@ -108,6 +105,22 @@ def _payment_route(task, route):
             confirmation_id=f"resolution-confirmation-{number}",
             idempotency_key=f"test-bank2-{key}",
         )
+        if key == "R":
+            minimum = deepcopy(consent)
+            minimum.action_id = "bank2:v12:minimum-change"
+            minimum.argument_values = {
+                "request.type": "reward_resolution_minimum_change"
+            }
+            minimum.arguments = {
+                "customer_id": "gromov_a_1187",
+                "transaction_id": "txn_804219",
+                "request": {
+                    "type": "reward_resolution_minimum_change",
+                    "case_id": "case_610903",
+                    "minimum_amount": 17,
+                },
+            }
+            actions.append(minimum)
         actions.extend([c, p])
         revision += 1
         if key == "X":
@@ -123,13 +136,32 @@ def _payment_route(task, route):
     return actions
 
 
+def test_bank2_strict_first_purchase_minimum_selects_zw_reference():
+    """A below-minimum replacement must not remain the main accepted reference."""
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    db = PlatformSession(task, get_environment).env.tools.db
+    preferences = db.reward_resolution_preferences["gromov_a_1187"].model_dump()
+    assert preferences.get("minimum_payouts") == {"txn_804219": 18}
+    payouts = [
+        action.arguments["offer_id"]
+        for action in task.evaluation_criteria.actions
+        if action.name == "execute_reward_resolution"
+    ]
+    assert payouts == ["offer_610741", "offer_610743", "offer_610749"]
+
+
 @pytest.mark.parametrize("mode", ["half", "full"])
 @pytest.mark.parametrize(
     "route,want_db,want_action",
     [
         ("reference", 1, 1),
         ("reverse", 1, 1),
-        ("pending_y", 1, 1),
+        ("early_y", 0, 1),
+        ("relaxed", 1, 1),
+        ("strict_decline", 1, 1),
+        ("unreceived_minimum", 1, 0),
+        ("late_minimum", 1, 0),
+        ("late_minimum_replay", 1, 1),
         ("replay", 1, 1),
         ("late_origin_snapshot", 1, 1),
         ("late_origin_replay", 1, 1),
@@ -137,7 +169,6 @@ def _payment_route(task, route):
         ("success_reverse", 1, 1),
         ("success_pending_y", 1, 1),
         ("suboptimal", 0, 1),
-        ("old_acg", 0, 1),
         ("early_r", 1, 1),
         ("old_consent", 1, 1),
         ("unreceived_status", 1, 0),
@@ -153,10 +184,21 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
     replacement_consent = deepcopy(
         next(
             a
-            for a in task.evaluation_criteria.actions
-            if a.action_id == "bank2:v11:consent-replacement"
+            for a in _payment_route(task, "relaxed")
+            if a.action_id == "bank2:v12:consent-first"
         )
     )
+    if route in {
+        "relaxed",
+        "unreceived_minimum",
+        "late_minimum",
+        "late_minimum_replay",
+    }:
+        task = task.model_copy(deep=True)
+        task.initial_state.initialization_data.agent_data[
+            "reward_resolution_preferences"
+        ]["gromov_a_1187"]["minimum_payout_reduction_limits"] = {"txn_804219": 17}
+        task.evaluation_criteria.actions = _payment_route(task, "relaxed")
     if route.startswith("success"):
         task = task.model_copy(deep=True)
         task.initial_state.initialization_data.agent_data[
@@ -172,7 +214,7 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
         task,
         get_environment,
         mcp_layout="directory"
-        if route in {"reference", "reverse", "pending_y", "replay", "success"}
+        if route in {"reference", "reverse", "early_y", "replay", "relaxed", "success"}
         else "single",
         max_errors=0,
     )
@@ -199,6 +241,7 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
     delayed = None
     late_origin = None
     received_operation = None
+    minimum_delayed = None
     for action in [] if route == "noop" else actions:
         if action.name == "submit_cashback_review" and route == "no_submit":
             continue
@@ -251,9 +294,7 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
             assert received_operation is not None
             action.arguments["resolution_operation_id"] = received_operation
             if route == "early_r":
-                replacement = next(
-                    a for a in actions if a.action_id == "bank2:v11:consent-replacement"
-                )
+                replacement = replacement_consent
                 before = deepcopy(session.env.tools.db.reward_resolution_executions)
                 assert call(replacement.name, replacement.arguments).is_error
                 assert session.env.tools.db.reward_resolution_executions == before
@@ -261,7 +302,7 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
                 delayed = session.begin_call(action.name, action.arguments, None)
                 payload(session.call(action.name, action.arguments, attempt=delayed))
                 continue
-        if action.action_id == "bank2:v11:pay-replacement" and route == "old_consent":
+        if action.action_id == "bank2:v12:pay-first" and route == "old_consent":
             before = deepcopy(session.env.tools.db.reward_resolution_executions)
             denied = call(
                 action.name,
@@ -270,15 +311,59 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
             assert denied.is_error or payload(denied)["status"] == "consent_stale"
             assert session.env.tools.db.reward_resolution_executions == before
         if action.action_id in {
-            "bank2:v11:consent-replacement",
-            "bank2:v11:pay-replacement",
+            "bank2:v12:consent-first",
+            "bank2:v12:pay-first",
         }:
             target = (
                 action.arguments["request"]
                 if action.name == "ask_client"
                 else action.arguments
             )
-            target["fallback_operation_id"] = received_operation
+            if target["offer_id"] == "offer_610751":
+                target["fallback_operation_id"] = received_operation
+        if action.action_id == "bank2:v12:minimum-change" and route in {
+            "unreceived_minimum",
+            "late_minimum",
+            "late_minimum_replay",
+        }:
+            minimum_delayed = session.begin_call(action.name, action.arguments, None)
+            result = payload(
+                session.call(action.name, action.arguments, attempt=minimum_delayed)
+            )
+            assert result["status"] == "accepted"
+            if route == "late_minimum_replay":
+                assert payload(call(action.name, action.arguments)) == result
+            continue
+        if action.action_id == "bank2:v12:consent-first" and route == "strict_decline":
+            result = payload(
+                call(
+                    "ask_client",
+                    {
+                        "customer_id": "gromov_a_1187",
+                        "transaction_id": "txn_804219",
+                        "request": {
+                            "type": "reward_resolution_minimum_change",
+                            "case_id": "case_610903",
+                            "minimum_amount": 17,
+                        },
+                    },
+                )
+            )
+            assert result["status"] == "declined"
+            assert result["data"]["effective_minimum"] == 18
+            rejected = payload(
+                call(replacement_consent.name, replacement_consent.arguments)
+            )
+            assert rejected["status"] == "declined"
+            assert "confirmation_id" not in rejected
+            before = deepcopy(session.env.tools.db.reward_resolution_executions)
+            replacement_pay = next(
+                a
+                for a in _payment_route(task, "relaxed")
+                if a.action_id == "bank2:v12:pay-first"
+            )
+            assert call(replacement_pay.name, replacement_pay.arguments).is_error
+            assert session.env.tools.db.reward_resolution_executions == before
         result = payload(call(action.name, action.arguments))
         if (
             route.startswith("success")
@@ -297,13 +382,18 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
             and result.get("operation_id") is not None
         ):
             received_operation = result["operation_id"]
-        if route == "late_status" and action.action_id == "bank2:v11:pay-replacement":
+        if route == "late_minimum" and action.action_id == "bank2:v12:consent-first":
+            session.result_sent(minimum_delayed)
+            minimum_delayed = None
+        if route == "late_status" and action.action_id == "bank2:v12:pay-first":
             session.result_sent(delayed)
             delayed = None
     if late_origin is not None:
         session.result_sent(late_origin)
     if delayed is not None:
         session.result_sent(delayed)
+    if minimum_delayed is not None:
+        session.result_sent(minimum_delayed)
     assert not call("done", {}).is_error
     reward = (
         session.grade() if mode == "half" else grade_full_session(session).reward_info
@@ -314,12 +404,19 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
     }, reward.info
     if want_db:
         case = session.env.tools.db.cases["case_610903"]
-        first = 7 if route.startswith("success") else 8
+        first, second, bank, partner = (
+            (7, 31, 22, 18)
+            if route.startswith("success")
+            else (8, 31, 21, 18)
+            if route
+            in {"relaxed", "unreceived_minimum", "late_minimum", "late_minimum_replay"}
+            else (1, 39, 19, 19)
+        )
         assert case.review_status == "registered"
         assert case.responsible_unit == "rewards_review"
-        assert case.review_amount == case.amount == first + 38
+        assert case.review_amount == case.amount == first + second + 7
         assert {r.transaction_id: r.amount for r in case.review_items} == {
-            r["transaction_id"]: r["amount"] for r in _claims(first, 31)
+            r["transaction_id"]: r["amount"] for r in _claims(first, second)
         }
         executions = list(session.env.tools.db.reward_resolution_executions.values())
         paid = [
@@ -327,10 +424,8 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
             for x in executions
             if x.result["status"] == "succeeded"
         ]
-        assert sum(x["bank"] for x in paid) == (
-            22 if route.startswith("success") else 21
-        )
-        assert sum(x["partner"] for x in paid) == 18
+        assert sum(x["bank"] for x in paid) == bank
+        assert sum(x["partner"] for x in paid) == partner
         assert not any(x.result["status"] == "execution_unknown" for x in executions)
 
 
@@ -533,7 +628,7 @@ def test_bank2_review_rules_reject_incomplete_or_unrelated_evidence(invalid):
         ) == [rule.evidence_id]
 
 
-def test_bank2_unknown_outcome_reference_has_replacement_consent():
+def test_bank2_unknown_outcome_reference_preserves_declined_replacement():
     task = next(t for t in get_tasks() if t.id == "Bank 2")
     session = PlatformSession(task, get_environment)
     db = session.env.tools.db
@@ -543,17 +638,22 @@ def test_bank2_unknown_outcome_reference_has_replacement_consent():
     assert replacement.amount == 17
     assert replacement.components[0].bank_cost == 8
     actions = task.evaluation_criteria.actions
-    assert len([a for a in actions if a.name == "execute_reward_resolution"]) == 3
+    assert [
+        a.arguments["offer_id"]
+        for a in actions
+        if a.name == "execute_reward_resolution"
+    ] == ["offer_610741", "offer_610743", "offer_610749"]
 
 
 @pytest.mark.parametrize(
-    "outcome,expected,components",
+    "outcome,minimum,expected,components",
     [
-        ("failed_final", 3900, (("Y",), ("R",))),
-        ("succeeded", 4000, (("X",), ("Y",))),
+        ("failed_final", 18, 3800, (("Z",), ("W",))),
+        ("failed_final", 17, 3900, (("Y",), ("R",))),
+        ("succeeded", 18, 4000, (("X",), ("Y",))),
     ],
 )
-def test_bank2_terminal_menu_has_unique_maximum(outcome, expected, components):
+def test_bank2_terminal_menu_has_unique_maximum(outcome, minimum, expected, components):
     """Enumerate legal scopes and reserve costs after authoritative X outcome."""
     from itertools import combinations
 
@@ -592,7 +692,12 @@ def test_bank2_terminal_menu_has_unique_maximum(outcome, expected, components):
                         incidents=db.service_incidents,
                         confirmations=db.partner_confirmations,
                     )
-                    amount, _ = selected_amounts(offer, list(subset))
+                    amount, allocation = selected_amounts(offer, list(subset))
+                    if any(
+                        tid == "txn_804219" and payout < minimum * 100
+                        for tid, payout in allocation.items()
+                    ):
+                        continue
                 except ValueError:
                     continue
                 selected = [c for c in offer.components if c.id in subset]
@@ -618,4 +723,4 @@ def test_bank2_terminal_menu_has_unique_maximum(outcome, expected, components):
     assert max(amount for amount, _ in legal) == expected
     assert [parts for amount, parts in legal if amount == expected] == [components]
     assert (3800, (("Z",), ("W",))) in legal
-    assert (3600, (("A", "C", "G"),)) in legal
+    assert (3600, (("A", "C", "G"),)) not in legal

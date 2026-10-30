@@ -209,6 +209,10 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
     def __init__(self, db: BankingDB) -> None:
         super().__init__(db)
         self._resolution_consents = {}
+        self._resolution_minimum_overrides = {}
+        self._resolution_minimum_revisions = {}
+        self._resolution_minimum_answers = {}
+        self._resolution_consent_minimums = {}
         self._resolution_violations = set()
         self._refund_keys = {}
         self._adjustment_keys = {}

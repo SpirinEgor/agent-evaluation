@@ -1,6 +1,6 @@
 """Typed bank offer and execution records."""
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, RootModel
 
@@ -109,6 +109,12 @@ class RewardResolutionPreferences(BaseModel):
     allow_new_products: bool = False
     customer_reported_offer_id: str | None = None
     customer_reported_status: str | None = None
+    minimum_payouts: dict[
+        str, Annotated[float, Field(ge=0, multiple_of=0.01, allow_inf_nan=False)]
+    ] = Field(default_factory=dict)
+    minimum_payout_reduction_limits: dict[
+        str, Annotated[float, Field(ge=0, multiple_of=0.01, allow_inf_nan=False)]
+    ] = Field(default_factory=dict)
     text: str
 
 

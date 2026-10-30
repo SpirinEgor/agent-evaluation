@@ -3653,26 +3653,26 @@
       ]
     },
     {
-      "action_id": "bank2:v11:consent-replacement",
+      "action_id": "bank2:v12:consent-first",
       "name": "ask_client",
       "arguments": {
         "customer_id": "gromov_a_1187",
         "request": {
           "type": "reward_resolution_confirmation",
-          "offer_id": "offer_610751",
+          "offer_id": "offer_610743",
           "offer_version": 2,
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 17
+              "amount": 24
             }
           ],
-          "total_amount": 17,
+          "total_amount": 24,
           "case_id": "case_610903",
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 8
+              "amount": 1
             },
             {
               "transaction_id": "txn_804227",
@@ -3685,10 +3685,9 @@
           ],
           "state_revision": 4,
           "component_ids": [
-            "R"
+            "Z"
           ],
-          "eligibility_evidence": {},
-          "fallback_operation_id": "resolution:case_610903:offer_610741"
+          "eligibility_evidence": {}
         }
       },
       "required_for_reward": false,
@@ -3700,27 +3699,26 @@
       }
     },
     {
-      "action_id": "bank2:v11:pay-replacement",
+      "action_id": "bank2:v12:pay-first",
       "name": "execute_reward_resolution",
       "arguments": {
-        "offer_id": "offer_610751",
+        "offer_id": "offer_610743",
         "offer_version": 2,
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 17
+            "amount": 24
           }
         ],
-        "total_amount": 17,
+        "total_amount": 24,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-2",
         "expected_revision": 4,
-        "idempotency_key": "bank2-resolution-r",
+        "idempotency_key": "bank2-resolution-z",
         "component_ids": [
-          "R"
+          "Z"
         ],
-        "eligibility_evidence": {},
-        "fallback_operation_id": "resolution:case_610903:offer_610741"
+        "eligibility_evidence": {}
       },
       "required_for_reward": false,
       "compare_args": [
@@ -3744,24 +3742,24 @@
         "customer_id": "gromov_a_1187",
         "request": {
           "type": "reward_resolution_confirmation",
-          "offer_id": "offer_610747",
+          "offer_id": "offer_610749",
           "offer_version": 2,
           "payouts": [
             {
               "transaction_id": "txn_804227",
-              "amount": 22
+              "amount": 14
             }
           ],
-          "total_amount": 22,
+          "total_amount": 14,
           "case_id": "case_610903",
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 8
+              "amount": 1
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 31
+              "amount": 39
             },
             {
               "transaction_id": "txn_804205",
@@ -3770,14 +3768,9 @@
           ],
           "state_revision": 5,
           "component_ids": [
-            "Y"
+            "W"
           ],
-          "eligibility_evidence": {
-            "Y": {
-              "contract_id": "rc_610482",
-              "record_id": "pc_740613"
-            }
-          }
+          "eligibility_evidence": {}
         }
       },
       "required_for_reward": false,
@@ -3792,28 +3785,23 @@
       "action_id": "bank2:v10:pay-second",
       "name": "execute_reward_resolution",
       "arguments": {
-        "offer_id": "offer_610747",
+        "offer_id": "offer_610749",
         "offer_version": 2,
         "payouts": [
           {
             "transaction_id": "txn_804227",
-            "amount": 22
+            "amount": 14
           }
         ],
-        "total_amount": 22,
+        "total_amount": 14,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-3",
         "expected_revision": 5,
-        "idempotency_key": "bank2-resolution-y",
+        "idempotency_key": "bank2-resolution-w",
         "component_ids": [
-          "Y"
+          "W"
         ],
-        "eligibility_evidence": {
-          "Y": {
-            "contract_id": "rc_610482",
-            "record_id": "pc_740613"
-          }
-        }
+        "eligibility_evidence": {}
       },
       "required_for_reward": false,
       "compare_args": [
@@ -3828,11 +3816,11 @@
         "items": [
           {
             "transaction_id": "txn_804219",
-            "amount": 8
+            "amount": 1
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 31
+            "amount": 39
           }
         ],
         "expected_revision": 6
@@ -5635,7 +5623,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_amounts.md",
         "complete": true,
-        "sha256": "dbd8cc6b2e1d0bbe36147927ee36f957ad5b4ad1a9acec1afba47b2b8a9c0f93"
+        "sha256": "a1a660ed556ec9e91eeb7d2cd0cb217c955a5fca9c940de79adc0f8f810e3530"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5654,7 +5642,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_rights.md",
         "complete": true,
-        "sha256": "cde22a42d027fb2f98b6c1adc3be9ed8698e0e1c27c173710f64590e47c9268c"
+        "sha256": "8a2e05539dd4fce33d92783b0eab3647e3738b511d0a4079f131d34d91e01472"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5673,7 +5661,7 @@
       "expected_fields": {
         "path": "/knowledge/reward_resolution_execution.md",
         "complete": true,
-        "sha256": "5bc1370e1d29deccaa8361c1b783d553b51452302ece5ba12ea466e4511599d3"
+        "sha256": "54e043f10b72cc6ae548df5bded3602079520d455176685eb1ddfc53681b6820"
       },
       "recoverable_result_statuses": [
         "settlement_pending",
@@ -5698,7 +5686,10 @@
         "preserve_other_case_items": true,
         "allow_new_products": false,
         "customer_reported_offer_id": "offer_610729",
-        "customer_reported_status": "approved"
+        "customer_reported_status": "approved",
+        "minimum_payouts": {
+          "txn_804219": 18
+        }
       },
       "before_action_id": "bank2:v5:pay",
       "recoverable_result_statuses": [

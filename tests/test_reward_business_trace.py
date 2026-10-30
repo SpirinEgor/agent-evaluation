@@ -1292,3 +1292,370 @@ def test_equivalent_replay_resolves_original_unknown_with_delayed_receipt(mode):
         )
         == []
     )
+
+
+def minimum_preference(minimum=5):
+    """Customer t1 requires five; the component fixture offers four."""
+    return (
+        "ask_client",
+        {
+            "customer_id": "own",
+            "request": {
+                "type": "case_clarification",
+                "topic": "resolution_preferences",
+            },
+        },
+        {
+            "customer_id": "own",
+            "request_type": "case_clarification",
+            "status": "answered",
+            "data": {"customer_id": "own", "minimum_payouts": {"t1": minimum}},
+        },
+        False,
+    )
+
+
+def minimum_change(previous=5, requested=4):
+    return (
+        "ask_client",
+        {
+            "customer_id": "own",
+            "transaction_id": "t1",
+            "request": {
+                "type": "reward_resolution_minimum_change",
+                "case_id": "case",
+                "minimum_amount": requested,
+            },
+        },
+        {
+            "customer_id": "own",
+            "request_type": "reward_resolution_minimum_change",
+            "status": "accepted",
+            "answer_id": "minimum-answer",
+            "data": {
+                "customer_id": "own",
+                "case_id": "case",
+                "transaction_id": "t1",
+                "previous_minimum": previous,
+                "requested_minimum": requested,
+                "effective_minimum": requested,
+            },
+        },
+        False,
+    )
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_customer_minimum_is_not_lowered_by_offer_confirmation(mode):
+    rows = composite_rows()
+    problems = failures([minimum_preference(), *rows], mode)
+    assert problems == ["3:resolution_below_customer_minimum"]
+    # The existing lawful selection above the minimum remains valid, whether
+    # or not it is the financial optimum checked separately by DB.
+    assert failures([minimum_preference(3), *rows], mode) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_received_exact_customer_minimum_change_authorizes_lower_offer(mode):
+    rows = composite_rows()
+    prefs, change = minimum_preference(), minimum_change()
+    assert failures([prefs, rows[0], change, *rows[1:]], mode) == []
+    # Public preferences are immutable; re-reading them does not revoke the
+    # case-specific acceptance. Repeating the accepted request is harmless.
+    assert failures([prefs, rows[0], change, prefs, change, *rows[1:]], mode) == []
+    denied = (rows[2][0], rows[2][1], {"error": "below customer minimum"}, True)
+    assert failures([prefs, *rows[:2], denied, change, *rows[1:]], mode) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize(
+    "defect",
+    [
+        "request_customer",
+        "request_case",
+        "request_transaction",
+        "request_amount",
+        "result_customer",
+        "data_customer",
+        "data_case",
+        "data_transaction",
+        "previous",
+        "requested",
+        "effective",
+        "status",
+        "request_type",
+        "answer_id",
+        "error",
+        "user_call",
+        "user_result",
+    ],
+)
+def test_customer_minimum_change_requires_exact_owned_accepted_receipt(mode, defect):
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows, change = composite_rows(), minimum_change()
+    args, result = change[1], change[2]
+    if defect.startswith("request_") and defect != "request_type":
+        if defect == "request_customer":
+            args["customer_id"] = "foreign"
+        elif defect == "request_case":
+            args["request"]["case_id"] = "foreign"
+        elif defect == "request_transaction":
+            args["transaction_id"] = "t2"
+        else:
+            args["request"]["minimum_amount"] = 3
+    elif defect == "result_customer":
+        result["customer_id"] = "foreign"
+    elif defect.startswith("data_"):
+        result["data"][defect.removeprefix("data_") + "_id"] = "foreign"
+    elif defect in {"previous", "requested", "effective"}:
+        result["data"][defect + "_minimum"] = 3
+    elif defect == "status":
+        result["status"] = "declined"
+    elif defect == "request_type":
+        result["request_type"] = "reward_resolution_confirmation"
+    elif defect == "answer_id":
+        result.pop("answer_id")
+    trace = trace_of([minimum_preference(), rows[0], change, *rows[1:]], mode)
+    source = trace.observed[2]
+    if defect == "error":
+        trace.observed[2] = source.model_copy(
+            update={"result": source.result.model_copy(update={"error": True})}
+        )
+    elif defect in {"user_call", "user_result"}:
+        field = "call" if defect == "user_call" else "result"
+        trace.observed[2] = source.model_copy(
+            update={
+                field: getattr(source, field).model_copy(update={"requestor": "user"})
+            }
+        )
+    assert reward_business_failures(trace, POLICY) == [
+        "4:resolution_below_customer_minimum"
+    ]
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize("defect", ["missing", "foreign", "wrong_topic", "late"])
+def test_lowered_minimum_also_requires_received_initial_own_preferences(mode, defect):
+    rows, prefs = composite_rows(), minimum_preference()
+    if defect == "foreign":
+        prefs[2]["data"]["customer_id"] = "foreign"
+    elif defect == "wrong_topic":
+        prefs[1]["request"]["topic"] = "existing_case"
+    if defect == "missing":
+        path = [rows[0], minimum_change(), *rows[1:]]
+    elif defect == "late":
+        path = [rows[0], minimum_change(), rows[1], prefs, rows[2]]
+    else:
+        path = [prefs, rows[0], minimum_change(), *rows[1:]]
+    assert any("customer_minimum_not_received" in p for p in failures(path, mode))
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize("timing", ["same_batch", "late", "unreceived"])
+def test_minimum_acceptance_result_must_arrive_before_consent(mode, timing):
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = composite_rows()
+    trace = trace_of([minimum_preference(), rows[0], minimum_change(), *rows[1:]], mode)
+    source, consent, payment = trace.observed[2:]
+    receipt = {
+        "same_batch": consent.call_position,
+        "late": payment.result_position + 1,
+        "unreceived": None,
+    }[timing]
+    trace.observed[2] = source.model_copy(update={"result_position": receipt})
+    assert reward_business_failures(trace, POLICY) == [
+        "4:resolution_below_customer_minimum"
+    ]
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_effective_minimum_change_invalidates_old_consent_but_repeat_does_not(mode):
+    rows = composite_rows()
+    changed = minimum_change(previous=3, requested=2)
+    assert failures([minimum_preference(3), *rows[:2], changed, rows[2]], mode) == [
+        "4:resolution_minimum_changed_after_consent"
+    ]
+    assert failures([minimum_preference(3), *rows[:2], changed, *rows[1:]], mode) == []
+    repeat = minimum_change(previous=3, requested=3)
+    assert failures([minimum_preference(3), *rows[:2], repeat, rows[2]], mode) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_declined_minimum_change_preserves_original_and_legacy_missing_field(mode):
+    rows, decline = composite_rows(), minimum_change(previous=3, requested=2)
+    decline[2]["status"] = "declined"
+    decline[2]["data"]["effective_minimum"] = 3
+    assert failures([minimum_preference(3), rows[0], decline, *rows[1:]], mode) == []
+    legacy = minimum_preference()
+    legacy[2]["data"].pop("minimum_payouts")
+    assert failures([legacy, *rows], mode) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_minimum_round_trip_cannot_resurrect_prior_offer_consent(mode):
+    rows = composite_rows()
+    lower, restore = minimum_change(3, 2), minimum_change(2, 3)
+    restore[2]["answer_id"] = "restore-answer"
+    assert failures(
+        [minimum_preference(3), *rows[:2], lower, restore, rows[2]], mode
+    ) == ["5:resolution_minimum_changed_after_consent"]
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_safe_minimum_rejection_does_not_add_requirements_to_legacy_preferences(mode):
+    rows = composite_rows()
+    rejection = (
+        "ask_client",
+        minimum_change()[1],
+        {"status": "unsupported_context", "data": None},
+        False,
+    )
+    assert failures([rows[0], rejection, *rows[1:]], mode) == []
+    decline = minimum_change()[2]
+    decline.update(status="declined")
+    decline["data"].update(previous_minimum=0, effective_minimum=0)
+    assert (
+        failures(
+            [rows[0], (rejection[0], rejection[1], decline, False), *rows[1:]], mode
+        )
+        == []
+    )
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_customer_minimum_change_does_not_invalidate_unrelated_offer_consent(mode):
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = shared_reserve_rows()
+    scope = {**POLICY, "transaction_ids": ["t1", "t2", "t3", "t4"]}
+    trace = trace_of(
+        [minimum_preference(3), *rows[:4], minimum_change(3, 2), rows[4]], mode
+    )
+    assert reward_business_failures(trace, scope) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_explicit_zero_customer_minimum_is_valid(mode):
+    rows = composite_rows()
+    assert failures([minimum_preference(0), *rows], mode) == []
+    assert (
+        failures([minimum_preference(), rows[0], minimum_change(5, 0), *rows[1:]], mode)
+        == []
+    )
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_received_final_minimum_change_can_follow_unreceived_intermediate_change(mode):
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = composite_rows()
+    first, final = minimum_change(5, 4), minimum_change(4, 3)
+    final[2]["answer_id"] = "final-answer"
+    trace = trace_of([minimum_preference(), rows[0], first, final, *rows[1:]], mode)
+    # The final exact acceptance explicitly covers three; it does not depend on
+    # using the intermediate four to justify this payout.
+    source = trace.observed[2]
+    trace.observed[2] = source.model_copy(update={"result_position": 1000})
+    assert reward_business_failures(trace, POLICY) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_actual_minimum_change_after_consent_is_stale_even_if_reply_is_delayed(mode):
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = composite_rows()
+    trace = trace_of(
+        [minimum_preference(3), *rows[:2], minimum_change(3, 2), rows[2]], mode
+    )
+    source = trace.observed[3]
+    trace.observed[3] = source.model_copy(update={"result_position": 1000})
+    assert reward_business_failures(trace, POLICY) == [
+        "4:resolution_minimum_changed_after_consent"
+    ]
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize("first_receipt", [None, 1000])
+def test_received_minimum_replay_delivers_previously_unreceived_acceptance(
+    mode, first_receipt
+):
+    from copy import deepcopy
+
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows, change = composite_rows(), minimum_change()
+    trace = trace_of(
+        [minimum_preference(), rows[0], change, deepcopy(change), *rows[1:]], mode
+    )
+    source = trace.observed[2]
+    trace.observed[2] = source.model_copy(update={"result_position": first_receipt})
+    # The received duplicate conveys the accepted four without changing terms
+    # again; payment must not depend on delivery of the original response.
+    assert reward_business_failures(trace, POLICY) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_old_minimum_receipt_replay_cannot_authorize_restored_amount(mode):
+    from copy import deepcopy
+
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = composite_rows()
+    first, restore, final = (
+        minimum_change(5, 4),
+        minimum_change(4, 5),
+        minimum_change(5, 4),
+    )
+    restore[2]["answer_id"] = "restore-answer"
+    final[2]["answer_id"] = "final-answer"
+    trace = trace_of(
+        [
+            minimum_preference(),
+            rows[0],
+            first,
+            restore,
+            final,
+            deepcopy(first),
+            *rows[1:],
+        ],
+        mode,
+    )
+    for index in (2, 4):
+        source = trace.observed[index]
+        trace.observed[index] = source.model_copy(update={"result_position": None})
+    # The latest actual minimum is four, but only the superseded receipt for
+    # four was delivered. The latest four still requires its own acceptance.
+    assert reward_business_failures(trace, POLICY) == [
+        "7:resolution_below_customer_minimum"
+    ]
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize(
+    "original,lower,want",
+    [(5, 4, ["6:resolution_below_customer_minimum"]), (3, 2, [])],
+)
+def test_received_superseded_minimum_cannot_authorize_unreceived_restoration(
+    mode, original, lower, want
+):
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = composite_rows()
+    first, restore, final = (
+        minimum_change(original, lower),
+        minimum_change(lower, original),
+        minimum_change(original, lower),
+    )
+    restore[2]["answer_id"] = "restore-answer"
+    final[2]["answer_id"] = "final-answer"
+    trace = trace_of(
+        [minimum_preference(original), rows[0], first, restore, final, *rows[1:]], mode
+    )
+    for index in (3, 4):
+        source = trace.observed[index]
+        trace.observed[index] = source.model_copy(update={"result_position": None})
+    # Superseded lower terms cannot carry authorization across real transitions.
+    # A payout above the original minimum remains lawful without that evidence.
+    assert reward_business_failures(trace, POLICY) == want
