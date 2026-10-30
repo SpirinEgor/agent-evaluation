@@ -162,7 +162,6 @@ def build_prompt(
                 "банковских систем. Не используйте "
                 "никаких других инструментов или источников."
             ),
-            policy,
             "Доступны bank_directory для поиска систем и инструментов и открытия схем, "
             "bank_call — для вызова открытой операции. Операция done вызывается через bank_call.",
             (
@@ -286,24 +285,14 @@ async def invoke_isolated_codex(
     container = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(container)
     name = "banking-codex-" + uuid.uuid4().hex
-    inner = list(command)
-    for i, arg in enumerate(inner):
-        if arg.startswith("mcp_servers.") and ".url=" in arg:
-            inner[i] = arg.replace("http://127.0.0.1:", "http://host.docker.internal:")
-        elif arg.startswith("skills.config="):
-            inner[i] = (
-                'skills.config=[{path="/root/.codex/skills/.system/imagegen/SKILL.md",enabled=false},{path="/root/.codex/skills/.system/openai-docs/SKILL.md",enabled=false},{path="/root/.codex/skills/.system/review-agent/SKILL.md",enabled=false},{path="/root/.codex/skills/.system/skill-creator/SKILL.md",enabled=false},{path="/root/.codex/skills/.system/skill-installer/SKILL.md",enabled=false}]'
-            )
-        elif arg == "-C":
-            inner[i + 1] = "/workspace"
     try:
         inspected = await asyncio.to_thread(
             container.prepare_container, image, name, policy
         )
         if expected_image_id is not None:
             verify_container_image(inspected, expected_image_id)
-        run = await invoke_codex(
-            ["docker", "exec", "-i", name, *inner], prompt, timeout_seconds
+        run = await container.invoke_app_server(
+            name, command, prompt, policy, timeout_seconds
         )
         run["container"] = {
             "name": name,
@@ -311,7 +300,9 @@ async def invoke_isolated_codex(
             "image_id": inspected["Image"],
             "create_command": container.create_command(image, name),
             "inspection": inspected,
-            "inner_command": inner,
+            "inner_command": run["app_server_command"],
+            "requested_command": command,
+            "thread_start": run["thread_start"],
             "auth_delivery": "explicit temporary copy to tmpfs; no host mount",
         }
         return run

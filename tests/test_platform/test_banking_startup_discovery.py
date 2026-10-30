@@ -74,7 +74,8 @@ def test_harness_prompt_has_no_duplicate_system_catalog():
         ticket="TICKET",
         mcp_urls={"crm": "secret", "knowledge": "secret"},
     )
-    assert "POLICY" in prompt and "TICKET" in prompt and "done" in prompt
+    assert "POLICY" not in prompt  # startup is supplied once as baseInstructions
+    assert "TICKET" in prompt and "done" in prompt
     assert "Доступные MCP:" not in prompt
     assert "crm" not in prompt and "knowledge" not in prompt and "secret" not in prompt
 

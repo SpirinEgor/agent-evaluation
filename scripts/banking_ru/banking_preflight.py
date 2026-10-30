@@ -85,7 +85,7 @@ def inputs(spec):
     paths += [path_for(boundary[k]) for k in ["receipt", "anchor_version"]]
     paths += [
         path_for(boundary["receipt"]).parent / n
-        for n in ["image.json", "cli-request.json"]
+        for n in ["image.json", "cli-request.json", "request-contract.json"]
     ]
     files = hash_files(paths)
     files["SPEC"] = hashlib.sha256(
@@ -340,6 +340,35 @@ def boundary_check(spec):
     if not all(receipt.get(k) is True for k in flags):
         raise ValueError("Unverified model boundary")
     parent = path_for(b["receipt"]).parent
+    # Recompute from the complete wire evidence; legacy boolean flags alone
+    # accepted extra Codex namespaces and generic developer instructions.
+    import importlib.util
+
+    runtime_spec = importlib.util.spec_from_file_location(
+        "banking_codex_container", Path(__file__).with_name("codex_container.py")
+    )
+    runtime = importlib.util.module_from_spec(runtime_spec)
+    runtime_spec.loader.exec_module(runtime)
+    contract = read(parent / "request-contract.json")
+    capture = read(parent / "cli-request.json")
+    thread = capture.get("thread_start", {})
+    if (
+        thread.get("model") != contract["model"]
+        or thread.get("baseInstructions") != contract["startup"]
+        or thread.get("developerInstructions") != ""
+        or thread.get("dynamicTools") != runtime.dynamic_bank_tools(contract["schemas"])
+        or thread.get("allowProviderModelFallback") is not False
+    ):
+        raise ValueError("Codex launch differs from the captured request contract")
+    for setting, field in [("name", "model"), ("effort", "effort")]:
+        if setting in spec["model"] and spec["model"][setting] != contract[field]:
+            raise ValueError(
+                "Codex request proof belongs to another model configuration"
+            )
+    if not capture.get("requests"):
+        raise ValueError("Missing complete Codex wire requests")
+    for request in capture["requests"]:
+        runtime.validate_model_request(request, contract)
     image = spec["model"]["image"]
     if (
         not re.fullmatch(r"sha256:[a-f0-9]{64}", image)
@@ -349,8 +378,9 @@ def boundary_check(spec):
             "Image differs from verified preflight or is not an immutable image ID"
         )
     if (
-        "--dangerously-bypass-approvals-and-sandbox"
-        not in read(parent / "cli-request.json")["command"]
+        thread.get("sandbox") != "danger-full-access"
+        or thread.get("approvalPolicy") != "never"
+        or thread.get("ephemeral") is not True
     ):
         raise ValueError("Preflight did not verify required full-access CLI")
     anchor = read(path_for(b["anchor_version"]))["files"]

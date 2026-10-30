@@ -256,7 +256,13 @@ def test_seal_includes_preflight_code(tmp_path, monkeypatch):
     (tmp_path / "solution").write_text("fixture")
     proof = tmp_path / "proof"
     proof.mkdir()
-    for name in ("receipt.json", "image.json", "cli-request.json", "anchor.json"):
+    for name in (
+        "receipt.json",
+        "image.json",
+        "cli-request.json",
+        "request-contract.json",
+        "anchor.json",
+    ):
         (proof / name).write_text("{}")
     spec = {
         "inputs": [],
@@ -374,9 +380,36 @@ def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
             }
         )
     )
+    from test_platform.test_codex_container import request_contract
+
+    contract, wire = request_contract()
+    (proof / "request-contract.json").write_text(json.dumps(contract))
     (proof / "image.json").write_text(json.dumps({"id": image}))
     (proof / "cli-request.json").write_text(
-        json.dumps({"command": ["--dangerously-bypass-approvals-and-sandbox"]})
+        json.dumps(
+            {
+                "requests": [wire],
+                "thread_start": {
+                    "model": "gpt-6.1-sol",
+                    "baseInstructions": "BANK STARTUP",
+                    "developerInstructions": "",
+                    "allowProviderModelFallback": False,
+                    "dynamicTools": [
+                        {
+                            "type": "function",
+                            "name": n,
+                            "description": n,
+                            "inputSchema": {"type": "object"},
+                            "deferLoading": False,
+                        }
+                        for n in ["bank_directory", "bank_call"]
+                    ],
+                    "sandbox": "danger-full-access",
+                    "approvalPolicy": "never",
+                    "ephemeral": True,
+                },
+            }
+        )
     )
     (proof / "anchor.json").write_text(json.dumps({"files": anchor}))
     spec = {
@@ -387,6 +420,27 @@ def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
         "model": {"image": image},
     }
     assert m.boundary_check(spec)["passed"]
+    capture = json.loads((proof / "cli-request.json").read_text())
+    capture["thread_start"]["baseInstructions"] = "STALE STARTUP"
+    (proof / "cli-request.json").write_text(json.dumps(capture))
+    with pytest.raises(ValueError, match="launch differs"):
+        m.boundary_check(spec)
+    capture["thread_start"]["baseInstructions"] = "BANK STARTUP"
+    (proof / "cli-request.json").write_text(json.dumps(capture))
+    # A trusted-looking receipt must not override contaminated wire evidence.
+    capture = json.loads((proof / "cli-request.json").read_text())
+    capture["requests"][0]["input"].append(
+        {
+            "type": "message",
+            "role": "developer",
+            "content": [{"type": "input_text", "text": "HOST INSTRUCTIONS"}],
+        }
+    )
+    (proof / "cli-request.json").write_text(json.dumps(capture))
+    with pytest.raises(ValueError, match="unexpected instructions"):
+        m.boundary_check(spec)
+    capture["requests"][0]["input"].pop()
+    (proof / "cli-request.json").write_text(json.dumps(capture))
     (tmp_path / "src/tau2/added.py").write_text("new runtime")
     with pytest.raises(ValueError, match="fresh physical preflight"):
         m.boundary_check(spec)
