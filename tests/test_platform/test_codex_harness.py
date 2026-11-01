@@ -167,6 +167,35 @@ def test_codex_cli_parses_configured_system_names_without_literal_quotes():
     assert not {'"crm"', '"support"'} & names
 
 
+def test_structured_model_refusal_is_a_failure_even_after_business_success():
+    harness = load_harness()
+    transcript = json.dumps(
+        dict(
+            type="item.completed",
+            item=dict(
+                id="host-model-message-1",
+                type="agent_message",
+                model_refusal=True,
+                text="Refusal text",
+            ),
+        )
+    )
+    journal = harness.collect_attempt_journal(transcript, "", [])
+    assert journal["external_refusals"] == 1
+    assert journal["attempts"][0]["blocking_layer"] == "model"
+    assert (
+        harness.classify_result(
+            {"status": "done"},
+            {"reward": 1.0, "business_process_only": True},
+            timed_out=False,
+            exit_code=0,
+            closed_by_harness=False,
+            external_refusals=journal["external_refusals"],
+        )
+        == "codex_refusal_fail"
+    )
+
+
 def test_external_refusal_counts_as_failure_even_if_recovered():
     harness = load_harness()
     assert (

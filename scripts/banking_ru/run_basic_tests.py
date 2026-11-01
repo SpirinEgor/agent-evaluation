@@ -43,6 +43,7 @@ GROUPS = {
                 "test_banking_startup_discovery.py",
                 "test_client.py",
                 "test_codex_container.py",
+                "test_codex_broker.py",
                 "test_codex_harness.py",
                 "test_main.py",
                 "test_langfuse_export.py",

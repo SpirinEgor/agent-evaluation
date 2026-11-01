@@ -1,6 +1,7 @@
 """Externally isolate full-access Codex; never expose host files to apply_patch."""
 
 import asyncio
+import importlib.util
 import json
 import subprocess
 import time
@@ -12,6 +13,15 @@ from pathlib import Path
 DEFAULT_IMAGE = "banking-codex-isolated:0.162.0-alpha.17.2"
 
 BANK_TOOLS = {"bank_directory", "bank_call"}
+
+
+def broker_module():
+    spec = importlib.util.spec_from_file_location(
+        "banking_codex_broker", Path(__file__).with_name("codex_broker.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def banking_model_catalog(catalog: dict, model: str) -> dict:
@@ -147,7 +157,8 @@ def create_command(image: str, name: str) -> list[str]:
         "--cpus",
         "2",
         "--network",
-        "bridge",
+        "none",
+        "--read-only",
         "--tmpfs",
         "/root/.codex:rw,noexec,nosuid,size=128m",
         "--tmpfs",
@@ -165,8 +176,12 @@ def validate_inspection(inspected: dict) -> None:
     if any(m.get("Type") != "tmpfs" for m in inspected.get("Mounts", [])):
         raise ValueError("Model container must have no host or volume mounts")
     config = inspected["HostConfig"]
-    if config.get("Privileged") or config.get("NetworkMode") != "bridge":
-        raise ValueError("Privileged/host-network model container is forbidden")
+    if (
+        config.get("Privileged")
+        or config.get("NetworkMode") != "none"
+        or config.get("ReadonlyRootfs") is not True
+    ):
+        raise ValueError("Model container requires network=none and a read-only root")
     if config.get("PidMode") == "host" or config.get("IpcMode") == "host":
         raise ValueError("Host PID/IPC namespace is forbidden")
     if "ALL" not in config.get("CapDrop", []):
@@ -209,18 +224,11 @@ def copy_bytes(name: str, destination: str, content: bytes) -> None:
 
 
 def prepare_container(image: str, name: str, policy: str) -> dict:
-    """Start one isolated CLI runtime, copying only auth and bank startup."""
+    """Start a credential-free runtime, copying only the bank startup."""
     subprocess.run(create_command(image, name), check=True, capture_output=True)
     try:
         inspected = inspect_container(name)
         subprocess.run(["docker", "start", name], check=True, capture_output=True)
-        # Auth is a runtime credential copy in volatile storage, never an image
-        # layer, host mount, model prompt, command argument or saved artifact.
-        copy_bytes(
-            name,
-            "/root/.codex/auth.json",
-            (Path.home() / ".codex/auth.json").read_bytes(),
-        )
         copy_bytes(name, "/workspace/AGENTS.md", policy.encode())
         inventory = subprocess.run(
             [
@@ -241,7 +249,7 @@ process.stdout.write(JSON.stringify(Object.fromEntries(['/root/.codex','/root/.a
         )
         fresh = json.loads(inventory.stdout)
         if fresh != {
-            "/root/.codex": ["/root/.codex/auth.json"],
+            "/root/.codex": [],
             "/root/.agents": [],
             "/root/.cache": [],
             "/workspace": ["/workspace/AGENTS.md"],
@@ -255,8 +263,20 @@ process.stdout.write(JSON.stringify(Object.fromEntries(['/root/.codex','/root/.a
 
 
 def remove_container(name: str) -> None:
-    """Remove only this attempt's container, including volatile auth storage."""
-    subprocess.run(["docker", "rm", "-f", name], capture_output=True, check=False)
+    """Never report successful cleanup when the daemon could not remove it."""
+    result = subprocess.run(
+        ["docker", "rm", "-f", name], capture_output=True, text=True, timeout=15
+    )
+    if result.returncode:
+        absent = subprocess.run(
+            ["docker", "inspect", name], capture_output=True, text=True, timeout=15
+        )
+        if absent.returncode == 0 or not any(
+            s in absent.stderr.lower() for s in ["no such object", "no such container"]
+        ):
+            raise RuntimeError(
+                "Container cleanup is unverified; further attempts forbidden"
+            )
 
 
 def app_server_command(command):
@@ -272,6 +292,23 @@ def app_server_command(command):
                 config[key] = value
     if len(urls) != 1:
         raise ValueError("Exactly one directory MCP endpoint is required")
+    # No inherited provider keys/headers/URLs are copied into the guest.
+    config = {
+        k: v
+        for k, v in config.items()
+        if k != "model_provider" and not k.startswith("model_providers.")
+    }
+    for key, value in {
+        "model_provider": "banking_relay",
+        "model_providers.banking_relay.name": "Host-only inference",
+        "model_providers.banking_relay.base_url": "http://127.0.0.1:8765/v1",
+        "model_providers.banking_relay.wire_api": "responses",
+        "model_providers.banking_relay.requires_openai_auth": False,
+        "model_providers.banking_relay.supports_websockets": False,
+        "model_providers.banking_relay.request_max_retries": 0,
+        "model_providers.banking_relay.stream_max_retries": 0,
+    }.items():
+        config[key] = json.dumps(value)
     config["model_catalog_json"] = '"/root/.codex/banking-models.json"'
     for key in [
         "include_permissions_instructions",
@@ -304,12 +341,20 @@ def app_server_command(command):
     )
 
 
-async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
+async def invoke_app_server(
+    name, command, prompt, policy, timeout_seconds, *, inference_forward=None
+):
     """Route only two explicit dynamic tools to the fresh session's real MCP."""
     from mcp import ClientSession
     from mcp.client.streamable_http import streamable_http_client
 
     actual, urls, model = app_server_command(command)
+    if inference_forward is None and any(
+        c.startswith("model_provider=") and c != 'model_provider="openai"'
+        for c in command
+    ):
+        raise ValueError("Custom providers require an explicit trusted stub forwarder")
+    broker = broker_module()
     bundled = await asyncio.to_thread(
         subprocess.run,
         ["docker", "exec", name, "codex", "debug", "models", "--bundled"],
@@ -326,8 +371,12 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
     )
     lines, observations, raw_events = [], [], []
     usage = None
+    relay = None
     started = time.monotonic()
     process = stderr_task = None
+    raw_bytes = 0
+    stderr_chunks = []
+    messages_emitted = 0
     timed_out, exit_code = False, 0
 
     def emit(event):
@@ -344,12 +393,67 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
         process.stdin.write((json.dumps(value) + "\n").encode())
         await process.stdin.drain()
 
+    def emit_host_messages():
+        nonlocal messages_emitted
+        if relay is None:
+            return
+        for item in relay.guard.trusted_messages[messages_emitted:]:
+            messages_emitted += 1
+            emit(
+                dict(
+                    type="item.completed",
+                    item=dict(
+                        id=f"host-model-message-{messages_emitted}",
+                        type="agent_message",
+                        model_refusal=any(
+                            c["type"] == "refusal" for c in item.get("content", [])
+                        ),
+                        text="".join(
+                            c["text"] if c["type"] == "output_text" else c["refusal"]
+                            for c in item.get("content", [])
+                        ),
+                    ),
+                )
+            )
+
+    async def read_stderr():
+        nonlocal raw_bytes
+        while chunk := await process.stderr.read(16384):
+            raw_bytes += len(chunk)
+            if raw_bytes > broker.MAX_TRANSCRIPT:
+                raise ValueError("Codex stderr/event budget exhausted")
+            stderr_chunks.append(chunk)
+
     async def receive():
-        line = await process.stdout.readline()
+        nonlocal raw_bytes
+        reading = asyncio.create_task(process.stdout.readline())
+        try:
+            while True:
+                if stderr_task.done() and stderr_task.exception():
+                    raise ValueError("Codex stderr/event budget exhausted")
+                watching = [reading, relay.task]
+                if not stderr_task.done():
+                    watching.append(stderr_task)
+                completed, _ = await asyncio.wait(
+                    watching, return_when=asyncio.FIRST_COMPLETED
+                )
+                if reading in completed:
+                    break
+                if relay.task in completed:
+                    raise RuntimeError("Host inference relay stopped")
+            line = reading.result()
+        finally:
+            if not reading.done():
+                reading.cancel()
+                await asyncio.gather(reading, return_exceptions=True)
         if not line:
             raise RuntimeError("Codex app-server closed before turn completion")
+        raw_bytes += len(line)
+        if raw_bytes > broker.MAX_TRANSCRIPT:
+            raise ValueError("Codex app-server event budget exhausted")
         event = json.loads(line)
         raw_events.append(event)
+        emit_host_messages()
         return event
 
     async def reply(ident):
@@ -378,6 +482,17 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
             contract = dict(
                 **model, startup=policy.strip(), prompt=prompt, schemas=schemas
             )
+            guard = broker.ConversationGuard(contract, validate_model_request)
+            relay = await stack.enter_async_context(
+                broker.InferenceRelay(
+                    name,
+                    guard,
+                    inference_forward
+                    if inference_forward is not None
+                    else broker.SubscriptionInference(),
+                    copy_bytes,
+                )
+            )
             thread_start = dict(
                 model=model["model"],
                 cwd="/workspace",
@@ -402,7 +517,7 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
                         stderr=asyncio.subprocess.PIPE,
                         limit=16 * 1024 * 1024,
                     )
-                    stderr_task = asyncio.create_task(process.stderr.read())
+                    stderr_task = asyncio.create_task(read_stderr())
                     await send(
                         dict(
                             id=1,
@@ -467,6 +582,11 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
                                 tool=params["tool"],
                                 arguments=params["arguments"],
                             )
+                            await guard.wait_for_response()
+                            emit_host_messages()
+                            guard.authorize_tool(
+                                params["callId"], params["tool"], params["arguments"]
+                            )
                             emit(dict(type="item.started", item=item))
                             result = await mcp.call_tool(
                                 params["tool"], params["arguments"]
@@ -480,15 +600,7 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
                                 raise ValueError(
                                     "Unexpected non-text banking tool result"
                                 )
-                            await send(
-                                dict(
-                                    id=event["id"],
-                                    result=dict(
-                                        contentItems=content,
-                                        success=not result.is_error,
-                                    ),
-                                )
-                            )
+                            output = "\n".join(c["text"] for c in content)
                             emit(
                                 dict(
                                     type="item.completed",
@@ -502,18 +614,15 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
                                     ),
                                 )
                             )
-                        elif (
-                            method == "item/completed"
-                            and params.get("item", {}).get("type") == "agentMessage"
-                        ):
-                            item = params["item"]
-                            emit(
+                            guard.tool_result(params["callId"], output)
+                            await send(
                                 dict(
-                                    type="item.completed",
-                                    item=dict(
-                                        id=item["id"],
-                                        type="agent_message",
-                                        text=item["text"],
+                                    id=event["id"],
+                                    result=dict(
+                                        contentItems=[
+                                            dict(type="inputText", text=output)
+                                        ],
+                                        success=not result.is_error,
                                     ),
                                 )
                             )
@@ -527,6 +636,9 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
                         elif method == "turn/completed":
                             turn = params["turn"]
                             exit_code = 0 if turn["status"] == "completed" else 1
+                            if exit_code == 0:
+                                await guard.wait_for_response()
+                                guard.validate_final()
                             emit(
                                 dict(
                                     type="turn.completed"
@@ -546,11 +658,24 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
                 if process is not None:
                     if process.returncode is None:
                         process.terminate()
-                    await process.wait()
+                    try:
+                        await asyncio.wait_for(process.wait(), 5)
+                    except TimeoutError:
+                        process.kill()
+                        await asyncio.wait_for(process.wait(), 5)
     except Exception as error:
         exit_code = 1
         emit(dict(type="error", message=str(error)))
-    stderr = (await stderr_task).decode(errors="replace") if stderr_task else ""
+    if stderr_task:
+        try:
+            await asyncio.wait_for(stderr_task, 5)
+        except (TimeoutError, ValueError):
+            exit_code = 1
+    emit_host_messages()
+    stderr = b"".join(stderr_chunks).decode(errors="replace")
+    if relay and relay.errors:
+        exit_code = 1
+        emit(dict(type="error", message="Host inference validation failed"))
     return dict(
         stdout="".join(lines),
         stderr=stderr,
@@ -560,6 +685,13 @@ async def invoke_app_server(name, command, prompt, policy, timeout_seconds):
         elapsed_seconds=time.monotonic() - started,
         app_server_events=raw_events,
         request_contract=contract,
+        broker_evidence=dict(
+            events=relay.guard.events,
+            errors=relay.errors,
+            mode="stub" if inference_forward is not None else "subscription",
+        )
+        if relay
+        else {},
         app_server_command=actual,
         thread_start=thread_start,
     )

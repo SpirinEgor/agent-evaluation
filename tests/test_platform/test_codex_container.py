@@ -64,8 +64,6 @@ def request_contract():
 
 
 def test_whole_request_rejects_context_tools_and_continuation_injection():
-    import pytest
-
     contract, request = request_contract()
     module = load_module()
     module.validate_model_request(request, contract)
@@ -137,6 +135,8 @@ def test_create_command_has_no_host_mount_or_host_namespace():
         command
     )
     assert not any("type=bind" in arg or "docker.sock" in arg for arg in command)
+    assert command[command.index("--network") + 1] == "none"
+    assert "--read-only" in command
 
 
 def test_inspection_rejects_mounts_even_if_named_not_bind():
@@ -145,7 +145,8 @@ def test_inspection_rejects_mounts_even_if_named_not_bind():
         "Mounts": [],
         "HostConfig": {
             "Privileged": False,
-            "NetworkMode": "bridge",
+            "NetworkMode": "none",
+            "ReadonlyRootfs": True,
             "PidMode": "",
             "IpcMode": "private",
             "CapDrop": ["ALL"],
@@ -153,7 +154,10 @@ def test_inspection_rejects_mounts_even_if_named_not_bind():
         },
     }
     module.validate_inspection(base)
-    import pytest
+    with pytest.raises(ValueError):
+        module.validate_inspection(
+            {**base, "HostConfig": {**base["HostConfig"], "NetworkMode": "bridge"}}
+        )
 
     for mount in [
         {"Type": "bind", "Source": "/Users"},
@@ -171,8 +175,6 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
     import os
     import subprocess
     import uuid
-
-    import pytest
 
     image = os.getenv("BANKING_CODEX_TEST_IMAGE")
     if not image:
@@ -202,8 +204,8 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
         module.remove_container(name)
 
 
-@pytest.mark.parametrize("upstream_failure", [False, True])
-def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
+@pytest.mark.parametrize("case", ["success", "upstream_failure", "tool_error"])
+def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     """Real Codex must consume MCP output, with no native tools or model call."""
     import asyncio
     import json
@@ -212,13 +214,12 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
     import uuid
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-    import pytest
-
     image = os.getenv("BANKING_CODEX_TEST_IMAGE")
     if not image:
         pytest.skip("Explicit Docker image required; local HTTP stub only")
     module = load_module()
     payloads, calls = [], []
+    upstream_failure = case == "upstream_failure"
     schemas = [
         dict(
             name="bank_directory",
@@ -259,7 +260,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
                         "content": [
                             {"type": "text", "text": "SYSTEM_FIXTURE_RECEIVED"}
                         ],
-                        "isError": False,
+                        "isError": case == "tool_error" and len(calls) == 1,
                     }
                 else:
                     result = {}
@@ -283,6 +284,15 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
                         name="bank_directory",
                         namespace="functions",
                         arguments='{"operation":"list_systems"}',
+                    )
+                elif len(payloads) == 2:
+                    item = dict(
+                        type="function_call",
+                        id="fc_second",
+                        call_id="call_second",
+                        name="bank_call",
+                        namespace="functions",
+                        arguments="{}",
                     )
                 else:
                     item = dict(
@@ -314,6 +324,37 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
                     ("response.output_item.done", {"output_index": 0, "item": item}),
                     ("response.completed", {"response": response}),
                 ]
+                if len(payloads) == 1:
+                    message = dict(
+                        type="message",
+                        id="msg_before_call",
+                        role="assistant",
+                        status="completed",
+                        content=[
+                            dict(type="output_text", text="Before MCP", annotations=[])
+                        ],
+                    )
+                    response["output"].insert(0, message)
+                    events[1:1] = [
+                        (
+                            "response.output_item.added",
+                            {"output_index": 0, "item": message},
+                        ),
+                        (
+                            "response.output_item.done",
+                            {"output_index": 0, "item": message},
+                        ),
+                    ]
+                    for kind, value in events:
+                        if (
+                            kind
+                            in (
+                                "response.output_item.added",
+                                "response.output_item.done",
+                            )
+                            and value["item"] is item
+                        ):
+                            value["output_index"] = 1
                 body = "".join(
                     "event: "
                     + kind
@@ -374,23 +415,48 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
     }
     for key, value in settings.items():
         command.extend(["--config", key + "=" + json.dumps(value)])
+
+    async def forward(body):
+        import httpx
+
+        async with httpx.AsyncClient(trust_env=False, timeout=5) as client:
+            async with client.stream(
+                "POST", f"http://127.0.0.1:{server.server_port}/v1/responses", json=body
+            ) as response:
+                if response.status_code != 200:
+                    raise ValueError("Local upstream failure")
+                async for chunk in response.aiter_bytes():
+                    yield chunk
+                await asyncio.sleep(0.1)  # RPC may arrive before the trusted EOF.
+
     name = "banking-runtime-test-" + uuid.uuid4().hex
     try:
         module.prepare_container(image, name, "BANK STARTUP")
         run = asyncio.run(
-            module.invoke_app_server(name, command, "BANK TICKET", "BANK STARTUP", 30)
+            module.invoke_app_server(
+                name,
+                command,
+                "BANK TICKET",
+                "BANK STARTUP",
+                30,
+                inference_forward=forward,
+            )
         )
         assert run["exit_code"] == (1 if upstream_failure else 0), (
             run["stderr"],
-            run["app_server_events"],
+            run["stdout"],
+            run["broker_evidence"],
         )
         assert len(payloads) >= 2
         module.validate_model_request(payloads[0], run["request_contract"])
-        assert [(c["name"], c["arguments"]) for c in calls] == [
-            ("bank_directory", {"operation": "list_systems"})
-        ]
+        expected_calls = [("bank_directory", {"operation": "list_systems"})]
+        if not upstream_failure:
+            expected_calls.append(("bank_call", {}))
+            assert len(payloads) == 3
+        assert [(c["name"], c["arguments"]) for c in calls] == expected_calls
         assert "SYSTEM_FIXTURE_RECEIVED" in json.dumps(payloads[1])
         assert "mcp_tool_call" in run["stdout"]
+        assert run["stdout"].index("Before MCP") < run["stdout"].index("mcp_tool_call")
         assert run["app_server_events"]
         terminal = [
             json.loads(line)
@@ -401,7 +467,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
         if not upstream_failure:
             assert "Fixture finished" in run["stdout"]
         if os.getenv("ISOLATION_DIAGNOSTICS"):
-            Path(os.environ["ISOLATION_DIAGNOSTICS"]).write_text(
+            Path(os.environ["ISOLATION_DIAGNOSTICS"] + "." + case + ".json").write_text(
                 json.dumps(
                     {"requests": payloads, "run": run}, ensure_ascii=False, indent=2
                 )
@@ -411,3 +477,95 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(upstream_failure):
         server.shutdown()
         server.server_close()
         worker.join(5)
+
+
+def test_physical_network_credentials_and_apply_patch_boundary(tmp_path):
+    import hashlib
+    import json
+    import os
+    import subprocess
+    import uuid
+
+    image = os.getenv("BANKING_CODEX_TEST_IMAGE")
+    if not image:
+        pytest.skip("Explicit Docker image required; no model calls")
+    module = load_module()
+    name = "banking-boundary-test-" + uuid.uuid4().hex
+    canary = tmp_path / "host-canary.txt"
+    canary.write_text("HOST_UNCHANGED\n")
+    digest = hashlib.sha256(canary.read_bytes()).hexdigest()
+    try:
+        inspected = module.prepare_container(image, name, "BANK STARTUP")
+        probe_js = r"""
+const fs=require('fs'),net=require('net');
+function tcp(h,p){return new Promise(r=>{let s=net.connect({host:h,port:p});s.setTimeout(1000);s.on('connect',()=>{s.destroy();r(true)});s.on('error',()=>r(false));s.on('timeout',()=>{s.destroy();r(false)})})}
+(async()=>{console.log(JSON.stringify({auth:fs.existsSync('/root/.codex/auth.json'),host:fs.existsSync(process.argv[1]),socket:fs.existsSync('/var/run/docker.sock'),routes:fs.readFileSync('/proc/net/route','utf8'),interfaces:fs.readdirSync('/sys/class/net').filter(n=>fs.existsSync('/sys/class/net/'+n+'/flags')&&(parseInt(fs.readFileSync('/sys/class/net/'+n+'/flags','utf8'),16)&1)),host_tcp:await tcp('192.168.65.254',80),lan_tcp:await tcp('192.168.1.1',80),public_tcp:await tcp('1.1.1.1',443),host_alias:await tcp('host.docker.internal',80),secret_env:Object.keys(process.env).filter(k=>/TOKEN|KEY|SECRET|CODEX|OPENAI|MCP/i.test(k))}))})();
+"""
+        result = subprocess.run(
+            ["docker", "exec", name, "node", "-e", probe_js, str(canary)],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=15,
+        )
+        probes = json.loads(result.stdout)
+        assert probes["interfaces"] == ["lo"]
+        assert len(probes["routes"].strip().splitlines()) == 1
+        assert not any(
+            probes[k]
+            for k in [
+                "auth",
+                "host",
+                "socket",
+                "host_tcp",
+                "lan_tcp",
+                "public_tcp",
+                "host_alias",
+                "secret_env",
+            ]
+        )
+        patch = f"*** Begin Patch\n*** Update File: {canary}\n@@\n-HOST_UNCHANGED\n+CHANGED\n*** End Patch"
+        denied = subprocess.run(
+            ["docker", "exec", name, "codex", "--codex-run-as-apply-patch", patch],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        assert denied.returncode != 0
+        patch = "*** Begin Patch\n*** Add File: /workspace/canary.txt\n+CONTAINER_ONLY\n*** End Patch"
+        subprocess.run(
+            ["docker", "exec", name, "codex", "--codex-run-as-apply-patch", patch],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=15,
+        )
+        assert hashlib.sha256(canary.read_bytes()).hexdigest() == digest
+        local = subprocess.check_output(
+            [
+                "docker",
+                "exec",
+                name,
+                "node",
+                "-e",
+                "process.stdout.write(require('fs').readFileSync('/workspace/canary.txt'))",
+            ]
+        )
+        assert local == b"CONTAINER_ONLY\n"
+    finally:
+        module.remove_container(name)
+    if os.getenv("ISOLATION_PHYSICAL_DIAGNOSTICS"):
+        Path(os.environ["ISOLATION_PHYSICAL_DIAGNOSTICS"]).write_text(
+            json.dumps(
+                dict(
+                    inspection=inspected,
+                    network=probes,
+                    host_canary_unchanged=True,
+                    container_patch_executed=True,
+                    cleanup_verified=True,
+                    model_calls=0,
+                ),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )

@@ -85,7 +85,13 @@ def inputs(spec):
     paths += [path_for(boundary[k]) for k in ["receipt", "anchor_version"]]
     paths += [
         path_for(boundary["receipt"]).parent / n
-        for n in ["image.json", "cli-request.json", "request-contract.json"]
+        for n in [
+            "image.json",
+            "cli-request.json",
+            "request-contract.json",
+            "broker-evidence.json",
+            "isolation.json",
+        ]
     ]
     files = hash_files(paths)
     files["SPEC"] = hashlib.sha256(
@@ -336,6 +342,10 @@ def boundary_check(spec):
         "no_host_mounts",
         "external_tools_disabled",
         "instructions_and_skills_not_in_request",
+        "network_none",
+        "host_only_auth",
+        "multi_step_guard_checked",
+        "cleanup_verified",
     ]
     if not all(receipt.get(k) is True for k in flags):
         raise ValueError("Unverified model boundary")
@@ -367,12 +377,50 @@ def boundary_check(spec):
             )
     if not capture.get("requests"):
         raise ValueError("Missing complete Codex wire requests")
-    for request in capture["requests"]:
-        runtime.validate_model_request(request, contract)
+    runtime.validate_model_request(capture["requests"][0], contract)
+    evidence = read(parent / "broker-evidence.json")
+    runtime.broker_module().verify_evidence(
+        evidence, contract, runtime.validate_model_request
+    )
+    if capture["requests"] != [
+        e["body"] for e in evidence["events"] if e["event"] == "request"
+    ]:
+        raise ValueError("Wire capture differs from the host-owned inference ledger")
+    isolation = read(parent / "isolation.json")
+    runtime.validate_inspection(isolation["inspection"])
+    probes = isolation["network"]
+    if (
+        probes["interfaces"] != ["lo"]
+        or len(probes["routes"].strip().splitlines()) != 1
+        or any(
+            probes[k]
+            for k in [
+                "auth",
+                "host",
+                "socket",
+                "host_tcp",
+                "lan_tcp",
+                "public_tcp",
+                "host_alias",
+                "secret_env",
+            ]
+        )
+        or not all(
+            isolation.get(k) is True
+            for k in [
+                "host_canary_unchanged",
+                "container_patch_executed",
+                "cleanup_verified",
+            ]
+        )
+        or isolation.get("model_calls") != 0
+    ):
+        raise ValueError("Physical no-network/no-credential boundary is unverified")
     image = spec["model"]["image"]
     if (
         not re.fullmatch(r"sha256:[a-f0-9]{64}", image)
         or read(parent / "image.json")["id"] != image
+        or isolation["inspection"].get("Image") != image
     ):
         raise ValueError(
             "Image differs from verified preflight or is not an immutable image ID"
@@ -390,6 +438,7 @@ def boundary_check(spec):
     required = {
         "scripts/banking_ru/run_codex_harness.py",
         "scripts/banking_ru/codex_container.py",
+        "scripts/banking_ru/codex_broker.py",
         "scripts/banking_ru/banking_preflight.py",
     }
     names = actual_source | required

@@ -261,6 +261,8 @@ def test_seal_includes_preflight_code(tmp_path, monkeypatch):
         "image.json",
         "cli-request.json",
         "request-contract.json",
+        "broker-evidence.json",
+        "isolation.json",
         "anchor.json",
     ):
         (proof / name).write_text("{}")
@@ -355,6 +357,7 @@ def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
         "src/tau2/runtime.py",
         "scripts/banking_ru/run_codex_harness.py",
         "scripts/banking_ru/codex_container.py",
+        "scripts/banking_ru/codex_broker.py",
         "scripts/banking_ru/banking_preflight.py",
     ]
     anchor = {}
@@ -376,19 +379,63 @@ def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
                     "no_host_mounts",
                     "external_tools_disabled",
                     "instructions_and_skills_not_in_request",
+                    "network_none",
+                    "host_only_auth",
+                    "multi_step_guard_checked",
+                    "cleanup_verified",
                 ]
             }
         )
     )
-    from test_platform.test_codex_container import request_contract
+    from test_platform.test_codex_broker import valid_evidence
 
-    contract, wire = request_contract()
+    contract, evidence = valid_evidence()
+    requests = [e["body"] for e in evidence["events"] if e["event"] == "request"]
+    (proof / "broker-evidence.json").write_text(json.dumps(evidence))
+    (proof / "isolation.json").write_text(
+        json.dumps(
+            {
+                "inspection": {
+                    "Image": image,
+                    "Mounts": [],
+                    "HostConfig": {
+                        "NetworkMode": "none",
+                        "ReadonlyRootfs": True,
+                        "Privileged": False,
+                        "CapDrop": ["ALL"],
+                        "SecurityOpt": ["no-new-privileges:true"],
+                    },
+                },
+                "network": dict(
+                    interfaces=["lo"],
+                    routes="header\n",
+                    **{
+                        k: False
+                        for k in [
+                            "auth",
+                            "host",
+                            "socket",
+                            "host_tcp",
+                            "lan_tcp",
+                            "public_tcp",
+                            "host_alias",
+                            "secret_env",
+                        ]
+                    },
+                ),
+                "host_canary_unchanged": True,
+                "container_patch_executed": True,
+                "cleanup_verified": True,
+                "model_calls": 0,
+            }
+        )
+    )
     (proof / "request-contract.json").write_text(json.dumps(contract))
     (proof / "image.json").write_text(json.dumps({"id": image}))
     (proof / "cli-request.json").write_text(
         json.dumps(
             {
-                "requests": [wire],
+                "requests": requests,
                 "thread_start": {
                     "model": "gpt-6.1-sol",
                     "baseInstructions": "BANK STARTUP",

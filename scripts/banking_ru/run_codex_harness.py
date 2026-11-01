@@ -277,6 +277,7 @@ async def invoke_isolated_codex(
     policy: str = "",
     *,
     expected_image_id: str | None = None,
+    inference_forward=None,
 ) -> dict:
     """Run full-access Codex in a fresh container without any host mounts."""
     spec = importlib.util.spec_from_file_location(
@@ -292,7 +293,12 @@ async def invoke_isolated_codex(
         if expected_image_id is not None:
             verify_container_image(inspected, expected_image_id)
         run = await container.invoke_app_server(
-            name, command, prompt, policy, timeout_seconds
+            name,
+            command,
+            prompt,
+            policy,
+            timeout_seconds,
+            inference_forward=inference_forward,
         )
         run["container"] = {
             "name": name,
@@ -303,11 +309,19 @@ async def invoke_isolated_codex(
             "inner_command": run["app_server_command"],
             "requested_command": command,
             "thread_start": run["thread_start"],
-            "auth_delivery": "explicit temporary copy to tmpfs; no host mount",
+            "auth_delivery": "host-only subscription broker; no guest credentials",
         }
         return run
     finally:
-        await asyncio.to_thread(container.remove_container, name)
+        try:
+            await asyncio.to_thread(container.remove_container, name)
+        except Exception as error:
+            if "run" in locals():
+                error.partial_run = run
+            raise
+        else:
+            if "run" in locals():
+                run["container"]["cleanup_verified"] = True
 
 
 def collect_attempt_journal(
@@ -368,6 +382,24 @@ def collect_attempt_journal(
         except ValueError:
             continue
         item = event.get("item", {})
+        if item.get("type") == "agent_message" and item.get("model_refusal") is True:
+            ident = f"model-refusal-{number}"
+            rows[ident] = dict(
+                id=item.get("id"),
+                journal_id=ident,
+                tool=None,
+                server=None,
+                timestamp=None,
+                observed_at=times.get(("stdout", number), observed_at),
+                arguments=None,
+                external_decision="rejected",
+                rejection_source="model_refusal",
+                blocking_layer="model",
+                rejection_observed_at=times.get(("stdout", number)),
+                reason="[REDACTED TEXT]",
+                delivered_to_mcp=False,
+            )
+            continue
         if item.get("type") != "mcp_tool_call":
             continue
         ident = item.get("id")
@@ -572,6 +604,11 @@ async def run_one_attempt(
             pass
         return {
             "task_id": task_id,
+            **(
+                {"run": error.partial_run}
+                if getattr(error, "partial_run", None) is not None
+                else {}
+            ),
             "token": opened.token,
             "classification": "invalid_harness",
             "error": repr(error),
