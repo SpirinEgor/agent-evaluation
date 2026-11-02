@@ -32,7 +32,12 @@ def banking_model_catalog(catalog: dict, model: str) -> dict:
     if models[0].get("use_responses_lite") is not True:
         raise ValueError("Model has no verified serial Responses transport")
     models[0].update(
-        apply_patch_tool_type=None, experimental_supported_tools=[], tool_mode="direct"
+        apply_patch_tool_type=None,
+        experimental_supported_tools=[],
+        tool_mode="direct",
+        # Keep MCP results intact in Codex continuation history. The host
+        # enforces the separate 2 MiB request/128 MiB transcript limits.
+        truncation_policy={"mode": "tokens", "limit": 500000},
     )
     return {"models": models}
 

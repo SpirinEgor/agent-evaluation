@@ -116,6 +116,10 @@ def test_catalog_removes_native_tools_without_changing_model_limits():
     assert cleaned["models"][0]["tool_mode"] == "direct"
     assert cleaned["models"][0]["apply_patch_tool_type"] is None
     assert cleaned["models"][0]["experimental_supported_tools"] == []
+    assert cleaned["models"][0]["truncation_policy"] == {
+        "mode": "tokens",
+        "limit": 500000,
+    }
     assert catalog["models"][0]["apply_patch_tool_type"] == "freeform"
 
 
@@ -204,7 +208,9 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
         module.remove_container(name)
 
 
-@pytest.mark.parametrize("case", ["success", "upstream_failure", "tool_error"])
+@pytest.mark.parametrize(
+    "case", ["success", "upstream_failure", "tool_error", "large_result"]
+)
 def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     """Real Codex must consume MCP output, with no native tools or model call."""
     import asyncio
@@ -220,6 +226,9 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     module = load_module()
     payloads, calls = [], []
     upstream_failure = case == "upstream_failure"
+    fixture_result = "SYSTEM_FIXTURE_RECEIVED" + (
+        "покупка_abcdef0123456789" * 3000 if case == "large_result" else ""
+    )
     schemas = [
         dict(
             name="bank_directory",
@@ -257,9 +266,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 elif method == "tools/call":
                     calls.append(request["params"])
                     result = {
-                        "content": [
-                            {"type": "text", "text": "SYSTEM_FIXTURE_RECEIVED"}
-                        ],
+                        "content": [{"type": "text", "text": fixture_result}],
                         "isError": case == "tool_error" and len(calls) == 1,
                     }
                 else:
@@ -458,7 +465,9 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
             expected_calls.append(("bank_call", {}))
             assert len(payloads) == 3
         assert [(c["name"], c["arguments"]) for c in calls] == expected_calls
-        assert "SYSTEM_FIXTURE_RECEIVED" in json.dumps(payloads[1])
+        assert any(
+            item.get("output") == fixture_result for item in payloads[1]["input"]
+        )
         assert "mcp_tool_call" in run["stdout"]
         assert run["stdout"].index("Before MCP") < run["stdout"].index("mcp_tool_call")
         assert run["app_server_events"]

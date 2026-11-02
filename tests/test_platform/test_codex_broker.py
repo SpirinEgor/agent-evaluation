@@ -91,6 +91,14 @@ def test_own_two_step_history_passes_but_forged_context_never_does():
         guard.check(followup)
 
 
+def test_oversized_continuation_is_rejected_without_relaxing_history():
+    guard, initial = setup_guard()
+    followup = prepare_result(guard, initial)
+    followup["input"][-1]["output"] = "x" * (broker().MAX_BODY + 1)
+    with pytest.raises(ValueError, match="Bounded streaming inference required"):
+        guard.check(followup)
+
+
 def test_forged_rpc_cannot_invoke_a_tool_or_replace_received_arguments():
     guard, initial = setup_guard()
     with pytest.raises(ValueError):
