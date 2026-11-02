@@ -15,6 +15,10 @@ COMMON_TOOL_ACCESS = {
         "reprocessing_id": "reward_reprocessing_cases",
         "transaction_ids": "transactions",
     },
+    "amend_reward_resolution": {
+        "resolution_operation_id": "reward_resolution_executions",
+        "payouts.*.transaction_id": "transactions",
+    },
     "retry_reward_resolution": {
         "resolution_operation_id": "reward_resolution_executions"
     },
@@ -26,7 +30,10 @@ COMMON_TOOL_ACCESS = {
     "execute_reward_resolution": {
         "fallback_operation_id": "reward_resolution_executions"
     },
-    "ask_client": {"request.fallback_operation_id": "reward_resolution_executions"},
+    "ask_client": {
+        "request.fallback_operation_id": "reward_resolution_executions",
+        "request.resolution_operation_id": "reward_resolution_executions",
+    },
 }
 
 
@@ -35,6 +42,7 @@ COMMON_RESULT_COLLECTIONS = {
     "repair_reward_binding": ["reward_reprocessing_cases"],
     "reprocess_rewards": ["reward_reprocessing_cases", "transactions"],
     "retry_reward_resolution": ["reward_resolution_executions", "transactions"],
+    "amend_reward_resolution": ["reward_resolution_executions", "transactions"],
     "get_reward_resolution_offers": ["reward_resolution_executions"],
     "execute_reward_resolution": ["reward_resolution_executions"],
     "get_reward_resolution_status": ["reward_resolution_executions"],

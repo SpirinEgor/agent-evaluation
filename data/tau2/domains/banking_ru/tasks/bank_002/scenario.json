@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Проверить недоплату и по регламенту предложить максимальную допустимую выплату, согласовать её и передать невозмещённый остаток в существующем деле.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "v15 natural customer ticket; no customer minimum; deterministic X failed_final; unique DB payout39.75/review14.35; previous measurements remain versioned."
+    "notes": "v17: после частичного исполнения независимая корректировка 4 ₽; пересмотр непроведённой части с новым согласием; соглашение 36,90 ₽ и сохранённое дело 7 ₽. Допустимы эквивалентные оптимальные пакеты."
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -634,11 +634,19 @@
         },
         "reward_resolution_partial_profiles": {
           "offer_610735": "txn_804227"
+        },
+        "reward_resolution_correction_profiles": {
+          "offer_610735": {
+            "transaction_id": "txn_804227",
+            "amount": 4,
+            "ledger_id": "reward-correction:610735:txn_804227",
+            "allow_reallocation": true
+          }
         }
       }
     }
   },
-  "scenario_version": "2026-11-02-bank2-combined-process-v16",
+  "scenario_version": "2026-11-03-bank2-post-payment-reconciliation-v17",
   "ticket_context": {
     "customer_name": "Громов Андрей Сергеевич",
     "customer_phone": "+7 926 118-77-30",

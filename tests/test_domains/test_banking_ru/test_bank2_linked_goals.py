@@ -64,6 +64,8 @@ def data(result):
         ("idempotent_retries", (1, 1)),
         ("safe_recovery", (1, 1)),
         ("early_settlement", (0, 1)),
+        ("only_clip_second", (0, 1)),
+        ("stale_retry_then_recover", (1, 1)),
         ("partial_abandoned", (0, 0)),
         ("unreceived_consent", (1, 0)),
         ("unreceived_partial", (1, 0)),
@@ -81,7 +83,7 @@ def test_combined_process_whole_grade(mode, route, expected):
         max_errors=0,
         mcp_layout="directory" if route == "reference" else "single",
     )
-    pending = None
+    pending_results = []
     actions = deepcopy(task.evaluation_criteria.actions)
     if route == "reprocess_before_refresh":
         moved = [
@@ -122,8 +124,15 @@ def test_combined_process_whole_grade(mode, route, expected):
             "resolution:case_610903:offer_610741"
         )
         for a in actions:
-            if a.action_id == "bank2:v12:consent-first":
-                a.arguments["request"]["state_revision"] = 6
+            if (
+                a.name == "ask_client"
+                and a.arguments.get("request", {}).get("type")
+                == "reward_resolution_confirmation"
+            ):
+                a.arguments["request"]["state_revision"] += 2
+            if a.name == "amend_reward_resolution":
+                a.arguments["expected_revision"] += 2
+                a.arguments["confirmation_id"] = "resolution-confirmation-3"
             if a.name == "execute_reward_resolution":
                 a.arguments.update(
                     expected_revision=6,
@@ -131,7 +140,7 @@ def test_combined_process_whole_grade(mode, route, expected):
                     idempotency_key="composite-after-x",
                 )
             if a.name == "amend_cashback_investigation":
-                a.arguments["expected_revision"] = 8
+                a.arguments["expected_revision"] += 2
         i = next(
             i for i, a in enumerate(actions) if a.action_id == "bank2:v12:consent-first"
         )
@@ -167,12 +176,36 @@ def test_combined_process_whole_grade(mode, route, expected):
             if route == "wrong_program":
                 packet["resulting_claims"][0]["amount"] = 1.5
             if route == "early_settlement":
-                packet["state_revision"] = 2
-                packet["resulting_claims"][0]["amount"] = 5.5
-                packet["resulting_claims"][1]["amount"] = 1.85
+                if packet.get("resolution_operation_id"):
+                    packet.update(
+                        state_revision=3,
+                        total_amount=20.25,
+                        payouts=[
+                            {"transaction_id": "txn_804219", "amount": 5.5},
+                            {"transaction_id": "txn_804227", "amount": 14.75},
+                        ],
+                        resulting_claims=[
+                            {"transaction_id": "txn_804227", "amount": 3.35},
+                            {"transaction_id": "txn_804205", "amount": 7},
+                        ],
+                    )
+                else:
+                    packet["state_revision"] = 2
+                    packet["resulting_claims"][0]["amount"] = 5.5
+                    packet["resulting_claims"][1]["amount"] = 1.85
+            if route == "only_clip_second" and packet.get("resolution_operation_id"):
+                packet.update(
+                    payouts=[{"transaction_id": "txn_804227", "amount": 16.9}],
+                    total_amount=16.9,
+                    resulting_claims=[
+                        {"transaction_id": "txn_804219", "amount": 0.5},
+                        {"transaction_id": "txn_804205", "amount": 7},
+                    ],
+                )
             if route == "unreceived_consent":
                 pending = session.begin_call(name, args, None)
                 data(session.call(name, args, attempt=pending))
+                pending_results.append(pending)
                 continue
         if name == "execute_reward_resolution":
             if route == "reverse_components":
@@ -213,20 +246,45 @@ def test_combined_process_whole_grade(mode, route, expected):
             assert invoke(
                 session, name, {**args, "transaction_ids": ["txn_804219"]}
             ).is_error
+        if name == "amend_reward_resolution":
+            if route == "early_settlement":
+                args.update(
+                    expected_revision=3,
+                    total_amount=20.25,
+                    payouts=[
+                        {"transaction_id": "txn_804219", "amount": 5.5},
+                        {"transaction_id": "txn_804227", "amount": 14.75},
+                    ],
+                )
+            if route == "only_clip_second":
+                args.update(
+                    total_amount=16.9,
+                    payouts=[{"transaction_id": "txn_804227", "amount": 16.9}],
+                )
+            if route == "stale_retry_then_recover":
+                before = session.env.tools.get_db_hash()
+                assert invoke(
+                    session, "retry_reward_resolution", {"resolution_operation_id": OP}
+                ).is_error
+                assert session.env.tools.get_db_hash() == before
         if name == "retry_reward_resolution":
             if route == "partial_abandoned":
                 break
             if route == "unreceived_completion":
                 pending = session.begin_call(name, args, None)
                 data(session.call(name, args, attempt=pending))
+                pending_results.append(pending)
                 continue
         if name == "amend_cashback_investigation" and route == "early_settlement":
-            args["expected_revision"] = 4
-            args["items"][0]["amount"] = 5.5
-            args["items"][1]["amount"] = 1.85
+            args["expected_revision"] = 5
+            args["items"][0]["amount"] = 0
+            args["items"][1]["amount"] = 3.35
+        if name == "amend_cashback_investigation" and route == "only_clip_second":
+            args["items"][0]["amount"] = 0.5
         if name == "execute_reward_resolution" and route == "unreceived_partial":
             pending = session.begin_call(name, args, None)
             data(session.call(name, args, attempt=pending))
+            pending_results.append(pending)
             continue
         result = data(invoke(session, name, args))
         if name == "execute_reward_resolution" and args["offer_id"] == "offer_610735":
@@ -242,13 +300,20 @@ def test_combined_process_whole_grade(mode, route, expected):
                 assert session.env.tools.get_db_hash() == before
         if name == "retry_reward_resolution":
             assert result["status"] == "succeeded"
-            assert result["total_amount"] == 39.75
-            assert len(result["ledger"]) == 2
+            assert result["total_amount"] == (
+                39.75
+                if route == "early_settlement"
+                else 36.4
+                if route == "only_clip_second"
+                else 36.9
+            )
+            assert len(result["ledger"]) == (2 if route == "only_clip_second" else 3)
         if route == "idempotent_retries" and name in {
             "repair_reward_binding",
             "reprocess_rewards",
             "execute_reward_resolution",
             "retry_reward_resolution",
+            "amend_reward_resolution",
         }:
             before = session.env.tools.get_db_hash()
             data(invoke(session, name, args))
@@ -280,7 +345,7 @@ def test_combined_process_whole_grade(mode, route, expected):
             "reply_to_ticket",
             {"customer_id": C, "text": "Номер карты: 4111111111111111"},
         )
-    if pending is not None:
+    for pending in pending_results:
         session.result_sent(pending)
     assert not invoke(session, "done", {}).is_error
     grade = (
@@ -292,13 +357,15 @@ def test_combined_process_whole_grade(mode, route, expected):
     if expected[0]:
         db = session.env.tools.db
         assert db.reward_reprocessing_cases[RID].status == "reprocessed"
-        assert db.cases["case_610903"].review_amount == 8.15
+        assert db.cases["case_610903"].review_amount == 7
         payouts = [
             t
             for t in db.transactions.values()
             if t.id.startswith(("reward-reprocessing:", "reward-resolution:"))
         ]
-        assert round(sum(t.amount for t in payouts), 2) == 45.95
+        assert round(sum(t.amount for t in payouts), 2) == 43.1
+        assert db.transactions["reward-correction:610735:txn_804227"].amount == 4
+        assert db.accounts["acc_1187"].balance == 138995
 
 
 def test_correct_reprocessing_uses_fragments_refunds_and_program_specific_rates():
@@ -322,7 +389,7 @@ def test_correct_reprocessing_uses_fragments_refunds_and_program_specific_rates(
     )
 
 
-def test_combined_process_retains_unique_optimum():
+def test_initial_package_and_replanned_global_optimum():
     task = task2()
     s = PlatformSession(task, get_environment)
     for a in task.evaluation_criteria.actions:
@@ -336,6 +403,7 @@ def test_combined_process_retains_unique_optimum():
     db = s.env.tools.db
     gaps = {k: v["gap"] for k, v in reward_obligations(db, C, "2026-07").items()}
     menu = []
+    optimal_replanned = []
     for offer in db.reward_resolution_offers.values():
         if (
             not offer.selection_budget
@@ -366,6 +434,11 @@ def test_combined_process_retains_unique_optimum():
                 except ValueError:
                     continue
                 selected = [p for p in offer.components if p.id in subset]
+                if (
+                    offer.id == "offer_610735"
+                    and amount >= sum(gaps[k] for k in offer.transaction_ids) - 400
+                ):
+                    optimal_replanned.append(subset)
                 menu.append(
                     (
                         subset,
@@ -384,6 +457,11 @@ def test_combined_process_retains_unique_optimum():
                 legal.append((sum(x[2] for x in choice), tuple(x[0] for x in choice)))
     assert max(x[0] for x in legal) == 3975
     assert [x[1] for x in legal if x[0] == 3975] == [(("1A", "2B", "4B", "5B", "6B"),)]
+    # Every route is capped by the actual purchase obligations. Replanning reaches
+    # this global bound; the originally largest package is no longer unique.
+    assert gaps["txn_804219"] + gaps["txn_804227"] == 4090
+    assert 400 + 3690 == 4090
+    assert len(optimal_replanned) == 6
 
 
 def test_reprocessing_authority_and_atomic_refusals():
@@ -400,3 +478,72 @@ def test_reprocessing_authority_and_atomic_refusals():
             tools.repair_reward_binding(RID, contract, card)
         assert tools.get_db_hash() == before
     assert get_environment().tools.db.reward_reprocessing_cases == {}
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+@pytest.mark.parametrize(
+    "components,total,first",
+    [
+        (["1A", "2B", "4B", "5B", "6B"], 39.75, 19.5),
+        (["1A", "2B", "3B", "4B", "5B"], 38, 20),
+        (["1A", "2B", "3A", "4A", "5B"], 37.25, 18.75),
+        (["1A", "2B", "3A", "4B", "5B"], 37.25, 18),
+        (["1B", "2B", "3B", "5B", "6A"], 37.25, 20),
+        (["1B", "2B", "3B", "4B", "5B"], 37, 19.75),
+    ],
+)
+def test_equivalent_optimal_amended_packages(mode, components, total, first):
+    task = task2()
+    session = PlatformSession(task, get_environment, max_errors=0)
+    initial_payouts = [
+        {"transaction_id": "txn_804219", "amount": first},
+        {"transaction_id": "txn_804227", "amount": round(total - first, 2)},
+    ]
+    remaining = [{"transaction_id": "txn_804227", "amount": 16.9}]
+    if first < 20:
+        remaining.insert(
+            0, {"transaction_id": "txn_804219", "amount": round(20 - first, 2)}
+        )
+    for action in deepcopy(task.evaluation_criteria.actions):
+        args = action.arguments
+        if (
+            action.name == "ask_client"
+            and args.get("request", {}).get("type") == "reward_resolution_confirmation"
+        ):
+            request = args["request"]
+            request["component_ids"] = components
+            if request.get("resolution_operation_id"):
+                request.update(payouts=remaining, total_amount=round(36.9 - first, 2))
+            else:
+                # Initial consent must describe the whole planned case, even if
+                # a purchase has zero left (the current input schema omits zero).
+                claims = [{"transaction_id": "txn_804205", "amount": 7}]
+                for tid, amount in [
+                    ("txn_804219", 20 - first),
+                    ("txn_804227", 20.9 - total + first),
+                ]:
+                    if round(amount, 2) > 0:
+                        claims.append(
+                            {"transaction_id": tid, "amount": round(amount, 2)}
+                        )
+                request.update(
+                    payouts=initial_payouts, total_amount=total, resulting_claims=claims
+                )
+        if action.name == "execute_reward_resolution":
+            args.update(
+                component_ids=components, payouts=initial_payouts, total_amount=total
+            )
+        if action.name == "amend_reward_resolution":
+            args.update(payouts=remaining, total_amount=round(36.9 - first, 2))
+        data(invoke(session, action.name, args))
+    data(invoke(session, "done", {}))
+    grade = (
+        session.grade() if mode == "half" else grade_full_session(session).reward_info
+    )
+    assert grade.reward_breakdown == {RewardType.DB: 1, RewardType.ACTION: 1}, (
+        grade.info
+    )
+    db = session.env.tools.db
+    assert db.accounts["acc_1187"].balance == 138995
+    assert db.cases["case_610903"].review_amount == 7
+    assert db.reward_resolution_executions[OP].result["total_amount"] == 36.9

@@ -34,6 +34,7 @@ from tau2.domains.banking_ru.data_model import (
     Case,
     CaseCategory,
     CashbackAdjustmentReservation,
+    CashbackInvestigationAmendmentItem,
     CashbackInvestigationItem,
     CashbackRules,
     ClosureReadiness,
@@ -277,6 +278,11 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         if pending:
             snapshot["pending_reward_resolutions"] = pending
         if funding:
+            from tau2.domains.banking_ru.reward_resolution_amendment import (
+                normalize_amended_state,
+            )
+
+            normalize_amended_state(self.db, snapshot, funding)
             snapshot["shared_reward_funding_usage"] = funding
         from tau2.domains.banking_ru.reward_workflows import standard_cycle
 
@@ -1195,13 +1201,14 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
     def amend_cashback_investigation(
         self,
         case_id: str,
-        items: list[CashbackInvestigationItem],
+        items: list[CashbackInvestigationAmendmentItem],
         reserved_adjustments: Optional[list[CashbackAdjustmentReservation]] = None,
         expected_revision: Optional[int] = None,
     ) -> Case:
         """Дополнить открытое дело. Для standard_cashback и cashback_reconciliation items задаёт итоговые суммы
         покупок, включая уже заявленное. Уменьшение допустимо только до фактического
-        остатка после проведённой выплаты по соглашению этого дела. Для будущей выплаты
+        остатка после проведённой выплаты по соглашению этого дела; ноль удаляет
+        полностью оплаченную позицию. Для будущей выплаты
         передайте reserved_adjustments. Для иных программ добавляются только новые покупки.
         """
         from tau2.domains.banking_ru.data_model import CashbackStateResult
@@ -3123,6 +3130,30 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         from tau2.domains.banking_ru.reward_resolution import retry
 
         return CashbackStateResult(retry(self, resolution_operation_id))
+
+    @is_tool(ToolType.WRITE)
+    def amend_reward_resolution(
+        self,
+        resolution_operation_id: str,
+        payouts: list[CashbackInvestigationItem],
+        total_amount: float,
+        confirmation_id: str,
+        expected_revision: int,
+    ) -> dict:
+        """Изменить неисполненные выплаты существующего соглашения по согласованному пакету."""
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+        from tau2.domains.banking_ru.reward_resolution_amendment import amend
+
+        return CashbackStateResult(
+            amend(
+                self,
+                resolution_operation_id,
+                payouts,
+                total_amount,
+                confirmation_id,
+                expected_revision,
+            )
+        )
 
     @is_tool(ToolType.READ)
     def get_reward_resolution_offers(

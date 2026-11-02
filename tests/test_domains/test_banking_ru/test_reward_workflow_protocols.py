@@ -297,3 +297,87 @@ def test_adjustment_validates_every_amount_before_first_write(bad_field):
 
 
 pytestmark = pytest.mark.usefixtures("operation_api_scenarios")
+
+
+@pytest.mark.parametrize(
+    "variant", ["settled", "unpaid", "other_case", "missing_credit"]
+)
+def test_zero_claim_removal_requires_real_full_settlement_in_same_case(variant):
+    from tau2.domains.banking_ru.data_model import Case, Transaction
+    from tau2.domains.banking_ru.reward_resolution_models import (
+        RewardResolutionExecution,
+    )
+
+    session = identified("Bank 2")
+    db = session.env.tools.db
+    customer, tid = "gromov_a_1187", "txn_552290"
+    db.cashback_rules[customer].cycles = [
+        {"period": "2026-07", "limit": 1000, "transaction_ids": [tid]}
+    ]
+    db.transactions = {
+        k: v for k, v in db.transactions.items() if v.original_transaction_id != tid
+    }
+    db.cases["settled-case"] = Case(
+        id="settled-case",
+        customer_id=customer,
+        category="cashback_investigation",
+        reward_program="standard_cashback",
+        reward_period="2026-07",
+        reward_items=[
+            {"transaction_id": tid, "amount": 60},
+            {"transaction_id": "txn_552291", "amount": 7},
+        ],
+        transaction_ids=[tid, "txn_552291"],
+        amount=67,
+        created_at="2026-08-01",
+    )
+    credit = Transaction(
+        id="settled-credit",
+        customer_id=customer,
+        account_id="acc_1187",
+        card_id="card_1187",
+        date="2026-08-01",
+        amount=59 if variant == "unpaid" else 60,
+        merchant="Выплата по соглашению",
+        kind="cashback",
+        status="posted",
+        original_transaction_id=tid,
+    )
+    if variant != "missing_credit":
+        db.transactions[credit.id] = credit
+    db.reward_resolution_executions["settled-operation"] = RewardResolutionExecution(
+        id="settled-operation",
+        customer_id=customer,
+        case_id="other-case" if variant == "other_case" else "settled-case",
+        period="2026-07",
+        transaction_ids=[tid],
+        idempotency_key="payment",
+        packet={"offer_id": "fixture-offer"},
+        result={"status": "succeeded", "ledger": [credit.model_dump()]},
+    )
+    before = session.env.tools.get_db_hash()
+    result = session.call(
+        "amend_cashback_investigation",
+        {
+            "case_id": "settled-case",
+            "items": [{"transaction_id": tid, "amount": 0}],
+        },
+    )
+    if variant != "settled":
+        assert result.is_error
+        assert session.env.tools.get_db_hash() == before
+    else:
+        value = decode(result)
+        assert value["reward_items"] == [{"transaction_id": "txn_552291", "amount": 7}]
+        assert value["transaction_ids"] == ["txn_552291"]
+        assert value["amount"] == 7
+        repeated = decode(
+            session.call(
+                "amend_cashback_investigation",
+                {
+                    "case_id": "settled-case",
+                    "items": [{"transaction_id": tid, "amount": 0}],
+                },
+            )
+        )
+        assert repeated == value

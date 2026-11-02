@@ -154,3 +154,13 @@ class RewardReprocessingCase(BaseModel):
     recovery_rates: dict[str, Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]]
     status: Literal["binding_mismatch", "repaired", "reprocessed"] = "binding_mismatch"
     ledger_ids: list[str] = Field(default_factory=list)
+
+
+class RewardResolutionCorrection(BaseModel):
+    """A bank posting released by the first partial execution of an agreement."""
+
+    model_config = ConfigDict(extra="forbid")
+    transaction_id: str
+    ledger_id: str
+    amount: float = Field(gt=0, multiple_of=0.01, allow_inf_nan=False)
+    allow_reallocation: bool = True

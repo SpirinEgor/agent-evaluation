@@ -89,12 +89,22 @@ def _settle(tools, operation, *, retry_pending=False):
     }
     result.update(status=plan.final_status, ledger=[])
     if plan.final_status == "succeeded":
+        if plan.retry_required:
+            gaps = standard_gaps(tools.db, operation.customer_id, operation.period)
+            if any(
+                cents(row["amount"]) > gaps.get(row["original_transaction_id"], 0)
+                for row in plan.ledger
+            ):
+                raise ToolExecutionRejected(
+                    "ERR_RESOLUTION_RECONCILIATION_REQUIRED: Остаток обязательства изменился; требуется пересмотр неисполненной части"
+                )
         credits = [Transaction.model_validate(row) for row in plan.ledger]
         _post_credits(tools, credits)
         result.update(
             total_amount=plan.total_amount,
             ledger=deepcopy(operation.result.get("ledger", []) + plan.ledger),
         )
+        result.pop("pending_total_amount", None)
         result.pop("retry_required", None)
         result.pop("failed_transaction_ids", None)
         if plan.funding_charge is not None:
@@ -249,6 +259,12 @@ def list_offers(tools, customer_id, case_id):
         )
         if not row["components_complete"]:
             row["components"] = []
+        correction_profile = tools.db.reward_resolution_correction_profiles.get(
+            offer.id
+        )
+        row["amendment_allowed"] = bool(
+            correction_profile and correction_profile.allow_reallocation
+        )
         reserve = reserve_snapshot(tools.db, offer)
         if reserve is not None:
             row["funding_reserve"] = reserve
@@ -367,6 +383,13 @@ def confirm(tools, customer_id, request):
         raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужое предложение")
     validate_fallback(tools, offer, request.fallback_operation_id)
     packet = request.model_dump(exclude={"type"})
+    if packet["resolution_operation_id"] is not None:
+        from tau2.domains.banking_ru.reward_resolution_amendment import (
+            confirm_amendment,
+        )
+
+        return confirm_amendment(tools, customer_id, request)
+    packet.pop("resolution_operation_id")
     if packet["fallback_operation_id"] is None:
         packet.pop("fallback_operation_id")
     if not packet["eligibility_evidence"]:
@@ -649,6 +672,10 @@ def execute(
                 if tid in gaps:
                     expected_claims[tid] = gaps[tid]
     expected_claims.update({tid: gaps[tid] - amt for tid, amt in expected.items()})
+    # Fully repaid positions are absent from the positive-only claim list.
+    expected_claims = {
+        tid: amount for tid, amount in expected_claims.items() if amount > 0
+    }
     if {
         x["transaction_id"]: cents(x["amount"]) for x in consent["resulting_claims"]
     } != expected_claims:
@@ -708,6 +735,23 @@ def execute(
     if deferred_tid is not None and deferred_tid not in expected:
         reject("Неверный профиль частичного исполнения")
     partial = deferred_tid is not None and profile is None
+    correction = None
+    if partial:
+        from tau2.domains.banking_ru.reward_resolution_amendment import (
+            correction_credit,
+        )
+
+        correction = correction_credit(
+            tools,
+            offer,
+            {tid: amount for tid, amount in expected.items() if tid != deferred_tid},
+        )
+        if correction is not None and correction.id in {
+            credit.id for credit in credits
+        }:
+            raise ToolExecutionRejected(
+                "ERR_CORRECTION_CONFLICT: ID корректировки совпадает с проводкой соглашения"
+            )
     if profile is None:
         _post_credits(
             tools,
@@ -717,6 +761,8 @@ def execute(
                 if not partial or c.original_transaction_id != deferred_tid
             ],
         )
+    if correction is not None:
+        _post_credits(tools, [correction])
     current = advance(tools.db, offer.customer_id, offer.period)
     result = dict(
         id=execution_id,

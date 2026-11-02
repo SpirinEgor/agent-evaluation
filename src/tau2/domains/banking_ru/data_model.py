@@ -26,6 +26,7 @@ from tau2.domains.banking_ru.reward_payment_register import (
 from tau2.domains.banking_ru.reward_resolution_models import (
     PartnerConfirmation,
     RewardReprocessingCase,
+    RewardResolutionCorrection,
     RewardResolutionExecution,
     RewardResolutionOffer,
     RewardResolutionPreferences,
@@ -464,6 +465,12 @@ class CashbackInvestigationItem(BaseModel):
     model_config = ConfigDict(extra="forbid")
     transaction_id: str = Field(min_length=1)
     amount: float = Field(gt=0, allow_inf_nan=False)
+
+
+class CashbackInvestigationAmendmentItem(CashbackInvestigationItem):
+    """An explicit zero removes a claim only after confirmed full settlement."""
+
+    amount: float = Field(ge=0, allow_inf_nan=False)
 
 
 class CashbackAdjustmentReservation(BaseModel):
@@ -1167,6 +1174,9 @@ class BankingDB(DB):
         default_factory=dict
     )
     reward_resolution_partial_profiles: dict[str, str] = Field(default_factory=dict)
+    reward_resolution_correction_profiles: dict[str, RewardResolutionCorrection] = (
+        Field(default_factory=dict)
+    )
     bank_operations: dict[str, dict] = Field(default_factory=dict)
     session: Session = Field(default_factory=Session, exclude=True)
 

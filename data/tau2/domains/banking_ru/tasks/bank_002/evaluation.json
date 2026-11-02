@@ -3683,6 +3683,82 @@
       "compare_args": []
     },
     {
+      "action_id": "bank2:v17:reconcile-postings",
+      "name": "get_transactions",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "posted_from": "2026-08-01",
+        "posted_to": "2026-08-28",
+        "limit": 50
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v17:consent-amendment",
+      "name": "ask_client",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "request": {
+          "type": "reward_resolution_confirmation",
+          "resolution_operation_id": "resolution:case_610903:offer_610735",
+          "offer_id": "offer_610735",
+          "offer_version": 2,
+          "case_id": "case_610903",
+          "payouts": [
+            {
+              "transaction_id": "txn_804219",
+              "amount": 0.5
+            },
+            {
+              "transaction_id": "txn_804227",
+              "amount": 16.9
+            }
+          ],
+          "total_amount": 17.4,
+          "resulting_claims": [
+            {
+              "transaction_id": "txn_804205",
+              "amount": 7
+            }
+          ],
+          "state_revision": 5,
+          "component_ids": [
+            "1A",
+            "2B",
+            "4B",
+            "5B",
+            "6B"
+          ],
+          "eligibility_evidence": {}
+        }
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v17:amend-resolution",
+      "name": "amend_reward_resolution",
+      "arguments": {
+        "resolution_operation_id": "resolution:case_610903:offer_610735",
+        "payouts": [
+          {
+            "transaction_id": "txn_804219",
+            "amount": 0.5
+          },
+          {
+            "transaction_id": "txn_804227",
+            "amount": 16.9
+          }
+        ],
+        "total_amount": 17.4,
+        "confirmation_id": "resolution-confirmation-2",
+        "expected_revision": 5
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
       "action_id": "bank2:v16:retry",
       "name": "retry_reward_resolution",
       "arguments": {
@@ -3699,14 +3775,14 @@
         "items": [
           {
             "transaction_id": "txn_804219",
-            "amount": 0.5
+            "amount": 0
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 0.65
+            "amount": 0
           }
         ],
-        "expected_revision": 6
+        "expected_revision": 7
       },
       "required_for_reward": true,
       "compare_args": [

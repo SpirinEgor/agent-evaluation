@@ -106,7 +106,7 @@ TOOL_OWNERS = {
     "repair_reward_binding": "loyalty",
     "reprocess_rewards": "loyalty",
     "retry_reward_resolution": "loyalty",
-
+    "amend_reward_resolution": "loyalty",
     "get_service_incidents": "crm",
     "get_partner_confirmations": "loyalty",
     "get_promotion_activations": "loyalty",

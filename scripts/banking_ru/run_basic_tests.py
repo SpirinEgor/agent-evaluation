@@ -92,6 +92,7 @@ GROUPS["regressions"] = tuple(
         "test_resolution_dependencies.py",
         "test_resolution_funding_pools.py",
         "test_resolution_unknown.py",
+        "test_resolution_amendment.py",
         "test_resolution_preferences.py",
         "test_resolution_percentage_deductions.py",
         "test_resolution_selection.py",

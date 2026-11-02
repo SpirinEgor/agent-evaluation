@@ -185,6 +185,10 @@ def protected_arguments() -> dict[str, dict[str, str]]:
     result["ask_client"]["request.fallback_operation_id"] = (
         "reward_resolution_executions"
     )
+    result["ask_client"]["request.resolution_operation_id"] = (
+        "reward_resolution_executions"
+    )
+    result["amend_reward_resolution"]["payouts.*.transaction_id"] = "transactions"
     result["ask_client"]["request.offer_id"] = "reward_resolution_offers"
     result["ask_client"]["request.case_id"] = "cases"
     result["ask_client"]["request.payouts.*.transaction_id"] = "transactions"
@@ -346,7 +350,10 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
             "allowed_customer_ids": [customer_id],
             "authentication_action_ids": auth,
             "resources_by_customer": {
-                k: v for k, v in catalog.items() if k not in {"reward_resolution_executions", "reward_reprocessing_cases"}
+                k: v
+                for k, v in catalog.items()
+                if k
+                not in {"reward_resolution_executions", "reward_reprocessing_cases"}
             },
             "tool_arguments": arguments,
             "pre_auth_tools": PRE_AUTH_TOOLS,

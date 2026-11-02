@@ -1659,3 +1659,149 @@ def test_received_superseded_minimum_cannot_authorize_unreceived_restoration(
     # Superseded lower terms cannot carry authorization across real transitions.
     # A payout above the original minimum remains lawful without that evidence.
     assert reward_business_failures(trace, POLICY) == want
+
+
+def amended_resolution_rows():
+    """Partial four, then confirmed remaining five under the same operation."""
+    from copy import deepcopy
+
+    first, _, _ = unknown_resolution_rows()
+    first[-1][2].update(
+        total_amount=4,
+        retry_required=True,
+        ledger=[{"id": "posted-first", "original_transaction_id": "t1", "amount": 4}],
+    )
+    request = {
+        "type": "reward_resolution_confirmation",
+        "resolution_operation_id": "op",
+        "offer_id": "offer",
+        "offer_version": 1,
+        "case_id": "case",
+        "component_ids": ["x", "y"],
+        "state_revision": 3,
+        "payouts": [
+            {"transaction_id": "t1", "amount": 1},
+            {"transaction_id": "t2", "amount": 4},
+        ],
+        "total_amount": 5,
+        "resulting_claims": [{"transaction_id": "old", "amount": 7}],
+    }
+    consent = (
+        "ask_client",
+        {"customer_id": "own", "request": deepcopy(request)},
+        {
+            "customer_id": "own",
+            "status": "confirmed",
+            "confirmation_id": "renewed",
+            "data": {k: deepcopy(v) for k, v in request.items() if k != "type"},
+        },
+        False,
+    )
+    amendment = (
+        "amend_reward_resolution",
+        {
+            "resolution_operation_id": "op",
+            "payouts": deepcopy(request["payouts"]),
+            "total_amount": 5,
+            "confirmation_id": "renewed",
+            "expected_revision": 3,
+        },
+        {
+            **deepcopy(first[-1][2]),
+            "state_revision": 4,
+            "pending_total_amount": 5,
+            "agreement_total_amount": 9,
+        },
+        False,
+    )
+    retry = (
+        "retry_reward_resolution",
+        {"resolution_operation_id": "op"},
+        {
+            **deepcopy(amendment[2]),
+            "status": "succeeded",
+            "state_revision": 5,
+            "total_amount": 9,
+        },
+        False,
+    )
+    return [*first, consent, amendment, retry]
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_amended_resolution_requires_received_renewed_consent(mode):
+    from copy import deepcopy
+
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = amended_resolution_rows()
+    assert failures(rows, mode) == []
+    trace = trace_of(rows, mode)
+    source = trace.observed[3]
+    trace.observed[3] = source.model_copy(update={"result_position": None})
+    assert reward_business_failures(trace, POLICY) == [
+        "4:amendment_packet_not_confirmed"
+    ]
+    changed = deepcopy(rows)
+    changed[4][1]["confirmation_id"] = "consent"
+    assert failures(changed, mode) == ["4:amendment_packet_not_confirmed"]
+    changed = deepcopy(rows)
+    changed[4][1]["payouts"][0]["amount"] = 2
+    assert "4:amendment_packet_not_confirmed" in failures(changed, mode)
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_amendment_requires_operation_received_before_consent(mode):
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    trace = trace_of(amended_resolution_rows(), mode)
+    source = trace.observed[2]
+    trace.observed[2] = source.model_copy(
+        update={"result_position": trace.observed[3].call_position + 0.5}
+    )
+    assert reward_business_failures(trace, POLICY) == [
+        "4:amendment_operation_not_received_before_consent"
+    ]
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_retry_requires_amended_operation_receipt_but_status_can_supply_it(mode):
+    from copy import deepcopy
+
+    from tau2.evaluator.reward_business_trace import reward_business_failures
+
+    rows = amended_resolution_rows()
+    trace = trace_of(rows, mode)
+    trace.observed[4] = trace.observed[4].model_copy(update={"result_position": None})
+    assert reward_business_failures(trace, POLICY) == [
+        "5:amended_operation_not_received"
+    ]
+    status = (
+        "get_reward_resolution_status",
+        {"resolution_operation_id": "op"},
+        deepcopy(rows[4][2]),
+        False,
+    )
+    trace = trace_of(rows[:5] + [status, rows[5]], mode)
+    trace.observed[4] = trace.observed[4].model_copy(update={"result_position": None})
+    assert reward_business_failures(trace, POLICY) == []
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_amendment_recovery_order_and_idempotency_are_not_penalized(mode):
+    from copy import deepcopy
+
+    rows = amended_resolution_rows()
+    denied = (
+        "retry_reward_resolution",
+        {"resolution_operation_id": "op"},
+        {"error": "remaining obligation changed"},
+        True,
+    )
+    assert failures(rows[:3] + [denied] + rows[3:], mode) == []
+    assert failures(rows[:5] + [deepcopy(rows[4])] + rows[5:], mode) == []
+    changed = deepcopy(rows)
+    changed[3][1]["request"]["payouts"].reverse()
+    changed[3][1]["request"]["component_ids"].reverse()
+    changed[4][1]["payouts"].reverse()
+    assert failures(changed, mode) == []

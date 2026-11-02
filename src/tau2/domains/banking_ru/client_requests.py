@@ -126,6 +126,7 @@ class RewardResolutionConfirmationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     type: Literal["reward_resolution_confirmation"]
     fallback_operation_id: str | None = None
+    resolution_operation_id: str | None = None
     offer_id: str
     offer_version: int
     payouts: list[CashbackInvestigationItem] = Field(min_length=1)

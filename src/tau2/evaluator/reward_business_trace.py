@@ -136,6 +136,7 @@ def _resolution_receipts(observed, target, policy):
             "execute_reward_resolution",
             "get_reward_resolution_status",
             "retry_reward_resolution",
+            "amend_reward_resolution",
         }:
             continue
         result = payload(source)
@@ -167,6 +168,7 @@ def _resolution_receipts(observed, target, policy):
         if source.call.name in {
             "get_reward_resolution_status",
             "retry_reward_resolution",
+            "amend_reward_resolution",
         }:
             if source.call.arguments.get("resolution_operation_id") != operation:
                 continue
@@ -183,6 +185,13 @@ def _resolution_receipts(observed, target, policy):
         ):
             continue
         previous = states.get(operation)
+        if (
+            previous
+            and result.get("state_revision") is not None
+            and previous[0].get("state_revision") is not None
+            and _money(result["state_revision"]) < _money(previous[0]["state_revision"])
+        ):
+            continue
         if previous and previous[0]["status"] in {"failed_final", "succeeded"}:
             continue
         states[operation] = (result, origin, source)
@@ -389,6 +398,127 @@ def _minimum_snapshot(observed, boundary, policy):
     }
 
 
+def _amendment_packet(args):
+    return {
+        "resolution_operation_id": args.get("resolution_operation_id"),
+        "confirmation_id": args.get("confirmation_id"),
+        "expected_revision": args.get("expected_revision"),
+        "total_amount": _money(args.get("total_amount")),
+        "payouts": sorted(
+            [
+                (row.get("transaction_id"), _money(row.get("amount")))
+                for row in args.get("payouts", [])
+            ],
+            key=lambda row: str(row[0]),
+        ),
+    }
+
+
+def _amendment_failures(observed, target, policy):
+    """Authorize changed pending instructions without imposing an optimal amount."""
+    args, ident = target.call.arguments, target.call.id
+    operation_id = args.get("resolution_operation_id")
+    proof = _resolution_receipts(observed, target, policy).get(operation_id)
+    failures = []
+    if (
+        not proof
+        or proof[0].get("status") != "execution_unknown"
+        or not proof[0].get("retry_required")
+        or not proof[0].get("ledger")
+    ):
+        return [f"{ident}:amendment_operation_not_received"]
+    state, origin, _ = proof
+    original = origin.call.arguments
+    packet = _amendment_packet(args)
+    rows = packet["payouts"]
+    scope = {row.get("transaction_id") for row in original.get("payouts", [])}
+    if (
+        not rows
+        or len({tid for tid, _ in rows}) != len(rows)
+        or any(
+            tid not in scope or not amount.is_finite() or amount <= 0
+            for tid, amount in rows
+        )
+        or sum((amount for _, amount in rows), Decimal(0)) != packet["total_amount"]
+    ):
+        failures.append(f"{ident}:amendment_outside_original_scope")
+    consent_source = None
+    for source in observed:
+        if (
+            source.call.name != "ask_client"
+            or source.result_position is None
+            or source.result_position >= target.call_position
+        ):
+            continue
+        consent = payload(source)
+        if not isinstance(consent, dict):
+            continue
+        data = consent.get("data") or {}
+        request = source.call.arguments.get("request") or {}
+        if not isinstance(data, dict) or not isinstance(request, dict):
+            continue
+        if (
+            source.call.arguments.get("customer_id") == policy["customer_id"]
+            and request.get("type") == "reward_resolution_confirmation"
+            and consent.get("customer_id") == policy["customer_id"]
+            and consent.get("status") == "confirmed"
+            and consent.get("confirmation_id") == args.get("confirmation_id")
+            and data.get("resolution_operation_id") == operation_id
+            and request.get("resolution_operation_id") == operation_id
+            and all(
+                data.get(key) == original.get(key)
+                for key in ("offer_id", "offer_version", "case_id")
+            )
+            and _money(data.get("total_amount")) == packet["total_amount"]
+            and _amendment_packet(data)["payouts"] == rows
+            and data.get("state_revision") == args.get("expected_revision")
+            and sorted(data.get("component_ids") or [])
+            == sorted(original.get("component_ids") or [])
+            and (data.get("eligibility_evidence") or {})
+            == (original.get("eligibility_evidence") or {})
+            and _amendment_packet(request)["payouts"] == rows
+            and sorted(request.get("component_ids") or [])
+            == sorted(data.get("component_ids") or [])
+            and sorted(
+                request.get("resulting_claims") or [],
+                key=lambda row: row["transaction_id"],
+            )
+            == sorted(
+                data.get("resulting_claims") or [],
+                key=lambda row: row["transaction_id"],
+            )
+            and all(
+                request.get(key) == data.get(key)
+                for key in (
+                    "offer_id",
+                    "offer_version",
+                    "case_id",
+                    "total_amount",
+                    "state_revision",
+                )
+            )
+        ):
+            consent_source = source
+    if consent_source is None:
+        failures.append(f"{ident}:amendment_packet_not_confirmed")
+        return failures
+    before_consent = _resolution_receipts(observed, consent_source, policy).get(
+        operation_id
+    )
+    if (
+        not before_consent
+        or before_consent[0].get("status") != "execution_unknown"
+        or not before_consent[0].get("retry_required")
+        or not before_consent[0].get("ledger")
+    ):
+        failures.append(f"{ident}:amendment_operation_not_received_before_consent")
+    elif _money(before_consent[0].get("state_revision")) > _money(
+        args.get("expected_revision")
+    ) or _money(state.get("state_revision")) > _money(args.get("expected_revision")):
+        failures.append(f"{ident}:amendment_consent_stale")
+    return failures
+
+
 def reward_business_failures(trace, policy):
     """Validate every successful protected mutation, including later repaired ones."""
     if not policy:
@@ -398,6 +528,7 @@ def reward_business_failures(trace, policy):
     observed = sorted(trace.observed, key=lambda row: row.execution_index)
     failures, executions, spent = [], {}, {}
     payments = []
+    amendments = {}
     selected = set(policy["transaction_ids"])
     initial = policy["initial_case_items"]
 
@@ -427,6 +558,12 @@ def reward_business_failures(trace, policy):
         ):
             continue
         name, args, ident = target.call.name, target.call.arguments, target.call.id
+        if name == "amend_reward_resolution":
+            amendment_key = args.get("resolution_operation_id")
+            packet = _amendment_packet(args)
+            if amendments.get(amendment_key) != packet:
+                failures.extend(_amendment_failures(observed, target, policy))
+                amendments[amendment_key] = packet
         if name == "retry_reward_resolution":
             operation_id = args.get("resolution_operation_id")
             proof = _resolution_receipts(observed, target, policy).get(operation_id)
@@ -436,6 +573,23 @@ def reward_business_failures(trace, policy):
                 "failed_final",
             }:
                 failures.append(f"{ident}:retry_operation_not_received")
+            for prior in observed:
+                changed = payload(prior)
+                if (
+                    prior.call.name == "amend_reward_resolution"
+                    and prior.execution_index < target.execution_index
+                    and prior.call.arguments.get("resolution_operation_id")
+                    == operation_id
+                    and isinstance(changed, dict)
+                    and changed.get("status") == "execution_unknown"
+                    and (
+                        not proof
+                        or _money(proof[0].get("state_revision"))
+                        < _money(changed.get("state_revision"))
+                    )
+                ):
+                    failures.append(f"{ident}:amended_operation_not_received")
+                    break
         if name == "refresh_cashback_settlement" and isinstance(result, dict):
             for decision in result.get("funding_decisions", []):
                 accepted = any(

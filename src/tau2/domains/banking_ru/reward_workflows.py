@@ -416,7 +416,10 @@ class RewardWorkflowMixin:
     def _amend_reward_investigation(
         self, case_id, items, reserved_adjustments=None, expected_revision=None
     ):
-        from tau2.domains.banking_ru.data_model import CashbackInvestigationItem
+        from tau2.domains.banking_ru.data_model import (
+            CashbackInvestigationAmendmentItem,
+            CashbackInvestigationItem,
+        )
 
         case = self.db.cases.get(case_id)
         if case is None:
@@ -428,13 +431,22 @@ class RewardWorkflowMixin:
             raise ValueError(
                 "ERR_REVIEW_REGISTERED: Состав переданного дела зафиксирован"
             )
-        values = [CashbackInvestigationItem.model_validate(x) for x in items]
+        values = [
+            CashbackInvestigationAmendmentItem.model_validate(
+                x.model_dump() if hasattr(x, "model_dump") else x
+            )
+            for x in items
+        ]
         if not values or len({x.transaction_id for x in values}) != len(values):
             raise ValueError("ERR_INVALID_ARGUMENT: Нужны разные покупки")
         if case.reward_program in {"standard_cashback", "cashback_reconciliation"}:
             return self._amend_standard_investigation(
                 case, values, reserved_adjustments, expected_revision
             )
+        # Other programs retain their positive-only append contract.
+        values = [
+            CashbackInvestigationItem.model_validate(x.model_dump()) for x in values
+        ]
         existing = {x.transaction_id: x for x in case.reward_items}
         for item in values:
             tx = self._get_transaction(item.transaction_id)
@@ -471,7 +483,10 @@ class RewardWorkflowMixin:
         self, case, values, reserved_adjustments, expected_revision=None
     ):
         """Set final per-purchase claims; preserve prior claims and reserve unpaid credits."""
-        from tau2.domains.banking_ru.data_model import CashbackAdjustmentReservation
+        from tau2.domains.banking_ru.data_model import (
+            CashbackAdjustmentReservation,
+            CashbackInvestigationItem,
+        )
 
         existing = {x.transaction_id: x for x in case.reward_items}
         for item in values:
@@ -486,6 +501,16 @@ class RewardWorkflowMixin:
             ):
                 raise ValueError(
                     "ERR_INVALID_ARGUMENT: Покупка другого владельца или периода"
+                )
+            if cents(item.amount) == 0 and (
+                not _resolution_paid_claim(self.db, case, item.transaction_id)
+                or (
+                    standard_gaps(self.db, case.customer_id, case.reward_period) or {}
+                ).get(item.transaction_id)
+                != 0
+            ):
+                raise ToolExecutionRejected(
+                    "ERR_CLAIM_NOT_SETTLED: Удаление возможно только после полной выплаты по делу"
                 )
             if item.transaction_id in existing and cents(item.amount) < cents(
                 existing[item.transaction_id].amount
@@ -543,6 +568,11 @@ class RewardWorkflowMixin:
             reservations,
         )
         merged = {**existing, **{x.transaction_id: x for x in values}}
+        merged = {
+            tid: CashbackInvestigationItem.model_validate(item.model_dump())
+            for tid, item in merged.items()
+            if cents(item.amount) > 0
+        }
         # Other open claims for a purchase cannot be silently overwritten/duplicated.
         for other in self.db.cases.values():
             if (
