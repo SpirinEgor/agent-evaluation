@@ -53,15 +53,24 @@ def upstream_reason(event):
     response_error = response_error if isinstance(response_error, dict) else {}
     incomplete = response.get("incomplete_details")
     incomplete = incomplete if isinstance(incomplete, dict) else {}
-    for value in (
-        event.get("code"),
-        nested.get("code"),
-        response_error.get("code"),
-        incomplete.get("reason"),
-    ):
-        if isinstance(value, str) and value in SAFE_UPSTREAM_REASONS:
-            return value
-    return "unknown"
+    values = [
+        value
+        for value in (
+            event.get("code"),
+            event.get("type"),
+            nested.get("code"),
+            nested.get("type"),
+            response_error.get("code"),
+            response_error.get("type"),
+            incomplete.get("reason"),
+        )
+        if isinstance(value, str) and value in SAFE_UPSTREAM_REASONS
+    ]
+    transient = {"server_error", "overloaded", "rate_limit_exceeded", "timeout"}
+    return next(
+        (value for value in values if value not in transient),
+        values[0] if values else "unknown",
+    )
 
 
 def diagnostic(error, stage):
@@ -84,6 +93,7 @@ def diagnostic(error, stage):
         in {
             "upstream_http_status",
             "unexpected_media_type",
+            "upstream_partial_transport",
             "upstream_response_failed",
             "upstream_response_incomplete",
             "upstream_error_event",
@@ -109,6 +119,23 @@ def diagnostic(error, stage):
     ):
         result["http_status"] = error.status
     return result
+
+
+def retryable_upstream(error):
+    """Retry only a failed inference with no delivered or authoritative output."""
+    if isinstance(error, httpx.TransportError):
+        return True
+    if not isinstance(error, BrokerFailure):
+        return False
+    if error.code == "upstream_http_status":
+        return error.status in {429, 500, 502, 503, 504}
+    return error.code == "upstream_error_event" and error.upstream_reason in {
+        "unknown",
+        "server_error",
+        "overloaded",
+        "rate_limit_exceeded",
+        "timeout",
+    }
 
 
 def canonical(items, *, model_output=False):
@@ -421,10 +448,17 @@ class SubscriptionInference:
                 )
                 if media and media != "text/event-stream":
                     raise BrokerFailure("unexpected_media_type")
-                async for chunk in response.aiter_bytes():
-                    clean = filt.feed(chunk)
-                    if clean:
-                        yield clean
+                received_bytes = False
+                try:
+                    async for chunk in response.aiter_bytes():
+                        received_bytes = received_bytes or bool(chunk)
+                        clean = filt.feed(chunk)
+                        if clean:
+                            yield clean
+                except httpx.TransportError:
+                    if received_bytes:
+                        raise BrokerFailure("upstream_partial_transport") from None
+                    raise
                 tail = filt.feed(b"", final=True)
                 if tail:
                     yield tail
@@ -440,6 +474,7 @@ class ResponseStream:
         self.size = 0
         self.completed = False
         self.first_line = True
+        self.output_started = False
 
     def feed(self, chunk):
         self.size += len(chunk)
@@ -467,6 +502,19 @@ class ResponseStream:
             return
         event = json.loads(raw)
         kind = event.get("type")
+        # Even an unfinished delta in the same chunk as an error makes retry unsafe.
+        if kind not in {
+            "response.created",
+            "response.in_progress",
+            "error",
+            "response.failed",
+            "response.incomplete",
+        }:
+            self.output_started = True
+        elif isinstance(event.get("response"), dict) and event["response"].get(
+            "output"
+        ):
+            self.output_started = True
         if kind == "response.output_item.done":
             self.guard.observe_item(event["item"])
         elif kind == "response.completed":
@@ -503,7 +551,8 @@ const server=http.createServer((req,res)=>{
  const finish=()=>{if(!done){done=true;active--}};res.on('close',finish);res.on('finish',finish);
  req.on('error',()=>{finish();res.destroy()});req.setTimeout(15000,()=>{finish();req.destroy()});
  req.on('data',b=>{size+=b.length;if(size>2097152){res.writeHead(413);res.end();req.destroy()}else chunks.push(b)});
- req.on('end',()=>{if(size>2097152)return;let body;try{body=JSON.parse(Buffer.concat(chunks))}catch{res.writeHead(400);res.end();return}
+ // Upload is complete. The host's bounded inference timeout now governs the response.
+ req.on('end',()=>{req.setTimeout(0);if(size>2097152)return;let body;try{body=JSON.parse(Buffer.concat(chunks))}catch{res.writeHead(400);res.end();return}
   const id=++next;pending.set(id,res);res.on('close',()=>pending.delete(id));
   process.stdout.write(JSON.stringify({id,method:req.method,path:req.url,body})+'\n');
  });
@@ -525,6 +574,8 @@ class InferenceRelay:
         )
         self.process = self.task = None
         self.errors = []
+        self.retries = []
+        self.upstream_requests = 0
         self.closing = False
 
     async def __aenter__(self):
@@ -579,25 +630,57 @@ class InferenceRelay:
                     stage = "request_validation"
                     self.guard.check(event["body"])
                     started = True
-                    stream = ResponseStream(self.guard)
                     async with asyncio.timeout(120):
-                        stage = "upstream_transport"
-                        async for chunk in self.forward(event["body"]):
-                            stage = "response_stream"
-                            stream.feed(chunk)
-                            if not sent:
+                        for attempt in range(3):
+                            stream = ResponseStream(self.guard)
+                            try:
+                                if self.upstream_requests >= MAX_REQUESTS:
+                                    raise ValueError(
+                                        "Upstream attempt budget exhausted"
+                                    )
+                                self.upstream_requests += 1
+                                stage = "upstream_transport"
+                                async for chunk in self.forward(event["body"]):
+                                    stage = "response_stream"
+                                    stream.feed(chunk)
+                                    if not sent:
+                                        stage = "relay_delivery"
+                                        await self.send(dict(id=ident, status=200))
+                                        sent = True
+                                    stage = "relay_delivery"
+                                    await self.send(
+                                        dict(
+                                            id=ident,
+                                            chunk=base64.b64encode(chunk).decode(),
+                                        )
+                                    )
+                                    stage = "upstream_transport"
+                                stage = "response_stream"
+                                stream.finish()
                                 stage = "relay_delivery"
-                                await self.send(dict(id=ident, status=200))
-                                sent = True
-                            stage = "relay_delivery"
-                            await self.send(
-                                dict(id=ident, chunk=base64.b64encode(chunk).decode())
-                            )
-                            stage = "upstream_transport"
-                        stage = "response_stream"
-                        stream.finish()
-                        stage = "relay_delivery"
-                        await self.send(dict(id=ident, end=True))
+                                await self.send(dict(id=ident, end=True))
+                                break
+                            except Exception as error:
+                                if (
+                                    attempt == 2
+                                    or sent
+                                    or self.guard.current
+                                    or stream.output_started
+                                    or self.guard.response_complete
+                                    or self.guard.failed
+                                    or stage
+                                    not in {"upstream_transport", "response_stream"}
+                                    or not retryable_upstream(error)
+                                ):
+                                    raise
+                                self.retries.append(
+                                    dict(
+                                        request=self.guard.requests,
+                                        failed_attempt=attempt + 1,
+                                        diagnostic=diagnostic(error, stage),
+                                    )
+                                )
+                                await asyncio.sleep(attempt + 1)
                 except Exception as error:
                     self.errors.append(diagnostic(error, stage))
                     self.guard.fail()

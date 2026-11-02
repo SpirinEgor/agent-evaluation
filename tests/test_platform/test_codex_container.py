@@ -209,7 +209,21 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
 
 
 @pytest.mark.parametrize(
-    "case", ["success", "upstream_failure", "tool_error", "large_result", "reasoning"]
+    "case",
+    [
+        "success",
+        "upstream_failure",
+        "tool_error",
+        "large_result",
+        "reasoning",
+        "delayed_response",
+        "delayed_stream",
+        "transient_error",
+        "policy_error",
+        "partial_error",
+        "partial_delta_error",
+        "exhausted_error",
+    ],
 )
 def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     """Real Codex must consume MCP output, with no native tools or model call."""
@@ -225,7 +239,8 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         pytest.skip("Explicit Docker image required; local HTTP stub only")
     module = load_module()
     payloads, calls = [], []
-    upstream_failure = case == "upstream_failure"
+    upstream_failure = case in {"upstream_failure", "policy_error"}
+    late_failure = case in {"partial_error", "partial_delta_error", "exhausted_error"}
     fixture_result = "SYSTEM_FIXTURE_RECEIVED" + (
         "покупка_abcdef0123456789" * 3000 if case == "large_result" else ""
     )
@@ -423,7 +438,12 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     server = ThreadingHTTPServer(("0.0.0.0", 0), Stub)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
-    command = ["codex", "exec", "--model", "gpt-6.1-sol"]
+    command = [
+        "codex",
+        "exec",
+        "--model",
+        os.getenv("BANKING_CODEX_TEST_MODEL", "gpt-6.1-sol"),
+    ]
     settings = {
         "model_reasoning_effort": "low",
         "model_provider": "fixture",
@@ -456,8 +476,68 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     for key, value in settings.items():
         command.extend(["--config", key + "=" + json.dumps(value)])
 
+    injected = False
+
     async def forward(body):
+        nonlocal injected
         import httpx
+
+        if (not injected or case == "exhausted_error") and (
+            (
+                case
+                in {
+                    "transient_error",
+                    "partial_error",
+                    "partial_delta_error",
+                    "exhausted_error",
+                }
+                and len(payloads) == 2
+            )
+            or (case == "policy_error" and len(payloads) == 1)
+        ):
+            injected = True
+            reason = (
+                "unrecognized-provider-code"
+                if case != "policy_error"
+                else "content_filter"
+            )
+            prefix = b""
+            if case == "partial_error":
+                item = {
+                    "type": "message",
+                    "id": "partial",
+                    "role": "assistant",
+                    "content": [
+                        {"type": "output_text", "text": "PARTIAL", "annotations": []}
+                    ],
+                }
+                prefix = (
+                    "data: "
+                    + json.dumps({"type": "response.output_item.done", "item": item})
+                    + "\n\n"
+                ).encode()
+            if case == "partial_delta_error":
+                prefix = (
+                    b'data: {"type":"response.output_text.delta","delta":"PARTIAL"}\n\n'
+                )
+            yield (
+                prefix
+                + (
+                    "event: error\ndata: "
+                    + json.dumps(
+                        {
+                            "type": "error",
+                            "code": reason,
+                            "message": "PRIVATE_DO_NOT_LOG",
+                        }
+                    )
+                    + "\n\n"
+                ).encode()
+            )
+            return
+
+        if case == "delayed_response" and len(payloads) == 2:
+            await asyncio.sleep(16)  # Valid model latency exceeds upload timeout.
 
         async with httpx.AsyncClient(trust_env=False, timeout=5) as client:
             async with client.stream(
@@ -466,6 +546,9 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 if response.status_code != 200:
                     raise ValueError("Local upstream failure")
                 async for chunk in response.aiter_bytes():
+                    if case == "delayed_stream" and len(payloads) == 3:
+                        yield b": waiting for model\n\n"
+                        await asyncio.sleep(16)
                     yield chunk
                 await asyncio.sleep(0.1)  # RPC may arrive before the trusted EOF.
 
@@ -482,20 +565,40 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 inference_forward=forward,
             )
         )
-        assert run["exit_code"] == (1 if upstream_failure else 0), (
+        assert run["exit_code"] == (1 if upstream_failure or late_failure else 0), (
             run["stderr"],
             run["stdout"],
             run["broker_evidence"],
         )
-        assert len(payloads) >= 2
+        assert len(payloads) >= (1 if case == "policy_error" else 2)
         module.validate_model_request(payloads[0], run["request_contract"])
         expected_calls = [("bank_directory", {"operation": "list_systems"})]
         if not upstream_failure:
             expected_calls.append(("bank_call", {}))
-            assert len(payloads) == 3
+            assert len(payloads) == (2 if late_failure else 3)
         assert [(c["name"], c["arguments"]) for c in calls] == expected_calls
-        assert any(
-            item.get("output") == fixture_result for item in payloads[1]["input"]
+        if case != "policy_error":
+            assert any(
+                item.get("output") == fixture_result for item in payloads[1]["input"]
+            )
+        else:
+            assert (
+                run["broker_evidence"]["errors"][0]["upstream_reason"]
+                == "content_filter"
+            )
+        if case == "transient_error":
+            assert len(run["broker_evidence"]["retries"]) == 1
+            assert run["broker_evidence"]["upstream_requests"] == 4
+            assert not run["broker_evidence"]["errors"]
+        if late_failure:
+            assert len(run["broker_evidence"]["retries"]) == (
+                2 if case == "exhausted_error" else 0
+            )
+            assert run["broker_evidence"]["upstream_requests"] == (
+                5 if case == "exhausted_error" else 3
+            )
+        assert "PRIVATE_DO_NOT_LOG" not in json.dumps(
+            run["broker_evidence"]["errors"] + run["broker_evidence"]["retries"]
         )
         assert "mcp_tool_call" in run["stdout"]
         assert run["stdout"].index("Before MCP") < run["stdout"].index("mcp_tool_call")
@@ -506,7 +609,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
             if json.loads(line)["type"] in ("turn.completed", "turn.failed")
         ]
         assert terminal[-1]["usage"]["input_tokens"] >= 20
-        if not upstream_failure:
+        if not upstream_failure and not late_failure:
             assert "Fixture finished" in run["stdout"]
         if os.getenv("ISOLATION_DIAGNOSTICS"):
             Path(os.environ["ISOLATION_DIAGNOSTICS"] + "." + case + ".json").write_text(

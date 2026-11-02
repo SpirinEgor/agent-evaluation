@@ -600,3 +600,106 @@ def test_nonempty_reasoning_content_remains_bound_to_host_response():
     with pytest.raises(ValueError):
         guard.check(bad)
     assert guard.check(follow) == 2
+
+
+@pytest.mark.parametrize(
+    "event,reason",
+    [
+        (
+            {
+                "type": "error",
+                "error": {"type": "authentication_error", "code": "unrecognized"},
+            },
+            "authentication_error",
+        ),
+        (
+            {
+                "type": "error",
+                "code": "rate_limit_exceeded",
+                "error": {"code": "content_filter"},
+            },
+            "content_filter",
+        ),
+        (
+            {
+                "type": "error",
+                "code": "server_error",
+                "error": {"type": "invalid_request_error"},
+            },
+            "invalid_request_error",
+        ),
+    ],
+)
+def test_permanent_provider_reasons_override_retryable_hints(event, reason):
+    m = broker()
+    assert m.upstream_reason(event) == reason
+    error = m.BrokerFailure(
+        "upstream_error_event", upstream_reason=m.upstream_reason(event)
+    )
+    assert not m.retryable_upstream(error)
+
+
+def test_partial_delta_before_error_in_same_chunk_is_not_an_empty_response():
+    guard, request = setup_guard()
+    guard.check(request)
+    stream = broker().ResponseStream(guard)
+    body = b'data: {"type":"response.output_text.delta","delta":"PARTIAL"}\n\n'
+    body += b'data: {"type":"error","code":"unrecognized"}\n\n'
+    with pytest.raises(ValueError):
+        stream.feed(body)
+    assert not guard.current  # No completed item, but generation has started.
+    assert stream.output_started
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_buffered_upstream_output_disables_transport_retry(
+    tmp_path, monkeypatch, partial
+):
+    import asyncio
+    import json
+
+    import httpx
+
+    b = broker()
+    home = tmp_path / ".codex"
+    home.mkdir()
+    (home / "auth.json").write_text(
+        json.dumps(
+            {
+                "auth_mode": "chatgpt",
+                "tokens": {"access_token": "x" * 1000, "account_id": "account"},
+            }
+        )
+    )
+    monkeypatch.setattr(b.Path, "home", lambda: tmp_path)
+
+    class BrokenStream(httpx.AsyncByteStream):
+        async def __aiter__(self):
+            if partial:
+                yield b'data: {"type":"response.output_text.delta","delta":"partial"}\n\n'
+            raise httpx.ReadError("private transport details")
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        b.httpx,
+        "AsyncClient",
+        lambda **kw: original(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200,
+                    headers={"Content-Type": "text/event-stream"},
+                    stream=BrokenStream(),
+                )
+            ),
+            **kw,
+        ),
+    )
+
+    async def collect():
+        return [chunk async for chunk in b.SubscriptionInference()({})]
+
+    with pytest.raises(Exception) as caught:
+        asyncio.run(collect())
+    assert b.retryable_upstream(caught.value) is (not partial)
+    if partial:
+        assert caught.value.code == "upstream_partial_transport"

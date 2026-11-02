@@ -693,6 +693,8 @@ async def invoke_app_server(
         broker_evidence=dict(
             events=relay.guard.events,
             errors=relay.errors,
+            retries=relay.retries,
+            upstream_requests=relay.upstream_requests,
             mode="stub" if inference_forward is not None else "subscription",
         )
         if relay

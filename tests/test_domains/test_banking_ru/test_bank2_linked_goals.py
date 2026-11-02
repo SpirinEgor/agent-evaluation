@@ -433,6 +433,7 @@ def test_bank2_unknown_outcome_reference_preserves_declined_replacement():
 @pytest.mark.parametrize(
     "outcome,minimum,expected,components",
     [
+        ("failed_final", 0, 3975, (("1A", "2B", "4B", "5B", "6B"),)),
         ("failed_final", 18, 3975, (("1A", "2B", "4B", "5B", "6B"),)),
         ("failed_final", 17, 3975, (("1A", "2B", "4B", "5B", "6B"),)),
         ("succeeded", 18, 4000, (("X",), ("Y",))),
