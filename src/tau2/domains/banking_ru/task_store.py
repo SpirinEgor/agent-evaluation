@@ -85,6 +85,10 @@ def _load_member(member: Path, root: Path) -> dict:
             "ticket": inputs[1].read_bytes().decode("utf-8"),
             "evaluation_criteria": evaluation,
         }
+        instructions = task.get("user_scenario", {}).get("instructions")
+        if isinstance(instructions, dict):
+            for field in ("reason_for_call", "known_info"):
+                instructions.setdefault(field, task["ticket"].rstrip("\n"))
     return task
 
 
@@ -165,6 +169,26 @@ def task_outputs(path: Path, tasks: list[dict]) -> dict[Path, bytes]:
                 },
                 member.with_name("evaluation.json"): task["evaluation_criteria"],
             }
+            original = json.loads(member.read_bytes()) if member.exists() else {}
+            original_instructions = original.get("user_scenario", {}).get(
+                "instructions", {}
+            )
+            instructions = pieces[member].get("user_scenario", {}).get("instructions")
+            if isinstance(instructions, dict):
+                # Work on a copy: serializing must not mutate the caller's task.
+                from copy import deepcopy
+
+                pieces[member] = deepcopy(pieces[member])
+                instructions = pieces[member]["user_scenario"]["instructions"]
+                for field in ("reason_for_call", "known_info"):
+                    if field not in original_instructions:
+                        if field in instructions and instructions[field] != task[
+                            "ticket"
+                        ].rstrip("\n"):
+                            raise ValueError(
+                                "Derived ticket fields must match ticket.md"
+                            )
+                        instructions.pop(field, None)
             outputs[member.with_name("ticket.md")] = task["ticket"].encode("utf-8")
         else:
             pieces = {member: task}

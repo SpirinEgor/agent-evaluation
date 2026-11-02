@@ -20,7 +20,7 @@ def test_completion_only_toolkit_has_no_legacy_reply_assertions():
         "_customer_limit_values",
     ):
         assert not hasattr(tools, name)
-    assert callable(tools.assert_bank_12_referral)
+    assert not hasattr(tools, "assert_bank_12_referral")
     for task in get_tasks():
         for assertion in task.evaluation_criteria.env_assertions or []:
             assert callable(getattr(tools, assertion.func_name))

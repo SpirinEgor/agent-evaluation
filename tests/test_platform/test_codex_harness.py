@@ -19,7 +19,7 @@ def load_harness():
     return module
 
 
-def test_classify_requires_model_done_for_luna_fail():
+def test_classify_requires_model_done_for_fail():
     """A harness-closed session is never evidence of a Luna failure."""
     harness = load_harness()
 
@@ -34,7 +34,7 @@ def test_classify_requires_model_done_for_luna_fail():
     assert status == "invalid_missing_done"
 
 
-def test_classify_counts_completed_zero_reward_as_luna_fail():
+def test_classify_counts_completed_zero_reward_as_fail():
     """A completed, healthy zero-reward session is a model result."""
     harness = load_harness()
 
@@ -46,7 +46,7 @@ def test_classify_counts_completed_zero_reward_as_luna_fail():
         closed_by_harness=False,
     )
 
-    assert status == "luna_fail"
+    assert status == "fail"
 
 
 def test_build_command_exposes_only_the_opened_session_server():
@@ -537,7 +537,7 @@ def test_denial_time_is_observation_of_error_not_call_start():
     assert unknown["attempts"][0]["rejection_observed_at"] is None
 
 
-@pytest.mark.parametrize("reward,want", [(1.0, "luna_pass"), (0.0, "luna_fail")])
+@pytest.mark.parametrize("reward,want", [(1.0, "pass"), (0.0, "fail")])
 def test_business_result_is_independent_of_missing_done(reward, want):
     result = {"reward": reward, "business_process_only": True}
     status = load_harness().classify_result(
@@ -1088,3 +1088,18 @@ def test_container_cleanup_preserves_primary_error_and_partial_transcript(
         asyncio.run(h.invoke_isolated_codex([], "TICKET", 1, policy="STARTUP"))
     assert caught.value.partial_run is evidence
     assert "secondary container cleanup failure" in "\n".join(caught.value.__notes__)
+
+
+def test_broker_provenance_is_separate_from_legacy_cli_capture_status():
+    from test_platform.test_codex_broker import valid_evidence
+
+    contract, evidence = valid_evidence()
+    evidence["mode"] = "subscription"
+    harness = load_harness()
+    run = {"broker_evidence": evidence, "request_contract": contract}
+    assert harness.broker_journal_verification(run)["status"] == "verified"
+    next(e for e in evidence["events"] if e["event"] == "tool_result")["output"] = (
+        "FORGED"
+    )
+    assert harness.broker_journal_verification(run)["status"] == "unverified"
+    assert harness.broker_journal_verification({})["status"] == "unavailable"

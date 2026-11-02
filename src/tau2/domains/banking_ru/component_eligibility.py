@@ -111,3 +111,19 @@ def validate_eligibility(
                 raise ValueError("Неизвестное условие применимости")
         except (KeyError, TypeError, ValueError, AttributeError) as exc:
             raise ValueError("ERR_COMPONENT_NOT_APPLICABLE: " + str(exc)) from exc
+
+
+def prepare_access_policy(policy):
+    """Expand shared banking ownership rules before the generic ACTION evaluator."""
+    if policy is None or policy.policy_id != "banking_private_access":
+        return policy
+    policy = policy.model_copy(deep=True)
+    for name, fields in COMMON_TOOL_ACCESS.items():
+        policy.tool_arguments[name] = {**policy.tool_arguments.get(name, {}), **fields}
+        for collection in fields.values():
+            policy.resources_by_customer.setdefault(collection, {})
+    for name, collections in COMMON_RESULT_COLLECTIONS.items():
+        policy.result_resource_collections[name] = sorted(
+            set(policy.result_resource_collections.get(name, [])) | set(collections)
+        )
+    return type(policy).model_validate(policy.model_dump())

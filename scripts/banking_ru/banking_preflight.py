@@ -199,14 +199,14 @@ def task_reward_basis(spec):
 
 def task_snapshot_sha256(spec):
     """Match the canonical task fingerprint recorded by PlatformSession."""
-    from tau2.data_model.tasks import Task
+    from tau2.domains.banking_ru.environment import prepare_task
     from tau2.domains.banking_ru.task_store import load_tasks
 
     tasks = load_tasks(path_for(spec["data_dir"]) / "tasks.json")
     selected = [task for task in tasks if task["id"] == spec["task_id"]]
     if len(selected) != 1:
         raise ValueError("Preflight requires exactly one target task")
-    task = Task.model_validate(selected[0]).model_dump(mode="json")
+    task = prepare_task(selected[0]).model_dump(mode="json")
     return hashlib.sha256(
         json.dumps(task, sort_keys=True, ensure_ascii=False).encode()
     ).hexdigest()

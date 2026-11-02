@@ -189,3 +189,28 @@ def test_ticket_patch_rejects_unrepresentable_eof(tmp_path, replacement):
     after[0]["ticket"] = replacement
     with pytest.raises(ValueError, match="write_tasks"):
         render_task_patch(index, before, after)
+
+
+def test_ticket_compatibility_fields_are_derived_without_persisting_copies(tmp_path):
+    index, tasks = indexed(tmp_path)
+    folder = tmp_path / "tasks/bank_002"
+    folder.mkdir()
+    scenario = {
+        "id": "Bank 2",
+        "user_scenario": {"instructions": {"domain": "banking_ru"}},
+    }
+    (folder / "scenario.json").write_text(json.dumps(scenario))
+    (folder / "ticket.md").write_text("Обращение\n")
+    (folder / "evaluation.json").write_text("{}")
+    index.write_text(json.dumps({"task_files": ["tasks/bank_002/scenario.json"]}))
+    loaded = load_tasks(index)
+    instructions = loaded[0]["user_scenario"]["instructions"]
+    assert instructions["reason_for_call"] == instructions["known_info"] == "Обращение"
+    write_tasks(index, loaded)
+    assert json.loads((folder / "scenario.json").read_text()) == scenario
+    assert loaded[0]["user_scenario"]["instructions"] == instructions
+    (folder / "ticket.md").write_text("Новое обращение\n")
+    assert (
+        load_tasks(index)[0]["user_scenario"]["instructions"]["reason_for_call"]
+        == "Новое обращение"
+    )

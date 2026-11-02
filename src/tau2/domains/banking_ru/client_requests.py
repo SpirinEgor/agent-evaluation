@@ -5,7 +5,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
-from tau2.domains.banking_ru.business_assertions import BankingBusinessAssertions
 from tau2.domains.banking_ru.closure_signature import closure_document, document_hash
 from tau2.domains.banking_ru.data_model import CashbackInvestigationItem, Customer
 from tau2.domains.banking_ru.file_pilot import FileBankingTools, FileResponse
@@ -208,10 +207,7 @@ ClientRequest = Annotated[
 REQUEST_ADAPTER = TypeAdapter(ClientRequest)
 
 
-class StructuredIdentityBankingTools(
-    BankingBusinessAssertions,
-    FileBankingTools,
-):
+class StructuredIdentityBankingTools(FileBankingTools):
     """Client receipts are replayable but do not change the bank DB."""
 
     def __init__(self, db, corpus):

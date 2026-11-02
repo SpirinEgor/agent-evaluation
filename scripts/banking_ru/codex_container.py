@@ -10,7 +10,7 @@ from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 
-DEFAULT_IMAGE = "banking-codex-isolated:0.162.0-alpha.17.2"
+DEFAULT_IMAGE = "banking-codex-isolated:0.166.0-alpha.5.1"
 
 BANK_TOOLS = {"bank_directory", "bank_call"}
 

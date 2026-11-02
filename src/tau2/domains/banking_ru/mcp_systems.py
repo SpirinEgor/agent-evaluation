@@ -124,8 +124,6 @@ TOOL_OWNERS = {
     "order_statement": "documents",
     "share_document": "documents",
     "unblock_operation": "risk",
-    "search_knowledge": "knowledge",
-    "get_article": "knowledge",
 }
 
 

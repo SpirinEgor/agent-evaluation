@@ -1,4 +1,4 @@
-"""Bank12's retained assertion checks registered business state, never reply text."""
+"""Bank12 business-state alternatives through the active whole evaluator."""
 
 from copy import deepcopy
 
@@ -82,23 +82,3 @@ def test_bank12_rejects_missing_or_extra_business_state(route):
                 },
             ).is_error
     _grade(session, 0.0)
-
-
-def test_bank12_referral_predicate_preserves_handoff_order_and_linkage():
-    session = _session()
-    _handoff(session)
-    tools = session.env.tools
-    assert tools.assert_bank_12_referral(OWNER)
-    original_log = list(tools._successful_tool_calls)
-    # The predicate must still reject an impossible handoff-first history even
-    # when a caller supplies the otherwise correct final state directly.
-    tools._successful_tool_calls[:] = ["escalate_to_human", "create_case"]
-    assert not tools.assert_bank_12_referral(OWNER)
-    tools._successful_tool_calls[:] = original_log
-    handoff = next(
-        c
-        for c in tools.db.cases.values()
-        if c.customer_id == OWNER and c.escalation_request is not None
-    )
-    handoff.case_id = None
-    assert not tools.assert_bank_12_referral(OWNER)

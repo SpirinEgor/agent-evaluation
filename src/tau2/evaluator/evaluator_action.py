@@ -323,20 +323,7 @@ def _tool_access_failures(
         }
         for collection, grouped in policy.resources_by_customer.items()
     }
-    from tau2.domains.banking_ru.component_eligibility import (
-        COMMON_RESULT_COLLECTIONS,
-        COMMON_TOOL_ACCESS,
-    )
-
-    result_collections = dict(policy.result_resource_collections)
-    if policy.policy_id == "banking_private_access":
-        for name, collections in COMMON_RESULT_COLLECTIONS.items():
-            result_collections[name] = list(
-                set(result_collections.get(name, [])) | set(collections)
-            )
-        for fields in COMMON_TOOL_ACCESS.values():
-            for collection in fields.values():
-                owners.setdefault(collection, {})
+    result_collections = policy.result_resource_collections
     allowed = set(policy.allowed_customer_ids)
     authenticated: dict[str, _ObservedCall] = {}
     dynamic_sources: dict[tuple[str, str], list[_ObservedCall]] = {}
@@ -397,10 +384,6 @@ def _tool_access_failures(
                 violation(item, reason)
             continue
         fields = policy.tool_arguments.get(call.name)
-        if policy.policy_id == "banking_private_access":
-            shared = COMMON_TOOL_ACCESS.get(call.name)
-            if shared is not None:
-                fields = {**(fields or {}), **shared}
         if fields is None:
             continue
         before_failures = len(failures)

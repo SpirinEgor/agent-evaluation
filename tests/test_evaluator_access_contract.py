@@ -6,6 +6,7 @@ import pytest
 
 from tau2.data_model.message import AssistantMessage, Tick, ToolCall, ToolMessage
 from tau2.data_model.tasks import Action, ToolAccessPolicy
+from tau2.domains.banking_ru.component_eligibility import prepare_access_policy
 from tau2.evaluator.evaluator_action import _tool_access_failures
 from tau2.evaluator.trace_evidence import evidence_from_messages, evidence_from_ticks
 
@@ -264,7 +265,9 @@ def test_nested_foreign_selector_rejected_even_on_error(mode):
 @pytest.mark.parametrize("mode", ["half", "full"])
 @pytest.mark.parametrize("name", ["get_service_incidents", "get_partner_confirmations"])
 def test_shared_component_reads_enforce_owner_and_identity(mode, name):
-    policy = POLICY.model_copy(update={"policy_id": "banking_private_access"})
+    policy = prepare_access_policy(
+        POLICY.model_copy(update={"policy_id": "banking_private_access"})
+    )
     auth, result = pair("verify_identity", {"customer_id": "own"}, id="auth")
     own, own_result = pair(
         name, {"customer_id": "own"}, id="read", content='{"records":[]}'
@@ -290,6 +293,7 @@ def test_shared_component_reads_enforce_owner_and_identity(mode, name):
 def test_common_resolution_operation_access_learns_received_ids(mode, foreign):
     policy = POLICY.model_copy(deep=True)
     policy.policy_id = "banking_private_access"
+    policy = prepare_access_policy(policy)
     policy.resources_by_customer["reward_resolution_executions"] = {
         "other": ["foreign-op"]
     }
@@ -338,6 +342,7 @@ def test_common_resolution_operation_access_learns_received_ids(mode, foreign):
 def test_resolution_operation_equivalent_receipts_before_fallback(mode, variant):
     policy = POLICY.model_copy(deep=True)
     policy.policy_id = "banking_private_access"
+    policy = prepare_access_policy(policy)
     policy.resources_by_customer["reward_resolution_executions"] = {
         "other": ["foreign-op"]
     }

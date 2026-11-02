@@ -84,5 +84,5 @@ The [evaluation guide](../../../docs/banking-ru/evaluation.md) records actual
 migration status separately from the target DB × ACTION contract.
 Do not change another task's profile or remove ENV guards as incidental cleanup.
 Banking has no task splits; the generic split rules above do not require adding one.
-The three-file task format and new discovery are targets, not implemented loaders.
+The three-file task format and directory discovery are implemented; see the banking guides for the current loader and interface contracts.
 Keep local instructions and data README consistent with changes in the same work.

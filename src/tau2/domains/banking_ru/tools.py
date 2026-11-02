@@ -26,7 +26,6 @@ from pydantic import TypeAdapter
 
 from tau2.domains.banking_ru.data_model import (
     Account,
-    Article,
     BankingDB,
     BlockReason,
     BranchComplaint,
@@ -1003,70 +1002,6 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         if best is None:
             return "Клиент: «Не могу ответить на этот вопрос — я такого не знаю»."
         return f"Клиент: «{best.answer}»"
-
-    @is_tool(ToolType.READ)
-    def search_knowledge(self, query: str, limit: int = 5) -> list[dict]:
-        """
-        Найти статьи базы знаний банка по запросу. Возвращает краткие карточки:
-        чтобы прочитать правило целиком, откройте статью через `get_article`.
-
-        Args:
-            query: Слова запроса, например «оспаривание частичный возврат».
-            limit: Сколько статей вернуть, не более 10. По умолчанию 5.
-
-        Returns:
-            Список карточек: идентификатор, раздел, название, срок действия
-            редакции и первые строки текста.
-
-        Raises:
-            ValueError: Если запрос пуст или limit вне диапазона 1..10.
-        """
-        if not query or not query.strip():
-            raise _error(ERR_INVALID_ARGUMENT, "Запрос не может быть пустым.")
-        if not 1 <= limit <= 10:
-            raise _error(ERR_INVALID_ARGUMENT, "limit должен быть в диапазоне 1..10.")
-        terms = _tokens(query)
-        scored = []
-        for article in self.db.articles.values():
-            haystack = _tokens(
-                " ".join([article.title, article.section, " ".join(article.keywords)])
-            )
-            body = _tokens(article.body)
-            score = sum(3 for t in terms if t in haystack)
-            score += sum(1 for t in terms if t in body)
-            if score:
-                scored.append((-score, article.id, article))
-        scored.sort()
-        return [
-            {
-                "id": a.id,
-                "section": a.section,
-                "title": a.title,
-                "effective_from": a.effective_from,
-                "effective_to": a.effective_to,
-                "snippet": a.body[:180].replace("\n", " ") + "…",
-            }
-            for _, _, a in scored[:limit]
-        ]
-
-    @is_tool(ToolType.READ)
-    def get_article(self, article_id: str) -> Article:
-        """
-        Прочитать статью базы знаний целиком.
-
-        Args:
-            article_id: Идентификатор статьи, например 'kb_110'.
-
-        Returns:
-            Статья с полным текстом, сроком действия редакции и ссылками.
-
-        Raises:
-            ValueError: Если статья не найдена.
-        """
-        article = self.db.articles.get(article_id)
-        if article is None:
-            raise _error(ERR_NOT_FOUND, f"Статья {article_id} не найдена.")
-        return article
 
     @is_tool(ToolType.READ)
     def list_tariffs(self) -> list[Tariff]:
@@ -4157,10 +4092,6 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         """
         return tool_name not in self.db.tool_calls_log
 
-    def assert_tool_call_count(self, tool_name: str, expected: int) -> bool:
-        """Инструмент вызван ровно ожидаемое число раз."""
-        return self.db.tool_calls_log.count(tool_name) == expected
-
     def assert_exactly_one_claim(
         self, customer_id: str, transaction_id: str, expected_amount: float
     ) -> bool:
@@ -4188,12 +4119,6 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
     ) -> bool:
         """Ни одной попытки изменения при требующем решения совпадающем pending."""
         return (card_id, limit_type) not in self._pending_limit_attempts
-
-    def assert_article_is_reachable(self, article_id: str, query: str) -> bool:
-        """Статья находится поиском по запросу — задача не опирается на статью,
-        которую нельзя найти словами клиента."""
-        found = self.search_knowledge(query=query, limit=10)
-        return any(card["id"] == article_id for card in found)
 
     def assert_document_shared(self, document_id: str, expected_shared: bool) -> bool:
         """Документ передан клиенту (или не передавался) — как ожидается."""

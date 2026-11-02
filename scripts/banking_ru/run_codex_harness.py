@@ -40,7 +40,7 @@ def classify_result(
         return "invalid_harness"
     if result.get("grading_status") == "needs_review":
         return "needs_review"
-    return "luna_pass" if result["reward"] == 1.0 else "luna_fail"
+    return "pass" if result["reward"] == 1.0 else "fail"
 
 
 async def run_batch(
@@ -322,7 +322,7 @@ async def invoke_isolated_codex(
     command: list[str],
     prompt: str,
     timeout_seconds: float,
-    image: str = "banking-codex-isolated:0.162.0-alpha.17.2",
+    image: str = "banking-codex-isolated:0.166.0-alpha.5.1",
     policy: str = "",
     *,
     expected_image_id: str | None = None,
@@ -562,6 +562,28 @@ def collect_attempt_journal(
     )
 
 
+def broker_journal_verification(run):
+    """Keep old CLI capture flags separate from verified host RPC provenance."""
+    if run is None:
+        return {"status": "unavailable"}
+    evidence = run.get("broker_evidence")
+    contract = run.get("request_contract")
+    if evidence is None or contract is None:
+        return {"status": "unavailable"}
+    spec = importlib.util.spec_from_file_location(
+        "banking_codex_container", Path(__file__).with_name("codex_container.py")
+    )
+    runtime = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runtime)
+    try:
+        verified = runtime.broker_module().verify_trajectory(
+            evidence, contract, runtime.validate_model_request
+        )
+    except (ValueError, KeyError, TypeError):
+        return {"status": "unverified"}
+    return {"status": "verified", "scope": "host_authorized_bank_rpc", **verified}
+
+
 def attach_persisted_journal(record: dict, results_dir: Path) -> None:
     """Bind CLI observations to the server-owned terminal session journal."""
     token = record.get("token")
@@ -594,6 +616,7 @@ def attach_persisted_journal(record: dict, results_dir: Path) -> None:
         "argument_capture_complete": journal["argument_capture_complete"],
         "boundary": journal["boundary"],
         "unknown_cases_require_audit": True,
+        "broker_trajectory": broker_journal_verification(run),
     }
 
 
@@ -606,7 +629,7 @@ async def run_one_attempt(
     timeout_seconds: float,
     work_root: Path,
     mcp_layout: str = "directory",
-    container_image: str = "banking-codex-isolated:0.162.0-alpha.17.2",
+    container_image: str = "banking-codex-isolated:0.166.0-alpha.5.1",
     expected_image_id: str | None = None,
 ) -> dict:
     """Open, run, classify and close one session exactly once."""
@@ -685,6 +708,7 @@ async def run_one_attempt(
                 "argument_capture_complete": journal["argument_capture_complete"],
                 "boundary": journal["boundary"],
                 "unknown_cases_require_audit": True,
+                "broker_trajectory": broker_journal_verification(run),
             },
             "attempt_reward": 0.0
             if journal["external_refusals"]
@@ -721,6 +745,7 @@ async def run_one_attempt(
             "event_observation": {
                 "argument_capture_complete": None,
                 "unknown_cases_require_audit": True,
+                "broker_trajectory": broker_journal_verification(saved_run),
             },
         }
 

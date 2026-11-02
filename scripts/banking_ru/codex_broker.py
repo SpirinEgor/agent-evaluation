@@ -429,7 +429,7 @@ class SubscriptionInference:
             "Accept": "text/event-stream",
             "OpenAI-Beta": "responses=experimental",
             "originator": "codex_cli_rs",
-            "User-Agent": "codex_cli_rs/0.162.0-alpha.17.2",
+            "User-Agent": "codex_cli_rs/0.166.0-alpha.5.1",
         }
         filt = SecretFilter([v.encode() for v in tokens.values() if isinstance(v, str)])
         async with httpx.AsyncClient(
@@ -726,10 +726,10 @@ class InferenceRelay:
         await self.close()
 
 
-def verify_evidence(evidence, contract, validate_initial):
-    """Replay host provenance instead of trusting a positive receipt flag."""
-    if evidence.get("mode") != "stub" or evidence.get("errors"):
-        raise ValueError("Physical proof must use a successful local stub")
+def verify_trajectory(evidence, contract, validate_initial):
+    """Replay a complete host-owned trajectory without asserting container isolation."""
+    if evidence.get("mode") not in {"stub", "subscription"} or evidence.get("errors"):
+        raise ValueError("A successful host broker trajectory is required")
     guard = ConversationGuard(contract, validate_initial)
     finished = False
     results = 0
@@ -758,14 +758,21 @@ def verify_evidence(evidence, contract, validate_initial):
         not events
         or events[-1].get("event") != "broker_closed"
         or not finished
-        or guard.requests < 3
-        or results < 2
+        or guard.requests < 1
     ):
         raise ValueError("Missing complete multi-step model/MCP proof")
     return dict(
         passed=True,
         model_requests=guard.requests,
         tool_results=results,
-        network="none",
-        host_only_auth=True,
     )
+
+
+def verify_evidence(evidence, contract, validate_initial):
+    """The physical boundary requires a multi-step local stub, never live inference."""
+    if evidence.get("mode") != "stub":
+        raise ValueError("Physical proof must use a successful local stub")
+    result = verify_trajectory(evidence, contract, validate_initial)
+    if result["model_requests"] < 3 or result["tool_results"] < 2:
+        raise ValueError("Missing complete multi-step model/MCP proof")
+    return dict(result, network="none", host_only_auth=True)

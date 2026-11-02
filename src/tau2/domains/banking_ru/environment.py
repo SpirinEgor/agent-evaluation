@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Optional
 
 from tau2.data_model.tasks import Task
+from tau2.domains.banking_ru.component_eligibility import prepare_access_policy
 from tau2.domains.banking_ru.data_model import BankingDB, ClientAnswer
 from tau2.domains.banking_ru.task_store import load_tasks
 from tau2.domains.banking_ru.utils import (
@@ -69,4 +70,14 @@ def get_tasks(task_split_name: Optional[str] = None) -> list[Task]:
     task_split_name is unused, retained for the shared task-loader interface.
     Banking task splits are not defined.
     """
-    return [Task.model_validate(task) for task in load_tasks(BANKING_RU_TASK_SET_PATH)]
+    return [prepare_task(task) for task in load_tasks(BANKING_RU_TASK_SET_PATH)]
+
+
+def prepare_task(value: dict) -> Task:
+    """The canonical runtime task, including domain-owned shared access rules."""
+    task = Task.model_validate(value)
+    if task.evaluation_criteria is not None:
+        task.evaluation_criteria.tool_access_policy = prepare_access_policy(
+            task.evaluation_criteria.tool_access_policy
+        )
+    return task

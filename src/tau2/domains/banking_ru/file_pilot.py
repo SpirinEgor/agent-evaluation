@@ -31,12 +31,8 @@ class FileBankingTools(DiscoveryBankingTools, BankingTools):
 
     @property
     def tools(self):
-        """Remove both discovery and invocation of legacy knowledge APIs."""
-        return {
-            k: v
-            for k, v in super().tools.items()
-            if k not in {"search_knowledge", "get_article"} | self.excluded_tools
-        }
+        """Apply the configured tool exclusions."""
+        return {k: v for k, v in super().tools.items() if k not in self.excluded_tools}
 
     @is_tool(ToolType.READ)
     def file_list(self, path: str = "/") -> FileResponse:
