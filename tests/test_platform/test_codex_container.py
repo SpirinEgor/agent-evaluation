@@ -282,7 +282,11 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                         id="fc_fixture",
                         call_id="call_fixture",
                         name="bank_directory",
-                        namespace="functions",
+                        metadata={"turn_id": "own-turn"},
+                        internal_chat_message_metadata_passthrough={
+                            "turn_id": "own-turn",
+                            "create_time": 123.5,
+                        },
                         arguments='{"operation":"list_systems"}',
                     )
                 elif len(payloads) == 2:

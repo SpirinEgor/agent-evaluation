@@ -16,12 +16,18 @@ MAX_REQUESTS = 512
 MAX_TRANSCRIPT = 128 * 1024 * 1024
 
 
-def canonical(items):
+def canonical(items, *, model_output=False):
     result = deepcopy(items)
     for item in result:
         item.pop("id", None)
         # Codex does not persist response-item delivery status in prompt history.
         item.pop("status", None)
+        if model_output:
+            # Subscription responses carry delivery metadata that Codex does
+            # not serialize into continuation history. Strip it only on the
+            # trusted response side; guest-supplied extra fields still fail.
+            item.pop("metadata", None)
+            item.pop("internal_chat_message_metadata_passthrough", None)
         # Codex omits empty response annotations when serializing history.
         # Nonempty annotations remain significant and must match exactly.
         if item.get("type") == "message":
@@ -119,7 +125,7 @@ class ConversationGuard:
         with self.lock:
             if not self.inflight or self.failed or self.response_complete:
                 raise ValueError("Model item outside a response")
-            row = canonical([item])[0]
+            row = canonical([item], model_output=True)[0]
             if row.get("type") not in {"message", "reasoning", "function_call"}:
                 raise ValueError("Unsupported model output type")
             if row["type"] == "message" and row.get("role") != "assistant":
@@ -164,7 +170,7 @@ class ConversationGuard:
                 or not isinstance(output, list)
             ):
                 raise ValueError("Unexpected response completion")
-            rows = canonical(output)
+            rows = canonical(output, model_output=True)
             if not self.current:
                 for item in output:
                     self.observe_item(item)

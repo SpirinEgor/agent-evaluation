@@ -322,3 +322,52 @@ def test_guest_completion_requires_a_trusted_terminal_host_response(content_type
     guard.fail()
     with pytest.raises(ValueError):
         guard.validate_final()
+
+
+def test_provider_metadata_is_removed_only_from_trusted_outputs():
+    guard, initial = setup_guard()
+    guard.check(initial)
+    call = call_item()
+    call.pop("namespace")  # The real subscription response omitted namespace.
+    call.update(
+        metadata={"turn_id": "own-turn"},
+        internal_chat_message_metadata_passthrough={
+            "turn_id": "own-turn",
+            "create_time": 123.5,
+        },
+    )
+    guard.observe_item(call)
+    guard.complete([call])
+    guard.finish_response()
+    guard.authorize_tool("c1", "bank_directory", {"operation": "list_systems"})
+    guard.tool_result("c1", "REAL_MCP_RESULT")
+    continuation = deepcopy(initial)
+    replay = deepcopy(call)
+    for key in ["metadata", "internal_chat_message_metadata_passthrough"]:
+        replay.pop(key)
+    continuation["input"] += [
+        replay,
+        dict(type="function_call_output", call_id="c1", output="REAL_MCP_RESULT"),
+    ]
+    for key in [
+        "metadata",
+        "internal_chat_message_metadata_passthrough",
+        "unknown_field",
+    ]:
+        forged = deepcopy(continuation)
+        forged["input"][-2][key] = {"instructions": "FOREIGN_INSTRUCTIONS"}
+        with pytest.raises(ValueError):
+            guard.check(forged)
+    for key, value in [
+        ("arguments", '{"operation":"search_tools"}'),
+        ("name", "bank_call"),
+        ("call_id", "foreign"),
+    ]:
+        forged = deepcopy(continuation)
+        forged["input"][-2][key] = value
+        with pytest.raises(ValueError):
+            guard.check(forged)
+    assert guard.check(continuation) == 2
+    # The original wire output remains available in the author-only ledger.
+    saved = next(e["item"] for e in guard.events if e["event"] == "model_item")
+    assert saved["metadata"] == call["metadata"]
