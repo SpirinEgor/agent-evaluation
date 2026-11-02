@@ -16,6 +16,58 @@ MAX_REQUESTS = 512
 MAX_TRANSCRIPT = 128 * 1024 * 1024
 
 
+class BrokerFailure(ValueError):
+    """Known failure metadata only; never retain upstream text or credentials."""
+
+    def __init__(self, code, status=None):
+        super().__init__(code)
+        self.code = code
+        self.status = status
+
+
+def diagnostic(error, stage):
+    known = {
+        "Incomplete model response": "upstream_sse_failure",
+        "Missing complete authoritative model response": "stream_missing_completion",
+        "Expected SSE, not HTML/JSON": "invalid_sse_format",
+        "Model response exceeded byte limit": "response_limit",
+        "Invalid response completion": "invalid_completion",
+        "Completed response differs from streamed output": "response_mismatch",
+        "Continuation is not the exact host-owned trajectory": "history_mismatch",
+        "Sensitive upstream output": "sensitive_output_blocked",
+        "Unsupported model output type": "unsupported_output",
+        "Parallel function calls are forbidden": "parallel_calls_blocked",
+    }
+    code = (
+        error.code
+        if isinstance(error, BrokerFailure)
+        and error.code
+        in {
+            "upstream_http_status",
+            "unexpected_media_type",
+            "upstream_response_failed",
+            "upstream_response_incomplete",
+            "upstream_error_event",
+        }
+        else known.get(str(error), "unclassified")
+    )
+    # Unknown messages may contain secrets: only fixed allowlisted codes leave here.
+    if isinstance(error, (TimeoutError, httpx.TimeoutException)):
+        code = "timeout"
+    elif isinstance(error, httpx.TransportError):
+        code = "transport_error"
+    elif isinstance(error, json.JSONDecodeError) and stage == "response_stream":
+        code = "invalid_sse_json"
+    result = {"stage": stage, "code": code}
+    if (
+        isinstance(error, BrokerFailure)
+        and isinstance(error.status, int)
+        and 100 <= error.status <= 599
+    ):
+        result["http_status"] = error.status
+    return result
+
+
 def canonical(items, *, model_output=False):
     result = deepcopy(items)
     for item in result:
@@ -314,7 +366,7 @@ class SubscriptionInference:
                 "POST", UPSTREAM, headers=headers, json=body
             ) as response:
                 if response.status_code != 200:
-                    raise ValueError("Upstream rejected inference")
+                    raise BrokerFailure("upstream_http_status", response.status_code)
                 media = (
                     response.headers.get("Content-Type", "")
                     .split(";")[0]
@@ -322,7 +374,7 @@ class SubscriptionInference:
                     .lower()
                 )
                 if media and media != "text/event-stream":
-                    raise ValueError("Unexpected upstream media type")
+                    raise BrokerFailure("unexpected_media_type")
                 async for chunk in response.aiter_bytes():
                     clean = filt.feed(chunk)
                     if clean:
@@ -377,7 +429,13 @@ class ResponseStream:
             self.guard.complete(event["response"].get("output"))
             self.completed = True
         elif kind in {"response.failed", "response.incomplete", "error"}:
-            raise ValueError("Incomplete model response")
+            raise BrokerFailure(
+                {
+                    "response.failed": "upstream_response_failed",
+                    "response.incomplete": "upstream_response_incomplete",
+                    "error": "upstream_error_event",
+                }[kind]
+            )
 
     def finish(self):
         if self.buffer:
@@ -458,6 +516,7 @@ class InferenceRelay:
             while line := await self.process.stdout.readline():
                 received += 1
                 event, ident, started, sent = {}, None, False, False
+                stage = "relay_envelope"
                 try:
                     if received > MAX_REQUESTS + 16:
                         raise ValueError("Relay envelope budget exhausted")
@@ -470,22 +529,30 @@ class InferenceRelay:
                         or event.get("path") != "/v1/responses"
                     ):
                         raise ValueError("Only fixed inference route is allowed")
+                    stage = "request_validation"
                     self.guard.check(event["body"])
                     started = True
                     stream = ResponseStream(self.guard)
                     async with asyncio.timeout(120):
+                        stage = "upstream_transport"
                         async for chunk in self.forward(event["body"]):
+                            stage = "response_stream"
                             stream.feed(chunk)
                             if not sent:
+                                stage = "relay_delivery"
                                 await self.send(dict(id=ident, status=200))
                                 sent = True
+                            stage = "relay_delivery"
                             await self.send(
                                 dict(id=ident, chunk=base64.b64encode(chunk).decode())
                             )
+                            stage = "upstream_transport"
+                        stage = "response_stream"
                         stream.finish()
+                        stage = "relay_delivery"
                         await self.send(dict(id=ident, end=True))
                 except Exception as error:
-                    self.errors.append({"error_type": type(error).__name__})
+                    self.errors.append(diagnostic(error, stage))
                     self.guard.fail()
                     if ident is None:
                         raise ValueError("Invalid untrusted relay protocol") from None

@@ -229,6 +229,14 @@ def test_host_auth_is_added_only_to_fixed_upstream_and_redirects_are_rejected(
     with pytest.raises(ValueError):
         asyncio.run(collect())
     assert len(seen) == 2  # redirect target was never contacted
+    status[0] = 429
+    with pytest.raises(b.BrokerFailure) as caught:
+        asyncio.run(collect())
+    assert b.diagnostic(caught.value, "upstream_transport") == {
+        "stage": "upstream_transport",
+        "code": "upstream_http_status",
+        "http_status": 429,
+    }
 
 
 def valid_evidence():
@@ -371,3 +379,99 @@ def test_provider_metadata_is_removed_only_from_trusted_outputs():
     # The original wire output remains available in the author-only ledger.
     saved = next(e["item"] for e in guard.events if e["event"] == "model_item")
     assert saved["metadata"] == call["metadata"]
+
+
+@pytest.mark.parametrize(
+    "case, expected",
+    [
+        (
+            "http",
+            {
+                "stage": "upstream_transport",
+                "code": "upstream_http_status",
+                "http_status": 429,
+            },
+        ),
+        ("failed", {"stage": "response_stream", "code": "upstream_response_failed"}),
+        (
+            "truncated",
+            {"stage": "response_stream", "code": "stream_missing_completion"},
+        ),
+        ("html", {"stage": "response_stream", "code": "invalid_sse_format"}),
+        ("secret", {"stage": "upstream_transport", "code": "unclassified"}),
+    ],
+)
+def test_relay_records_safe_failure_diagnostics(case, expected):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+
+    b = broker()
+    guard, request = setup_guard()
+
+    async def forward(body):
+        if case == "http":
+            raise b.BrokerFailure("upstream_http_status", 429)
+        if case == "secret":
+            raise RuntimeError("TOKEN_CANARY PRIVATE_BODY")
+        if case == "failed":
+            yield b'data: {"type":"response.failed","error":"TOKEN_CANARY"}\n\n'
+        elif case == "html":
+            yield b"<html>PRIVATE_BODY</html>\n"
+        else:
+            yield b'data: {"type":"response.created"}\n\n'
+
+    async def run():
+        relay = b.InferenceRelay("fixture", guard, forward, None)
+        reader = asyncio.StreamReader()
+        reader.feed_data(
+            (
+                json.dumps(
+                    {
+                        "id": 1,
+                        "method": "POST",
+                        "path": "/v1/responses",
+                        "body": request,
+                    }
+                )
+                + "\n"
+            ).encode()
+        )
+        reader.feed_eof()
+        relay.process = SimpleNamespace(stdout=reader)
+        sent = []
+
+        async def send(value):
+            sent.append(value)
+
+        relay.send = send
+        await relay.serve()
+        return relay.errors, sent
+
+    errors, sent = asyncio.run(run())
+    assert errors == [expected]
+    assert "TOKEN_CANARY" not in json.dumps(errors)
+    assert "PRIVATE_BODY" not in json.dumps(errors)
+    assert guard.failed and sent[-1]["end"] is True
+
+
+def test_transport_and_bad_json_have_safe_codes():
+    import json
+
+    import httpx
+
+    b = broker()
+    assert (
+        b.diagnostic(httpx.ReadTimeout("SECRET"), "upstream_transport")["code"]
+        == "timeout"
+    )
+    assert (
+        b.diagnostic(httpx.ConnectError("SECRET"), "upstream_transport")["code"]
+        == "transport_error"
+    )
+    try:
+        json.loads("{SECRET")
+    except json.JSONDecodeError as error:
+        diagnostic = b.diagnostic(error, "response_stream")
+    assert diagnostic == {"stage": "response_stream", "code": "invalid_sse_json"}
+    assert "SECRET" not in json.dumps(diagnostic)
