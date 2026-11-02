@@ -25,16 +25,24 @@ def _payment_route(task, route):
     reference = deepcopy(task.evaluation_criteria.actions)
     by_id = {a.action_id: a for a in reference}
     start = next(
-        i for i, a in enumerate(reference) if a.action_id == "bank2:v5:consent"
+        i for i, a in enumerate(reference) if a.action_id == "bank2:v12:consent-first"
     )
     actions = reference[:start]
-    consent = by_id["bank2:v5:consent"]
-    pay = by_id["bank2:v5:pay"]
+    consent = by_id["bank2:v12:consent-first"]
+    pay = by_id["bank2:v12:pay-first"]
     offers = by_id["bank2:v5:offers"]
-    status = by_id["bank2:v11:status"]
+    status = pay.model_copy(deep=True)
+    status.name = "get_reward_resolution_status"
+    status.action_id = "bank2:v11:status"
+    status.required_for_reward = False
+    status.compare_args = []
+    status.arguments = {
+        "resolution_operation_id": "resolution:case_610903:offer_610741"
+    }
     operation_id = status.arguments["resolution_operation_id"]
     sequence = {
         "reverse": ["X", "resolve", "C"],
+        "direct": ["C"],
         "early_y": ["Y", "X", "resolve"],
         "relaxed": ["X", "resolve", "R", "Y"],
         "suboptimal": ["Y"],
@@ -147,13 +155,13 @@ def test_bank2_minimum_and_prior_payments_select_composite_reference():
     task = next(t for t in get_tasks() if t.id == "Bank 2")
     db = PlatformSession(task, get_environment).env.tools.db
     preferences = db.reward_resolution_preferences["gromov_a_1187"].model_dump()
-    assert preferences.get("minimum_payouts") == {"txn_804219": 18}
+    assert preferences.get("minimum_payouts") == {}
     payouts = [
         action.arguments["offer_id"]
         for action in task.evaluation_criteria.actions
         if action.name == "execute_reward_resolution"
     ]
-    assert payouts == ["offer_610741", "offer_610735"]
+    assert payouts == ["offer_610735"]
 
 
 @pytest.mark.parametrize("mode", ["half", "full"])
@@ -161,6 +169,7 @@ def test_bank2_minimum_and_prior_payments_select_composite_reference():
     "route,want_db,want_action",
     [
         ("reference", 1, 1),
+        ("direct", 1, 1),
         ("reverse", 1, 1),
         ("early_y", 0, 1),
         ("strict_decline", 1, 1),
@@ -183,6 +192,11 @@ def test_bank2_minimum_and_prior_payments_select_composite_reference():
 )
 def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action):
     task = next(t for t in get_tasks() if t.id == "Bank 2")
+    if route == "strict_decline":
+        task = task.model_copy(deep=True)
+        task.initial_state.initialization_data.agent_data[
+            "reward_resolution_preferences"
+        ]["gromov_a_1187"]["minimum_payouts"] = {"txn_804219": 18}
     replacement_consent = deepcopy(
         next(
             a
@@ -195,6 +209,9 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
         task.initial_state.initialization_data.agent_data[
             "reward_resolution_execution_profiles"
         ] = {"offer_610741": "succeeded"}
+        for evidence in task.evaluation_criteria.result_evidence:
+            if evidence.before_action_id == "bank2:v12:pay-first":
+                evidence.before_action_id = "bank2:v5:pay"
         task.evaluation_criteria.actions = _payment_route(task, route)
     actions = (
         _payment_route(task, "replay" if route == "late_origin_replay" else route)
@@ -410,7 +427,7 @@ def test_bank2_unknown_outcome_reference_preserves_declined_replacement():
         a.arguments["offer_id"]
         for a in actions
         if a.name == "execute_reward_resolution"
-    ] == ["offer_610741", "offer_610735"]
+    ] == ["offer_610735"]
 
 
 @pytest.mark.parametrize(
@@ -507,12 +524,7 @@ def test_composite_requires_received_permission_to_lower_minimum(delivery):
         "reward_resolution_preferences"
     ]["gromov_a_1187"]
     prefs["minimum_payouts"] = {"txn_804219": 20}
-    prefs["text"] = prefs["text"].replace("не меньше 18 рублей", "не меньше 20 рублей")
-    next(
-        e
-        for e in task.evaluation_criteria.result_evidence
-        if e.evidence_id == "bank2:v5:preferences"
-    ).expected_fields["minimum_payouts"] = {"txn_804219": 20}
+    prefs["text"] = "По первой покупке хочу не меньше 20 рублей."
     prefs["minimum_payout_reduction_limits"] = {"txn_804219": 19.5}
     actions = [
         a
@@ -538,6 +550,15 @@ def test_composite_requires_received_permission_to_lower_minimum(delivery):
             "minimum_amount": 19.5,
         },
     }
+    preferences_action = consent.model_copy(deep=True)
+    preferences_action.action_id = "test:read-minimum"
+    preferences_action.required_for_reward = False
+    preferences_action.argument_values = {}
+    preferences_action.arguments = {
+        "customer_id": "gromov_a_1187",
+        "request": {"type": "case_clarification", "topic": "resolution_preferences"},
+    }
+    actions.insert(actions.index(consent), preferences_action)
     actions.insert(actions.index(consent), change)
     consent.action_id = "bank2:v5:consent"
     consent.arguments["request"]["state_revision"] = 2
@@ -550,6 +571,9 @@ def test_composite_requires_received_permission_to_lower_minimum(delivery):
     next(a for a in actions if a.name == "amend_cashback_investigation").arguments[
         "expected_revision"
     ] = 3
+    for evidence in task.evaluation_criteria.result_evidence:
+        if evidence.before_action_id == "bank2:v12:pay-first":
+            evidence.before_action_id = "bank2:v5:pay"
     task.evaluation_criteria.actions = actions
     task = type(task).model_validate_json(task.model_dump_json())
     session = PlatformSession(task, get_environment, max_errors=0)
@@ -573,4 +597,29 @@ def test_composite_requires_received_permission_to_lower_minimum(delivery):
         assert grade.reward_breakdown == {
             RewardType.DB: 1,
             RewardType.ACTION: int(delivery in {"received", "replayed"}),
+        }, grade.info
+
+
+@pytest.mark.parametrize("delivery", ["received", "unreceived", "late"])
+def test_direct_package_requires_received_consent(delivery):
+    """Correct money cannot hide execution before consent reached the agent."""
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    session = PlatformSession(task, get_environment, max_errors=0)
+    pending = None
+    for action in task.evaluation_criteria.actions:
+        if action.action_id == "bank2:v12:consent-first" and delivery != "received":
+            pending = session.begin_call(action.name, action.arguments, None)
+            reply = session.call(action.name, action.arguments, attempt=pending)
+        else:
+            reply = session.call(action.name, action.arguments)
+        assert not reply.is_error
+        if action.name == "execute_reward_resolution" and delivery == "late":
+            session.result_sent(pending)
+    if pending is not None and delivery == "unreceived":
+        session.result_sent(pending)
+    session.call("done", {})
+    for grade in [session.grade(), grade_full_session(session).reward_info]:
+        assert grade.reward_breakdown == {
+            RewardType.DB: 1,
+            RewardType.ACTION: int(delivery == "received"),
         }, grade.info

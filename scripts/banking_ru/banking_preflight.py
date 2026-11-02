@@ -632,7 +632,7 @@ def surface_child(spec, out):
         ),
         "prompt": build_prompt(
             policy=startup,
-            ticket=task.ticket,
+            ticket=task.agent_ticket(),
             max_calls=session.max_calls,
             max_errors=session.max_errors,
             max_discovery_calls=session.max_discovery_calls,

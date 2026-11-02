@@ -3,7 +3,7 @@ id: "reward_resolution_execution"
 section: "Акции и кешбэк"
 title: "Согласие и исполнение предложения"
 keywords: ["кешбэк", "урегулирование", "предложения", "resolution"]
-revision_id: "resolution-client-minimum-v12"
+revision_id: resolution-natural-ticket-v15-reward_resolution_execution
 effective_from: "2026-06-01"
 effective_to: null
 document_type: "knowledge"
@@ -157,8 +157,9 @@ idempotency_key. Повтор не создаёт отдельную выпла�
 
 ## Отдельное изменение минимальной выплаты
 
-Сначала получите ограничения через ask_client с case_clarification и
-topic=resolution_preferences. Для предложения изменить минимум используйте
+Если клиент установил отдельный минимум, сначала получите его через ask_client
+с case_clarification и topic=resolution_preferences. Без установленного минимума
+этот этап не нужен. Для предложения изменить минимум используйте
 request.type=reward_resolution_minimum_change с case_id и minimum_amount;
 transaction_id передайте отдельным аргументом ask_client. Ответ accepted
 с данными своего клиента, дела и покупки устанавливает effective_minimum;

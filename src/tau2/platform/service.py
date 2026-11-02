@@ -237,7 +237,7 @@ def build_app(settings: PlatformSettings) -> FastAPI:
 
     @app.get("/tasks")
     async def list_tasks() -> list[TaskCard]:
-        return [TaskCard(task_id=t.id, ticket=t.ticket or "") for t in tasks.values()]
+        return [TaskCard(task_id=t.id, ticket=t.agent_ticket()) for t in tasks.values()]
 
     @app.post("/sessions", status_code=201, response_model_exclude_unset=True)
     async def create_session(body: SessionCreate) -> SessionInfo:
@@ -271,7 +271,7 @@ def build_app(settings: PlatformSettings) -> FastAPI:
         return SessionInfo(
             token=session.token,
             task_id=task.id,
-            ticket=task.ticket or "",
+            ticket=task.agent_ticket(),
             policy=session.policy,
             mcp_path=item.paths.get(SINGLE_SERVER),
             mcp_paths=item.paths,

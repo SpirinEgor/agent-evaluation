@@ -585,10 +585,12 @@ def test_real_directory_schemas_match_checked_surface():
     )
     prompt = build_prompt(
         policy=session.policy,
-        ticket=task.ticket,
+        ticket=task.agent_ticket(),
         max_calls=session.max_calls,
         max_errors=session.max_errors,
     )
+    assert "+7 926 118-77-30" in prompt
+    assert "Сообщение клиента:" in prompt
     expected = {
         "startup": session.policy,
         "configuration": module().session_configuration(session),

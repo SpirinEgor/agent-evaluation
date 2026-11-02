@@ -229,3 +229,34 @@ def test_service_preserves_explicit_banking_limits(settings):
 
     info = run_with_app(build_app(settings), go)
     assert (info["max_calls"], info["max_errors"]) == (7, 2)
+
+
+def test_public_customer_context_excludes_author_material():
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    visible = task.agent_ticket()
+    assert task.ticket.startswith("Здравствуйте!")
+    assert "Громов Андрей Сергеевич" in visible
+    assert "+7 926 118-77-30" in visible
+    assert "Контекст обращения" in visible
+    assert "не заменяет идентификацию" in visible
+    assert "39.75" not in visible and "1A" not in visible
+    assert "CF-" not in visible and "txn_" not in visible
+    assert "evaluation_criteria" not in visible
+    other = next(t for t in get_tasks() if t.id == "Bank 40")
+    assert other.agent_ticket() == other.ticket
+
+
+def test_bank2_public_context_survives_task_list_and_session(app):
+    async def go(http):
+        listed = (await http.get("/tasks")).json()
+        card = next(row for row in listed if row["task_id"] == "Bank 2")
+        opened = await open_session(http, "Bank 2")
+        assert opened["ticket"] == card["ticket"]
+        assert (
+            opened["ticket"]
+            == next(t for t in get_tasks() if t.id == "Bank 2").agent_ticket()
+        )
+        assert "+7 926 118-77-30" in opened["ticket"]
+        assert "Сообщение клиента:" in opened["ticket"]
+
+    run_with_app(app, go)

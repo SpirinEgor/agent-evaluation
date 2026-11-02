@@ -1504,6 +1504,24 @@ class Task(BaseModel):
             default=None,
         ),
     ]
+    ticket_context: Optional[dict[str, str]] = Field(
+        default=None,
+        description="Public CRM context delivered separately from customer-authored ticket; never assessment or scenario internals.",
+    )
+
+    def agent_ticket(self) -> str:
+        """Render only explicitly public context and the customer ticket."""
+        if not self.ticket_context:
+            return self.ticket or ""
+        import json
+
+        return (
+            "Контекст обращения (данные CRM; не заменяет идентификацию):\n"
+            + json.dumps(self.ticket_context, ensure_ascii=False, indent=2)
+            + "\n\nСообщение клиента:\n"
+            + (self.ticket or "")
+        )
+
     initial_state: Annotated[
         Optional[InitialState],
         Field(

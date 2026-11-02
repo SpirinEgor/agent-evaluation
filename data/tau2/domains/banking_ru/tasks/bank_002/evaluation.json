@@ -3007,16 +3007,6 @@
   },
   "result_argument_bindings": [
     {
-      "binding_id": "bank2:v5:received-consent",
-      "source_action_id": "bank2:v5:consent",
-      "target_action_id": "bank2:v5:pay",
-      "argument_name": "confirmation_id",
-      "result_path": [
-        "confirmation_id"
-      ],
-      "only_if_target_attempted": true
-    },
-    {
       "binding_id": "bank2:v8:received-submission",
       "source_action_id": "bank2:v8:submit-statement",
       "target_action_id": "bank2:v8:register-statement",
@@ -3487,22 +3477,6 @@
       ]
     },
     {
-      "action_id": "bank2:v5:preferences",
-      "name": "ask_client",
-      "arguments": {
-        "customer_id": "gromov_a_1187",
-        "request": {
-          "type": "case_clarification",
-          "topic": "resolution_preferences"
-        }
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id",
-        "request"
-      ]
-    },
-    {
       "action_id": "bank2:v5:doc:reward_resolution_amounts",
       "name": "file_read",
       "arguments": {
@@ -3569,101 +3543,6 @@
       ]
     },
     {
-      "action_id": "bank2:v5:consent",
-      "name": "ask_client",
-      "arguments": {
-        "customer_id": "gromov_a_1187",
-        "request": {
-          "type": "reward_resolution_confirmation",
-          "offer_id": "offer_610741",
-          "offer_version": 2,
-          "payouts": [
-            {
-              "transaction_id": "txn_804219",
-              "amount": 18
-            }
-          ],
-          "total_amount": 18,
-          "case_id": "case_610903",
-          "resulting_claims": [
-            {
-              "transaction_id": "txn_804219",
-              "amount": 7
-            },
-            {
-              "transaction_id": "txn_804227",
-              "amount": 22.1
-            },
-            {
-              "transaction_id": "txn_804205",
-              "amount": 7
-            }
-          ],
-          "state_revision": 2,
-          "component_ids": [
-            "X"
-          ],
-          "eligibility_evidence": {}
-        }
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id"
-      ],
-      "argument_values": {
-        "request.type": "reward_resolution_confirmation"
-      }
-    },
-    {
-      "action_id": "bank2:v5:pay",
-      "name": "execute_reward_resolution",
-      "arguments": {
-        "offer_id": "offer_610741",
-        "offer_version": 2,
-        "payouts": [
-          {
-            "transaction_id": "txn_804219",
-            "amount": 18
-          }
-        ],
-        "total_amount": 18,
-        "case_id": "case_610903",
-        "confirmation_id": "resolution-confirmation-1",
-        "expected_revision": 2,
-        "idempotency_key": "bank2-resolution-x",
-        "component_ids": [
-          "X"
-        ],
-        "eligibility_evidence": {}
-      },
-      "required_for_reward": true,
-      "compare_args": [
-        "case_id"
-      ]
-    },
-    {
-      "action_id": "bank2:v11:status",
-      "name": "get_reward_resolution_status",
-      "arguments": {
-        "resolution_operation_id": "resolution:case_610903:offer_610741"
-      },
-      "required_for_reward": false,
-      "compare_args": []
-    },
-    {
-      "action_id": "bank2:v10:offers-after-first",
-      "name": "get_reward_resolution_offers",
-      "arguments": {
-        "customer_id": "gromov_a_1187",
-        "case_id": "case_610903"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id",
-        "case_id"
-      ]
-    },
-    {
       "action_id": "bank2:v12:consent-first",
       "name": "ask_client",
       "arguments": {
@@ -3698,7 +3577,7 @@
               "amount": 7
             }
           ],
-          "state_revision": 4,
+          "state_revision": 2,
           "component_ids": [
             "1A",
             "2B",
@@ -3735,8 +3614,8 @@
         ],
         "total_amount": 39.75,
         "case_id": "case_610903",
-        "confirmation_id": "resolution-confirmation-2",
-        "expected_revision": 4,
+        "confirmation_id": "resolution-confirmation-1",
+        "expected_revision": 2,
         "idempotency_key": "candidate-composite",
         "component_ids": [
           "1A",
@@ -3747,7 +3626,7 @@
         ],
         "eligibility_evidence": {}
       },
-      "required_for_reward": false,
+      "required_for_reward": true,
       "compare_args": [
         "case_id"
       ]
@@ -3767,7 +3646,7 @@
             "amount": 1.85
           }
         ],
-        "expected_revision": 5
+        "expected_revision": 3
       },
       "required_for_reward": true,
       "compare_args": [
@@ -4052,33 +3931,7 @@
         "offer_changed"
       ],
       "only_if_target_attempted": true,
-      "before_action_id": "bank2:v5:pay"
-    },
-    {
-      "evidence_id": "bank2:v5:preferences",
-      "tool_names": [
-        "ask_client"
-      ],
-      "record_id": "resolution-preferences-1187",
-      "expected_fields": {
-        "id": "resolution-preferences-1187",
-        "customer_id": "gromov_a_1187",
-        "objective": "maximize_additional_guaranteed_cash",
-        "currency": "RUB",
-        "preserve_unpaid_claims": true,
-        "preserve_other_case_items": true,
-        "allow_new_products": false,
-        "customer_reported_offer_id": "offer_610729",
-        "customer_reported_status": "approved",
-        "minimum_payouts": {
-          "txn_804219": 18
-        }
-      },
-      "before_action_id": "bank2:v5:pay",
-      "recoverable_result_statuses": [
-        "funding_pending",
-        "offer_changed"
-      ]
+      "before_action_id": "bank2:v12:pay-first"
     },
     {
       "evidence_id": "common_discovery_Bank 2",
