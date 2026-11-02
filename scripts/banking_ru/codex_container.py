@@ -42,6 +42,21 @@ def banking_model_catalog(catalog: dict, model: str) -> dict:
     return {"models": models}
 
 
+def model_tool_text(text: str) -> str:
+    """Render trusted JSON without ASCII escapes; keep non-JSON text verbatim.
+
+    This happens before the host ledger records the result. Continuations must
+    still reproduce the exact delivered text, not merely equivalent JSON.
+    """
+    try:
+        value = json.loads(text)
+    except (ValueError, RecursionError):
+        return text
+    if not isinstance(value, (dict, list)):
+        return text
+    return json.dumps(value, ensure_ascii=False)
+
+
 def dynamic_bank_tools(schemas: list[dict], agent_profile="baseline") -> list[dict]:
     from tau2.platform.agents import profile
 
@@ -641,7 +656,7 @@ async def invoke_app_server(
                                 )
                             )
                             content = [
-                                dict(type="inputText", text=c.text)
+                                dict(type="inputText", text=model_tool_text(c.text))
                                 for c in result.content
                                 if c.type == "text"
                             ]

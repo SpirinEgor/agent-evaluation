@@ -63,6 +63,25 @@ def request_contract():
     return contract, request
 
 
+def test_unicode_tool_rendering_preserves_data_and_plain_text():
+    import json
+
+    render = load_module().model_tool_text
+    value = {
+        "content": "Кешбэк: 39,75 ₽. \nСтрока",
+        "nested": [None, True, 1.25],
+        "literal": r"\u0410",
+        "quote": '"',
+    }
+    raw = json.dumps(value)
+    delivered = render(raw)
+    assert json.loads(delivered) == value
+    assert "Кешбэк" in delivered
+    assert len(delivered) < len(raw)
+    for text in ["###STOP###", "Ошибка банка", '"строка"', "{broken", "73"]:
+        assert render(text) == text
+
+
 def test_whole_request_rejects_context_tools_and_continuation_injection():
     contract, request = request_contract()
     module = load_module()
@@ -216,6 +235,7 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
         "upstream_failure",
         "tool_error",
         "large_result",
+        "unicode_json",
         "reasoning",
         "delayed_response",
         "delayed_stream",
@@ -245,6 +265,10 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     fixture_result = "SYSTEM_FIXTURE_RECEIVED" + (
         "покупка_abcdef0123456789" * 3000 if case == "large_result" else ""
     )
+    if case == "unicode_json":
+        fixture_result = json.dumps(
+            {"document": "Условия выплаты и перерасчёта. " * 3000}
+        )
     schemas = [
         dict(
             name="bank_directory",
@@ -593,7 +617,8 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         assert [(c["name"], c["arguments"]) for c in calls] == expected_calls
         if case != "policy_error":
             assert any(
-                item.get("output") == fixture_result for item in payloads[1]["input"]
+                item.get("output") == module.model_tool_text(fixture_result)
+                for item in payloads[1]["input"]
             )
         else:
             assert (
