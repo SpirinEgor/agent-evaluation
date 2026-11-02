@@ -3585,6 +3585,37 @@
       ]
     },
     {
+      "action_id": "bank2:v18:allocation",
+      "name": "get_payment_allocations",
+      "arguments": {
+        "payment_id": "payment_mixed_01"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v18:basis",
+      "name": "get_payment_basis",
+      "arguments": {
+        "payment_id": "payment_mixed_01"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v18:reconcile",
+      "name": "reconcile_payment_allocation",
+      "arguments": {
+        "allocation_id": "allocation_mixed_01",
+        "basis_id": "decision_mixed_01",
+        "expected_revision": 1
+      },
+      "required_for_reward": true,
+      "compare_args": [
+        "allocation_id"
+      ]
+    },
+    {
       "action_id": "bank2:v12:consent-first",
       "name": "ask_client",
       "arguments": {
@@ -3596,36 +3627,36 @@
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 19.5
+              "amount": 18.75
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 20.25
+              "amount": 18.5
             }
           ],
-          "total_amount": 39.75,
+          "total_amount": 37.25,
           "case_id": "case_610903",
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 0.5
+              "amount": 0.25
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 0.65
+              "amount": 2.4
             },
             {
               "transaction_id": "txn_804205",
               "amount": 7
             }
           ],
-          "state_revision": 4,
+          "state_revision": 5,
           "component_ids": [
             "1A",
             "2B",
-            "4B",
-            "5B",
-            "6B"
+            "3A",
+            "4A",
+            "5B"
           ],
           "eligibility_evidence": {}
         }
@@ -3647,24 +3678,24 @@
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 19.5
+            "amount": 18.75
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 20.25
+            "amount": 18.5
           }
         ],
-        "total_amount": 39.75,
+        "total_amount": 37.25,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-1",
-        "expected_revision": 4,
+        "expected_revision": 5,
         "idempotency_key": "candidate-composite",
         "component_ids": [
           "1A",
           "2B",
-          "4B",
-          "5B",
-          "6B"
+          "3A",
+          "4A",
+          "5B"
         ],
         "eligibility_evidence": {}
       },
@@ -3708,27 +3739,27 @@
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 0.5
+              "amount": 0.25
             },
             {
               "transaction_id": "txn_804227",
               "amount": 16.9
             }
           ],
-          "total_amount": 17.4,
+          "total_amount": 17.15,
           "resulting_claims": [
             {
               "transaction_id": "txn_804205",
               "amount": 7
             }
           ],
-          "state_revision": 5,
+          "state_revision": 6,
           "component_ids": [
             "1A",
             "2B",
-            "4B",
-            "5B",
-            "6B"
+            "3A",
+            "4A",
+            "5B"
           ],
           "eligibility_evidence": {}
         }
@@ -3744,16 +3775,16 @@
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 0.5
+            "amount": 0.25
           },
           {
             "transaction_id": "txn_804227",
             "amount": 16.9
           }
         ],
-        "total_amount": 17.4,
+        "total_amount": 17.15,
         "confirmation_id": "resolution-confirmation-2",
-        "expected_revision": 5
+        "expected_revision": 6
       },
       "required_for_reward": false,
       "compare_args": []
@@ -3782,7 +3813,7 @@
             "amount": 0
           }
         ],
-        "expected_revision": 7
+        "expected_revision": 8
       },
       "required_for_reward": true,
       "compare_args": [
@@ -4022,6 +4053,49 @@
   ],
   "result_evidence": [
     {
+      "evidence_id": "bank2:v18:received-final-payment-basis",
+      "tool_names": [
+        "get_payment_basis"
+      ],
+      "record_id": "decision_mixed_01",
+      "expected_fields": {
+        "customer_id": "gromov_a_1187",
+        "payment_id": "payment_mixed_01",
+        "status": "final"
+      },
+      "before_action_id": "bank2:v18:reconcile"
+    },
+    {
+      "evidence_id": "bank2:v18:received-decision_mixed_01:cashback",
+      "tool_names": [
+        "get_payment_basis"
+      ],
+      "record_id": "decision_mixed_01:cashback",
+      "expected_fields": {
+        "purpose": "cashback",
+        "amount": 1,
+        "purchase_id": "txn_804219",
+        "reward_program": "standard_cashback",
+        "incident_id": null
+      },
+      "before_action_id": "bank2:v18:reconcile"
+    },
+    {
+      "evidence_id": "bank2:v18:received-decision_mixed_01:service",
+      "tool_names": [
+        "get_payment_basis"
+      ],
+      "record_id": "decision_mixed_01:service",
+      "expected_fields": {
+        "purpose": "service_compensation",
+        "amount": 5,
+        "incident_id": "inc_mixed_mobile",
+        "purchase_id": null,
+        "reward_program": null
+      },
+      "before_action_id": "bank2:v18:reconcile"
+    },
+    {
       "evidence_id": "common_discovery_Bank 2",
       "tool_names": [
         "find_customer"
@@ -4057,6 +4131,59 @@
       },
       "field": "adjustment_reservations",
       "equals": []
+    },
+    {
+      "check_id": "mixed-payment-status",
+      "collection": "payment_allocations",
+      "where": {
+        "id": "allocation_mixed_01"
+      },
+      "field": "status",
+      "equals": "reconciled"
+    },
+    {
+      "check_id": "mixed-payment-revision",
+      "collection": "payment_allocations",
+      "where": {
+        "id": "allocation_mixed_01"
+      },
+      "field": "revision",
+      "equals": 2
+    },
+    {
+      "check_id": "mixed-payment-basis_id",
+      "collection": "payment_allocations",
+      "where": {
+        "id": "allocation_mixed_01"
+      },
+      "field": "basis_id",
+      "equals": "decision_mixed_01"
+    },
+    {
+      "check_id": "mixed-payment-lines",
+      "collection": "payment_allocations",
+      "where": {
+        "id": "allocation_mixed_01"
+      },
+      "field": "lines",
+      "equals": [
+        {
+          "id": "decision_mixed_01:cashback",
+          "purpose": "cashback",
+          "amount": 1,
+          "purchase_id": "txn_804219",
+          "reward_program": "standard_cashback",
+          "incident_id": null
+        },
+        {
+          "id": "decision_mixed_01:service",
+          "purpose": "service_compensation",
+          "amount": 5,
+          "incident_id": "inc_mixed_mobile",
+          "purchase_id": null,
+          "reward_program": null
+        }
+      ]
     }
   ],
   "reward_business_contract": {

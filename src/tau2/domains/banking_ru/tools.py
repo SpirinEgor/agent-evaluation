@@ -1253,6 +1253,17 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
             raise ToolExecutionRejected(
                 "ERR_RESOLUTION_PENDING: Дождитесь окончательного статуса урегулирования"
             )
+        from tau2.domains.banking_ru.reward_payment_register import (
+            require_reconciled_payments,
+        )
+
+        require_reconciled_payments(
+            self.db,
+            case.customer_id,
+            case.reward_period,
+            set(self._initial_reward_items.get(case.id, {}))
+            | {x.transaction_id for x in case.reward_items},
+        )
         case.review_source_version = case.version
         case.review_items = [x.model_copy(deep=True) for x in case.reward_items]
         case.review_amount = case.amount
@@ -3156,6 +3167,41 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         )
 
     @is_tool(ToolType.READ)
+    def get_payment_basis(self, payment_id: str) -> list[dict]:
+        """Получить окончательные банковские основания проведённой выплаты."""
+        payment = self.db.transactions.get(payment_id)
+        if payment is None:
+            raise ValueError("ERR_NOT_FOUND: Выплата не найдена")
+        self._require_verified(payment.customer_id)
+        return [
+            x.model_dump()
+            for x in self.db.payment_bases.values()
+            if x.payment_id == payment_id and x.customer_id == payment.customer_id
+        ]
+
+    @is_tool(ToolType.READ)
+    def get_payment_allocations(self, payment_id: str) -> list[dict]:
+        """Получить рабочие распределения выплаты, их статусы и версии."""
+        payment = self.db.transactions.get(payment_id)
+        if payment is None:
+            raise ValueError("ERR_NOT_FOUND: Выплата не найдена")
+        self._require_verified(payment.customer_id)
+        return [
+            x.model_dump()
+            for x in self.db.payment_allocations.values()
+            if x.payment_id == payment_id and x.customer_id == payment.customer_id
+        ]
+
+    @is_tool(ToolType.WRITE)
+    def reconcile_payment_allocation(
+        self, allocation_id: str, basis_id: str, expected_revision: int
+    ) -> dict:
+        """Сверить распределение выплаты с окончательным банковским основанием."""
+        from tau2.domains.banking_ru.reward_payment_register import reconcile_payment
+
+        return reconcile_payment(self, allocation_id, basis_id, expected_revision)
+
+    @is_tool(ToolType.READ)
     def get_reward_resolution_offers(
         self, customer_id: str, case_id: str
     ) -> list[dict]:
@@ -3331,6 +3377,13 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         """
         transaction = self._get_transaction(transaction_id)
         self._require_verified(transaction.customer_id)
+        from tau2.domains.banking_ru.reward_payment_register import (
+            require_reconciled_payments,
+        )
+
+        require_reconciled_payments(
+            self.db, transaction.customer_id, transaction.date[:7], {transaction_id}
+        )
         if any(
             c.review_status == "registered"
             and c.customer_id == transaction.customer_id

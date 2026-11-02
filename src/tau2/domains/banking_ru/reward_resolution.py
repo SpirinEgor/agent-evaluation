@@ -454,6 +454,13 @@ def execute(
 ):
     """Execute one chosen offer; never choose or advertise the optimal offer."""
     offer, case = owned_offer(tools, offer_id, case_id)
+    from tau2.domains.banking_ru.reward_payment_register import (
+        require_reconciled_payments,
+    )
+
+    require_reconciled_payments(
+        tools.db, offer.customer_id, offer.period, set(offer.transaction_ids)
+    )
 
     def reject(message):
         tools._resolution_violations.add(offer.customer_id)

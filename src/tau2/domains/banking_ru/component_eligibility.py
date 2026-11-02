@@ -5,6 +5,12 @@ from zoneinfo import ZoneInfo
 
 # Shared private reads are declared once, rather than copied into every task.
 COMMON_TOOL_ACCESS = {
+    "get_payment_basis": {"payment_id": "transactions"},
+    "get_payment_allocations": {"payment_id": "transactions"},
+    "reconcile_payment_allocation": {
+        "allocation_id": "payment_allocations",
+        "basis_id": "payment_bases",
+    },
     "get_reward_reprocessing_cases": {"customer_id": "customers"},
     "repair_reward_binding": {
         "reprocessing_id": "reward_reprocessing_cases",
@@ -38,6 +44,9 @@ COMMON_TOOL_ACCESS = {
 
 
 COMMON_RESULT_COLLECTIONS = {
+    "get_payment_basis": ["payment_bases"],
+    "get_payment_allocations": ["payment_allocations"],
+    "reconcile_payment_allocation": ["payment_allocations"],
     "get_reward_reprocessing_cases": ["reward_reprocessing_cases"],
     "repair_reward_binding": ["reward_reprocessing_cases"],
     "reprocess_rewards": ["reward_reprocessing_cases", "transactions"],

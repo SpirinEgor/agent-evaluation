@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Проверить недоплату и по регламенту предложить максимальную допустимую выплату, согласовать её и передать невозмещённый остаток в существующем деле.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "v17: после частичного исполнения независимая корректировка 4 ₽; пересмотр непроведённой части с новым согласием; соглашение 36,90 ₽ и сохранённое дело 7 ₽. Допустимы эквивалентные оптимальные пакеты."
+    "notes": "v18: историческая смешанная выплата 6 ₽ — 1 ₽ кешбэка первой покупки и 5 ₽ за отдельный сбой приложения; исправление предварительного распределения. Все механизмы v17 сохранены: поздняя корректировка 4 ₽, новое согласие и перераспределение. Итог соглашения 35,90 ₽, дело 7 ₽; эквивалентные оптимальные пути допустимы."
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -448,6 +448,17 @@
             "receipt_id": "CF-2507-1187",
             "original_transaction_id": null,
             "purchase_group_id": "txn_804219"
+          },
+          "payment_mixed_01": {
+            "id": "payment_mixed_01",
+            "customer_id": "gromov_a_1187",
+            "account_id": "acc_1187",
+            "date": "2026-08-23",
+            "posted_at": "2026-08-23T12:00:00+03:00",
+            "amount": 6,
+            "merchant": "Выплата по решению банка",
+            "kind": "compensation",
+            "status": "posted"
           }
         },
         "reward_resolution_offer_updates": {
@@ -503,6 +514,14 @@
             "kind": "activation_sync_failure",
             "starts_at": "2026-07-27T09:00:00+03:00",
             "ends_at": "2026-07-27T11:00:00+03:00"
+          },
+          "inc_mixed_mobile": {
+            "id": "inc_mixed_mobile",
+            "customer_id": "gromov_a_1187",
+            "contract_id": "rc_610482",
+            "kind": "mobile_app_unavailable",
+            "starts_at": "2026-08-10T10:00:00+03:00",
+            "ends_at": "2026-08-10T12:00:00+03:00"
           }
         },
         "partner_confirmations": {
@@ -609,7 +628,7 @@
         },
         "accounts": {
           "acc_1187": {
-            "balance": 138940.9
+            "balance": 138946.9
           }
         },
         "reward_reprocessing_cases": {
@@ -642,11 +661,54 @@
             "ledger_id": "reward-correction:610735:txn_804227",
             "allow_reallocation": true
           }
+        },
+        "payment_bases": {
+          "decision_mixed_01": {
+            "id": "decision_mixed_01",
+            "customer_id": "gromov_a_1187",
+            "payment_id": "payment_mixed_01",
+            "period": "2026-07",
+            "status": "final",
+            "lines": [
+              {
+                "id": "decision_mixed_01:cashback",
+                "purpose": "cashback",
+                "amount": 1,
+                "purchase_id": "txn_804219",
+                "reward_program": "standard_cashback"
+              },
+              {
+                "id": "decision_mixed_01:service",
+                "purpose": "service_compensation",
+                "amount": 5,
+                "incident_id": "inc_mixed_mobile"
+              }
+            ]
+          }
+        },
+        "payment_allocations": {
+          "allocation_mixed_01": {
+            "id": "allocation_mixed_01",
+            "customer_id": "gromov_a_1187",
+            "payment_id": "payment_mixed_01",
+            "period": "2026-07",
+            "revision": 1,
+            "status": "provisional",
+            "lines": [
+              {
+                "id": "mixed_provisional",
+                "purpose": "cashback",
+                "amount": 6,
+                "purchase_id": "txn_804219",
+                "reward_program": "standard_cashback"
+              }
+            ]
+          }
         }
       }
     }
   },
-  "scenario_version": "2026-11-03-bank2-post-payment-reconciliation-v17",
+  "scenario_version": "2026-11-03-bank2-mixed-payment-v18",
   "ticket_context": {
     "customer_name": "Громов Андрей Сергеевич",
     "customer_phone": "+7 926 118-77-30",

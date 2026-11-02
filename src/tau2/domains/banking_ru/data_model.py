@@ -20,6 +20,8 @@ from tau2.domains.banking_ru.document_service_models import (
     DocumentServiceProfile,
 )
 from tau2.domains.banking_ru.reward_payment_register import (
+    PaymentAllocation,
+    PaymentBasis,
     RewardPaymentAllocation,
     RewardPostingRole,
 )
@@ -45,6 +47,7 @@ TransactionKind = Literal[
     "fee",
     "transfer",
     "fee_refund",
+    "compensation",
     "cashback",
     "deposit_payout",
     "deposit_funding",
@@ -1177,6 +1180,8 @@ class BankingDB(DB):
     reward_resolution_correction_profiles: dict[str, RewardResolutionCorrection] = (
         Field(default_factory=dict)
     )
+    payment_bases: dict[str, PaymentBasis] = Field(default_factory=dict)
+    payment_allocations: dict[str, PaymentAllocation] = Field(default_factory=dict)
     bank_operations: dict[str, dict] = Field(default_factory=dict)
     session: Session = Field(default_factory=Session, exclude=True)
 

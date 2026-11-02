@@ -25,6 +25,9 @@ SYSTEMS = {
 }
 
 TOOL_OWNERS = {
+    "get_payment_basis": "payments",
+    "get_payment_allocations": "crm",
+    "reconcile_payment_allocation": "crm",
     "list_documents": "knowledge",
     "search_documents": "knowledge",
     "list_revisions": "knowledge",

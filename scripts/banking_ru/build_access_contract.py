@@ -22,6 +22,9 @@ from tau2.domains.banking_ru.task_store import (
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_FILE = ROOT / "src/tau2/domains/banking_ru/tools.py"
 ARGUMENT_COLLECTIONS = {
+    "payment_id": "transactions",
+    "basis_id": "payment_bases",
+    "allocation_id": "payment_allocations",
     "reprocessing_id": "reward_reprocessing_cases",
     "contract_id": "reward_contracts",
     "replacement_card_id": "cards",
@@ -258,6 +261,14 @@ def resource_catalog(db: dict) -> dict[str, dict[str, list[str]]]:
         set(ARGUMENT_COLLECTIONS.values())
         | {c for collections in RESULT_COLLECTIONS.values() for c in collections}
     ):
+        # These generic scenario-only resources are resolved from the initial
+        # environment and received tool results by the shared access evaluator.
+        # Do not add empty catalogs to every task when no base record exists.
+        if (
+            collection in {"payment_bases", "payment_allocations"}
+            and collection not in db
+        ):
+            continue
         groups = defaultdict(set)
         if collection == "customers":
             for customer_id in db["customers"]:

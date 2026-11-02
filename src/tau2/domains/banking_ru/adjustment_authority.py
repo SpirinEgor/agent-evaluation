@@ -78,6 +78,11 @@ def execute_adjustment(
     p = tools.db.cashback_adjustment_permissions.get(permission_id)
     if p is None:
         raise ValueError("ERR_PERMISSION_NOT_FOUND: Разрешение не найдено")
+    from tau2.domains.banking_ru.reward_payment_register import (
+        require_reconciled_payments,
+    )
+
+    require_reconciled_payments(tools.db, tx.customer_id, p.get("period"), {tx.id})
     if any(
         op.customer_id == tx.customer_id
         and tx.id in op.transaction_ids

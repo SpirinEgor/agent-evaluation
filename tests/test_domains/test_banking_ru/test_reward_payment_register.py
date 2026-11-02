@@ -181,44 +181,47 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
     data = task.initial_state.initialization_data.agent_data
     different = variant == "different_allocation"
     if different:
+        # A higher share of the same posted batch belongs to the disputed
+        # purchase. The whole-bank receipt stays 40.90; its allocation changes.
         for row in data["documents"]["doc_reward_register_8801"][
             "reward_payment_allocations"
         ]:
             if row["posting_id"] in {"txn_batch_8801", "txn_batch_8804"}:
-                row["amount"] = 22 if row["purchase_id"] == "txn_804227" else 18.9
+                row["amount"] = 35.9 if row["purchase_id"] == "txn_804227" else 5
         for action in task.evaluation_criteria.actions:
             packet = (
                 action.arguments.get("request", {})
                 if action.name == "ask_client"
                 else action.arguments
             )
-            if packet.get("offer_id") == "offer_610735":
+            if (
+                packet.get("offer_id") == "offer_610735"
+                and "resolution_operation_id" not in packet
+            ):
                 packet.update(
-                    component_ids=["1A", "2A", "3A", "5B", "6A"],
-                    total_amount=41.5,
+                    component_ids=["1A", "2A", "5B", "6B"],
+                    total_amount=33.5,
                     payouts=[
-                        {"transaction_id": "txn_804219", "amount": 19.25},
-                        {"transaction_id": "txn_804227", "amount": 22.25},
+                        {"transaction_id": "txn_804219", "amount": 18.25},
+                        {"transaction_id": "txn_804227", "amount": 15.25},
                     ],
                 )
                 if "resulting_claims" in packet:
                     packet["resulting_claims"] = [
                         {"transaction_id": "txn_804219", "amount": 0.75},
-                        {"transaction_id": "txn_804227", "amount": 7.55},
+                        {"transaction_id": "txn_804227", "amount": 0.65},
                         {"transaction_id": "txn_804205", "amount": 7},
                     ]
-            elif (
-                packet.get("offer_id") == "offer_610741"
-                and "resulting_claims" in packet
-            ):
-                for row in packet["resulting_claims"]:
-                    if row["transaction_id"] == "txn_804227":
-                        row["amount"] = 31
-            if action.name == "amend_cashback_investigation":
-                action.arguments["items"] = [
-                    {"transaction_id": "txn_804219", "amount": 0.75},
-                    {"transaction_id": "txn_804227", "amount": 7.55},
-                ]
+            if packet.get("resolution_operation_id") and "payouts" in packet:
+                packet.update(
+                    total_amount=12.65,
+                    payouts=[
+                        {"transaction_id": "txn_804219", "amount": 0.75},
+                        {"transaction_id": "txn_804227", "amount": 11.9},
+                    ],
+                )
+                if "component_ids" in packet:
+                    packet["component_ids"] = ["1A", "2A", "5B", "6B"]
     session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
     for action in original_packets if wrong else task.evaluation_criteria.actions:
         result = session.call(action.name, action.arguments)
@@ -235,12 +238,16 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
             }, reward.info
     if not wrong:
         case = session.env.tools.db.cases["case_610903"]
-        assert case.review_amount == (15.3 if different else 8.15)
+        assert case.review_amount == 7
         assert {r.transaction_id: r.amount for r in case.review_items} == {
-            "txn_804219": 0.75 if different else 0.5,
-            "txn_804227": 7.55 if different else 0.65,
-            "txn_804205": 7,
+            "txn_804205": 7
         }
+        operation = next(
+            o
+            for o in session.env.tools.db.reward_resolution_executions.values()
+            if o.packet["offer_id"] == "offer_610735"
+        )
+        assert operation.result["total_amount"] == (30.9 if different else 35.9)
 
 
 @pytest.mark.parametrize(
@@ -279,3 +286,137 @@ def test_merchant_attachment_does_not_authorize_foreign_access(route):
                 f["reason"] == "foreign_owner"
                 for f in reward.info["action"]["tool_access_policy"]
             )
+
+
+@pytest.fixture
+def mixed_tools():
+    task = next(t for t in get_tasks() if t.id == "Bank 2")
+    tools = PlatformSession(task, get_environment).env.tools
+    tools.db.session.verified_customers.append("gromov_a_1187")
+    return tools
+
+
+def test_mixed_payment_basis_decides_money_not_provisional_allocation(mixed_tools):
+    from tau2.domains.banking_ru.reward_payment_register import basis_reward_payments
+
+    db = mixed_tools.db
+    amounts = basis_reward_payments(db, "gromov_a_1187", db.today)
+    assert amounts == {("txn_804219", "standard_cashback"): 100}
+    db.payment_allocations["allocation_mixed_01"].lines[0].amount = 600
+    assert basis_reward_payments(db, "gromov_a_1187", db.today) == amounts
+    # A different program cannot settle this purchase's standard reward obligation.
+    db.payment_bases["decision_mixed_01"].lines[0].reward_program = "partner_cashback"
+    assert basis_reward_payments(db, "gromov_a_1187", db.today) == {
+        ("txn_804219", "partner_cashback"): 100
+    }
+
+
+def test_mixed_reconciliation_preserves_money_and_replay(mixed_tools):
+    db = mixed_tools.db
+    original_payment = db.transactions["payment_mixed_01"].model_dump()
+    original_basis = db.payment_bases["decision_mixed_01"].model_dump()
+    original_balance = db.accounts["acc_1187"].balance
+    original_hash = mixed_tools.get_db_hash()
+    result = mixed_tools.reconcile_payment_allocation(
+        "allocation_mixed_01", "decision_mixed_01", 1
+    )
+    assert result["status"] == "reconciled" and result["revision"] == 2
+    assert mixed_tools.get_db_hash() != original_hash
+    assert result["state_revision"] is not None
+    snapshot = db.model_dump()
+    assert (
+        mixed_tools.reconcile_payment_allocation(
+            "allocation_mixed_01", "decision_mixed_01", 1
+        )
+        == result
+    )
+    assert db.model_dump() == snapshot
+    assert db.transactions["payment_mixed_01"].model_dump() == original_payment
+    assert db.payment_bases["decision_mixed_01"].model_dump() == original_basis
+    assert db.accounts["acc_1187"].balance == original_balance
+
+
+@pytest.mark.parametrize(
+    "variant", ["stale", "foreign", "different_payment", "wrong_sum", "wrong_period"]
+)
+def test_mixed_invalid_reconciliation_has_no_effect(mixed_tools, variant):
+    db = mixed_tools.db
+    basis = db.payment_bases["decision_mixed_01"]
+    revision = 0 if variant == "stale" else 1
+    if variant == "foreign":
+        basis.customer_id = "egorova_n_3358"
+    elif variant == "different_payment":
+        basis.payment_id = "txn_804253"
+    elif variant == "wrong_sum":
+        basis.lines[1].amount = 4
+    elif variant == "wrong_period":
+        basis.period = "2026-06"
+    before = db.model_dump()
+    with pytest.raises(ValueError):
+        mixed_tools.reconcile_payment_allocation(
+            "allocation_mixed_01", basis.id, revision
+        )
+    assert db.model_dump() == before
+
+
+def test_mixed_provisional_guard_is_scope_specific(mixed_tools):
+    from tau2.domains.banking_ru.reward_payment_register import (
+        require_reconciled_payments,
+    )
+
+    db = mixed_tools.db
+    for period, purchases in [("2026-06", {"txn_804219"}), ("2026-07", {"txn_804205"})]:
+        require_reconciled_payments(db, "gromov_a_1187", period, purchases)
+    with pytest.raises(ValueError, match="ERR_PAYMENT_ALLOCATION_PENDING"):
+        require_reconciled_payments(db, "gromov_a_1187", "2026-07", {"txn_804219"})
+    before = db.model_dump()
+    with pytest.raises(ValueError, match="ERR_PAYMENT_ALLOCATION_PENDING"):
+        mixed_tools.grant_cashback("txn_804219", 1)
+    assert db.model_dump() == before
+
+
+@pytest.mark.parametrize("amount", [float("nan"), float("inf"), 0, -1, 1.001])
+def test_mixed_basis_amounts_are_finite_whole_kopecks(amount):
+    from tau2.domains.banking_ru.reward_payment_register import PaymentBasisLine
+
+    with pytest.raises(ValueError):
+        PaymentBasisLine(
+            id="bad",
+            purpose="cashback",
+            amount=amount,
+            purchase_id="txn_804219",
+            reward_program="standard_cashback",
+        )
+
+
+@pytest.mark.parametrize(
+    "variant",
+    ["missing_program", "wrong_purchase", "goodwill_purchase", "foreign_incident"],
+)
+def test_mixed_invalid_purpose_links_rejected(mixed_tools, variant):
+    from tau2.domains.banking_ru.reward_payment_register import validate_payment_basis
+
+    db = mixed_tools.db
+    basis = db.payment_bases["decision_mixed_01"]
+    if variant == "missing_program":
+        basis.lines[0].reward_program = None
+    elif variant == "wrong_purchase":
+        basis.lines[0].purchase_id = "missing"
+    elif variant == "goodwill_purchase":
+        basis.lines[1].purchase_id = "txn_804219"
+    else:
+        db.service_incidents[basis.lines[1].incident_id].customer_id = "egorova_n_3358"
+    with pytest.raises(ValueError, match="ERR_PAYMENT_BASIS"):
+        validate_payment_basis(db, basis)
+
+
+def test_mixed_provisional_blocks_permission_payment(mixed_tools):
+    db = mixed_tools.db
+    db.cashback_adjustment_permissions["mixed-permission"] = {
+        "period": "2026-07",
+        "customer_id": "gromov_a_1187",
+    }
+    before = db.model_dump()
+    with pytest.raises(ValueError, match="ERR_PAYMENT_ALLOCATION_PENDING"):
+        mixed_tools.execute_cashback_adjustment("mixed-permission", "txn_804219", 1)
+    assert db.model_dump() == before
