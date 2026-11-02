@@ -783,13 +783,14 @@ async def probe(spec, out):
         attach_persisted_journal,
         build_prompt,
         run_one_attempt,
+        temporary_run_directory,
     )
 
     from tau2.platform.client import PlatformClient
 
     record = None
     try:
-        with tempfile.TemporaryDirectory(prefix="bank-prototype-model-") as temp:
+        with temporary_run_directory(prefix="bank-prototype-model-") as temp:
             root = Path(temp)
             copied = root / "data/tau2/domains/banking_ru"
             shutil.copytree(path_for(spec["data_dir"]), copied)
@@ -907,17 +908,33 @@ async def probe(spec, out):
                             container_image=model["image"],
                             expected_image_id=boundary["image"],
                         )
+                        # Persist before journal enrichment or server cleanup can fail.
+                        write(folder / "record.json", record)
                         if "run" in record:
                             attach_persisted_journal(record, folder / "platform")
                     finally:
-                        await client._http.aclose()
+                        primary_error = sys.exc_info()[1]
+                        try:
+                            await client._http.aclose()
+                        except Exception as error:
+                            if primary_error is None:
+                                raise
+                            primary_error.add_note(
+                                f"HTTP cleanup also failed: {error!r}"
+                            )
                 finally:
-                    server.terminate()
+                    primary_error = sys.exc_info()[1]
                     try:
-                        server.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        server.kill()
-                        server.wait()
+                        server.terminate()
+                        try:
+                            server.wait(timeout=10)
+                        except subprocess.TimeoutExpired:
+                            server.kill()
+                            server.wait(timeout=5)
+                    except Exception as error:
+                        if primary_error is None:
+                            raise
+                        primary_error.add_note(f"Server cleanup also failed: {error!r}")
         write(folder / "record.json", record)
         current(spec, out)
         write(
@@ -929,7 +946,12 @@ async def probe(spec, out):
             write(folder / "record.json", record)
         write(
             folder / "outcome.json",
-            {"outcome": "technical_failure", "error": str(exc), "fingerprint": fp},
+            {
+                "outcome": "technical_failure",
+                "error": str(exc),
+                "error_notes": getattr(exc, "__notes__", []),
+                "fingerprint": fp,
+            },
         )
         raise
     finally:

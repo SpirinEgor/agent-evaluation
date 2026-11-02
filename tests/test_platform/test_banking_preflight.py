@@ -784,3 +784,128 @@ def test_surface_child_uses_directory_and_probes_gateway_without_solution_file(
     assert result["canary_not_searchable"]
     assert all(result["hidden_reads_denied"].values())
     assert result["native_bypass_denied"]
+
+
+@pytest.mark.parametrize("failure_stage", ["journal", "http_cleanup", "server_cleanup"])
+def test_probe_persists_runtime_before_postprocessing_and_cleanup_errors(
+    tmp_path, monkeypatch, failure_stage
+):
+    import asyncio
+    import sys
+    from contextlib import nullcontext
+    from types import SimpleNamespace
+
+    from tau2.platform import client as client_module
+    from test_platform.test_codex_harness import load_harness
+
+    h = load_harness()
+    m = module()
+    evidence = {
+        "stdout": "MODEL_TRANSCRIPT",
+        "stderr": "MODEL_STDERR",
+        "broker_evidence": {"events": ["captured"]},
+    }
+    record = {
+        "task_id": "Bank 2",
+        "run": evidence,
+        "classification": "luna_pass",
+        "final_reward": 1.0,
+    }
+    for phase in ["validation", "surface"]:
+        m.write(tmp_path / (phase + ".json"), {"passed": True, "fingerprint": "fp"})
+    m.write(tmp_path / "surface-packet.json", {})
+    surface = m.read(tmp_path / "surface.json")
+    surface["packet_sha256"] = m.sha(tmp_path / "surface-packet.json")
+    m.write(tmp_path / "surface.json", surface)
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "fixture.txt").write_text("SELF_CONTAINED")
+    monkeypatch.setattr(m, "current", lambda *a: "fp")
+    monkeypatch.setattr(m, "boundary_check", lambda *a: {"image": "fixture"})
+    monkeypatch.setattr(m.urllib.request, "urlopen", lambda *a, **k: nullcontext())
+    monkeypatch.delenv("BANKING_LANGFUSE_ENABLED", raising=False)
+
+    class Server:
+        def __init__(self, *a, **k):
+            pass
+
+        def poll(self):
+            return None
+
+        def terminate(self):
+            if failure_stage in ["journal", "server_cleanup"]:
+                raise RuntimeError("server cleanup failed")
+
+        def wait(self, **kwargs):
+            return 0
+
+    class Client:
+        def __init__(self, *a, **k):
+            self._http = self
+
+        async def open(self, *a, **k):
+            pass
+
+        async def aclose(self):
+            if failure_stage in ["journal", "http_cleanup"]:
+                raise RuntimeError("http cleanup failed")
+
+    async def stub(**kwargs):
+        return record
+
+    def attach(*args):
+        # The durable copy must exist before this potentially failing stage.
+        saved = m.read(tmp_path / "attempts/01/record.json")
+        assert saved["run"] == evidence
+        if failure_stage == "journal":
+            raise RuntimeError("journal failed")
+
+    if failure_stage == "journal":
+        work = tmp_path / "model-work"
+        work.mkdir()
+
+        def cleanup():
+            raise RuntimeError("temporary directory cleanup failed")
+
+        monkeypatch.setattr(
+            h.tempfile,
+            "TemporaryDirectory",
+            lambda **kwargs: SimpleNamespace(name=str(work), cleanup=cleanup),
+        )
+    monkeypatch.setattr(m.subprocess, "Popen", Server)
+    monkeypatch.setattr(client_module, "PlatformClient", Client)
+    monkeypatch.setitem(
+        sys.modules,
+        "run_codex_harness",
+        SimpleNamespace(
+            run_one_attempt=stub,
+            build_prompt=lambda **k: "BANK TICKET",
+            attach_persisted_journal=attach,
+            temporary_run_directory=h.temporary_run_directory,
+        ),
+    )
+    spec = {
+        "max_attempts": 1,
+        "task_id": "Bank 2",
+        "data_dir": str(source),
+        "model": {
+            "name": "local-stub",
+            "effort": "low",
+            "max_calls": 100,
+            "max_errors": 0,
+            "timeout_seconds": 1,
+            "image": "fixture",
+        },
+    }
+    expected = (
+        "journal failed"
+        if failure_stage == "journal"
+        else failure_stage.replace("_", " ") + " failed"
+    )
+    with pytest.raises(RuntimeError, match=expected):
+        asyncio.run(m.probe(spec, tmp_path))
+    assert m.read(tmp_path / "attempts/01/record.json")["run"] == evidence
+    outcome = m.read(tmp_path / "attempts/01/outcome.json")
+    assert outcome["outcome"] == "technical_failure" and outcome["error"] == expected
+    if failure_stage == "journal":
+        assert len(outcome["error_notes"]) == 3

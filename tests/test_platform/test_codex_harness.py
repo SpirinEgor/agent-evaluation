@@ -578,7 +578,8 @@ def test_finish_attempt_preserves_protocol_state(initial_status, closed):
             yield self
 
         async def call_tool(self, name, arguments):
-            calls.append(name)
+            calls.append((name, arguments))
+            return SimpleNamespace(is_error=False)
 
         async def result(self, token):
             return {"reward": 1.0, "business_process_only": True}
@@ -586,12 +587,26 @@ def test_finish_attempt_preserves_protocol_state(initial_status, closed):
         async def close(self, token):
             calls.append("close")
 
-    opened = SimpleNamespace(server_for=lambda name: "support")
+    opened = SimpleNamespace(mcp_layout="directory", server_for=lambda name: "support")
     result = asyncio.run(load_harness().finish_attempt(Client(), opened, state))
     assert result["closed_by_harness"] is closed
     assert result["state_before_cleanup"] == state
     assert state["status"] == initial_status
-    assert calls == (["done", "close"] if closed else ["close"])
+    assert calls == (
+        [
+            (
+                "bank_directory",
+                {"operation": "open_tool", "system_id": "support", "tool_name": "done"},
+            ),
+            (
+                "bank_call",
+                {"system_id": "support", "tool_name": "done", "arguments": {}},
+            ),
+            "close",
+        ]
+        if closed
+        else ["close"]
+    )
 
 
 def test_main_rejects_model_launch_without_validation_receipts(tmp_path, monkeypatch):
@@ -721,8 +736,9 @@ def test_supported_harness_requests_directory_before_any_model_call(tmp_path):
         )
 
 
+@pytest.mark.parametrize("model_done", [True, False])
 def test_directory_harness_round_trip_with_real_mcp_and_no_model(
-    app, settings, tmp_path, monkeypatch
+    app, settings, tmp_path, monkeypatch, model_done
 ):
     import asyncio
 
@@ -819,26 +835,27 @@ def test_directory_harness_round_trip_with_real_mcp_and_no_model(
                             not result.is_error
                             and json.loads(result.content[0].text)["content"]
                         )
-                        assert not (
-                            await mcp.call_tool(
-                                "bank_directory",
-                                {
-                                    "operation": "open_tool",
-                                    "system_id": "support",
-                                    "tool_name": "done",
-                                },
-                            )
-                        ).is_error
-                        assert not (
-                            await mcp.call_tool(
-                                "bank_call",
-                                {
-                                    "system_id": "support",
-                                    "tool_name": "done",
-                                    "arguments": {},
-                                },
-                            )
-                        ).is_error
+                        if model_done:
+                            assert not (
+                                await mcp.call_tool(
+                                    "bank_directory",
+                                    {
+                                        "operation": "open_tool",
+                                        "system_id": "support",
+                                        "tool_name": "done",
+                                    },
+                                )
+                            ).is_error
+                            assert not (
+                                await mcp.call_tool(
+                                    "bank_call",
+                                    {
+                                        "system_id": "support",
+                                        "tool_name": "done",
+                                        "arguments": {},
+                                    },
+                                )
+                            ).is_error
                     return {
                         "stdout": "",
                         "stderr": "",
@@ -858,7 +875,10 @@ def test_directory_harness_round_trip_with_real_mcp_and_no_model(
                 )
 
     record = asyncio.run(go())
-    assert record["mcp_layout"] == "directory" and record["state"]["status"] == "done"
+    assert record["mcp_layout"] == "directory"
+    assert record["state"]["status"] == ("done" if model_done else "open")
+    assert record["closed_by_harness"] is (not model_done)
+    assert record["protocol_status"] == ("done" if model_done else "missing_done")
     assert not record["technical_failure"] and record["final_reward"] == 0
     assert record["discovery"]["calls"] == 5
     h.attach_persisted_journal(record, settings.results_dir)
@@ -900,3 +920,171 @@ def test_harness_closes_wrong_layout_before_invoking_runtime(tmp_path, monkeypat
         )
     )
     assert result["classification"] == "invalid_harness" and closed == ["fixture"]
+
+
+@pytest.mark.parametrize(
+    "failure_stage",
+    ["state", "result", "close", "runtime", "journal", "runtime_directory_cleanup"],
+)
+def test_attempt_keeps_runtime_evidence_after_errors(
+    tmp_path, monkeypatch, failure_stage
+):
+    import asyncio
+    from types import SimpleNamespace
+
+    h = load_harness()
+    evidence = dict(
+        stdout="MODEL_TRANSCRIPT",
+        stderr="MODEL_STDERR",
+        app_server_events=[{"event": "captured"}],
+        broker_evidence={"events": [{"event": "request"}]},
+        output_observations=[],
+        timed_out=False,
+        exit_code=0,
+    )
+    opened = SimpleNamespace(
+        token="fixture",
+        mcp_layout="directory",
+        mcp_urls={"banking_ru_pilot": "http://fixture/mcp"},
+        policy="BANK STARTUP",
+        ticket="BANK TICKET",
+        max_calls=100,
+        max_errors=0,
+        max_discovery_calls=None,
+    )
+
+    class Client:
+        async def open(self, *args, **kwargs):
+            return opened
+
+        async def state(self, token):
+            if failure_stage == "state":
+                raise RuntimeError("state failed")
+            return {"token": token, "status": "done"}
+
+        async def result(self, token):
+            if failure_stage == "result":
+                raise RuntimeError("result failed")
+            return {"reward": 1.0, "business_process_only": True}
+
+        async def close(self, token):
+            if failure_stage == "close":
+                raise RuntimeError("close failed")
+
+    async def stub(*args, **kwargs):
+        if failure_stage in {"runtime", "runtime_directory_cleanup"}:
+            error = RuntimeError(failure_stage + " failed")
+            error.partial_run = evidence
+            raise error
+        return evidence
+
+    def journal(*args, **kwargs):
+        raise RuntimeError("journal failed")
+
+    if failure_stage == "runtime_directory_cleanup":
+
+        def cleanup():
+            raise RuntimeError("directory cleanup failed")
+
+        monkeypatch.setattr(
+            h.tempfile,
+            "TemporaryDirectory",
+            lambda **kwargs: SimpleNamespace(name=str(tmp_path), cleanup=cleanup),
+        )
+    monkeypatch.setattr(h, "invoke_isolated_codex", stub)
+    if failure_stage == "journal":
+        monkeypatch.setattr(h, "collect_attempt_journal", journal)
+    record = asyncio.run(
+        h.run_one_attempt(
+            client=Client(),
+            task_id="Bank 2",
+            model="local-stub",
+            effort="low",
+            timeout_seconds=1,
+            work_root=tmp_path,
+        )
+    )
+    assert record["classification"] == "invalid_harness"
+    assert record["run"] == evidence
+    assert failure_stage + " failed" in record["error"]
+    if failure_stage == "runtime_directory_cleanup":
+        assert "directory cleanup failed" in "\n".join(record["error_notes"])
+
+
+@pytest.mark.parametrize("failed_tool", ["bank_directory", "bank_call"])
+def test_completion_rejection_does_not_fetch_reward_or_mask_primary_error(failed_tool):
+    import asyncio
+    from contextlib import asynccontextmanager
+    from types import SimpleNamespace
+
+    class Client:
+        @asynccontextmanager
+        async def connect(self, opened, server):
+            yield self
+
+        async def call_tool(self, name, arguments):
+            return SimpleNamespace(is_error=name == failed_tool)
+
+        async def result(self, token):
+            raise AssertionError("Result must not be fetched after rejection")
+
+        async def close(self, token):
+            raise RuntimeError("secondary cleanup failure")
+
+    opened = SimpleNamespace(mcp_layout="directory", server_for=lambda name: "support")
+    with pytest.raises(
+        RuntimeError, match="completion failed at " + failed_tool
+    ) as caught:
+        asyncio.run(
+            load_harness().finish_attempt(
+                Client(), opened, {"status": "open", "token": "fixture"}
+            )
+        )
+    assert "secondary cleanup failure" in "\n".join(caught.value.__notes__)
+
+
+@pytest.mark.parametrize("failure_stage", ["runtime", "metadata"])
+def test_container_cleanup_preserves_primary_error_and_partial_transcript(
+    monkeypatch, failure_stage
+):
+    import asyncio
+    from importlib.machinery import ModuleSpec
+
+    h = load_harness()
+    evidence = {
+        "stdout": "CAPTURED",
+        "stderr": "CAPTURED_ERR",
+        "broker_evidence": {"events": ["captured"]},
+    }
+
+    async def runtime(*args, **kwargs):
+        if failure_stage == "runtime":
+            error = RuntimeError("original runtime failure")
+            error.partial_run = evidence
+            raise error
+        return evidence  # Missing app_server_command triggers a metadata failure.
+
+    def cleanup(name):
+        raise RuntimeError("secondary container cleanup failure")
+
+    class Loader:
+        def create_module(self, spec):
+            return None
+
+        def exec_module(self, module):
+            module.prepare_container = lambda *a: {"Id": "fixture", "Image": "fixture"}
+            module.invoke_app_server = runtime
+            module.create_command = lambda *a: []
+            module.remove_container = cleanup
+
+    monkeypatch.setattr(
+        h.importlib.util,
+        "spec_from_file_location",
+        lambda *a: ModuleSpec("container_fixture", Loader()),
+    )
+    with pytest.raises(
+        RuntimeError if failure_stage == "runtime" else KeyError
+    ) as caught:
+        asyncio.run(h.invoke_isolated_codex([], "TICKET", 1, policy="STARTUP"))
+    assert caught.value.partial_run is evidence
+    assert "secondary container cleanup failure" in "\n".join(caught.value.__notes__)

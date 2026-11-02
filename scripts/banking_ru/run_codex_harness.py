@@ -11,6 +11,7 @@ import tempfile
 import time
 import uuid
 from collections.abc import Awaitable, Callable
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -189,6 +190,24 @@ def build_prompt(
     )
 
 
+@contextmanager
+def temporary_run_directory(**kwargs):
+    """Keep the original failure/evidence if directory removal also fails."""
+    directory = tempfile.TemporaryDirectory(**kwargs)
+    try:
+        yield directory.name
+    finally:
+        primary_error = sys.exc_info()[1]
+        try:
+            directory.cleanup()
+        except Exception as error:
+            if primary_error is None:
+                raise
+            primary_error.add_note(
+                f"Temporary directory cleanup also failed: {error!r}"
+            )
+
+
 async def finish_attempt(client, opened, state: dict) -> dict:
     """Collect a result and close the session without laundering an open run.
 
@@ -200,7 +219,31 @@ async def finish_attempt(client, opened, state: dict) -> dict:
     try:
         if closed_by_harness:
             async with client.connect(opened, opened.server_for("done")) as mcp:
-                await mcp.call_tool("done", {})
+                if opened.mcp_layout == "directory":
+                    calls = [
+                        (
+                            "bank_directory",
+                            {
+                                "operation": "open_tool",
+                                "system_id": "support",
+                                "tool_name": "done",
+                            },
+                        ),
+                        (
+                            "bank_call",
+                            {
+                                "system_id": "support",
+                                "tool_name": "done",
+                                "arguments": {},
+                            },
+                        ),
+                    ]
+                else:
+                    calls = [("done", {})]
+                for name, arguments in calls:
+                    response = await mcp.call_tool(name, arguments)
+                    if response.is_error:
+                        raise RuntimeError(f"Harness completion failed at {name}")
         result = await client.result(state["token"])
         return {
             "closed_by_harness": closed_by_harness,
@@ -208,7 +251,13 @@ async def finish_attempt(client, opened, state: dict) -> dict:
             "result": result,
         }
     finally:
-        await client.close(state["token"])
+        primary_error = sys.exc_info()[1]
+        try:
+            await client.close(state["token"])
+        except Exception as error:
+            if primary_error is None:
+                raise
+            primary_error.add_note(f"Session cleanup also failed: {error!r}")
 
 
 async def invoke_codex(command: list[str], prompt: str, timeout_seconds: float) -> dict:
@@ -286,6 +335,7 @@ async def invoke_isolated_codex(
     container = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(container)
     name = "banking-codex-" + uuid.uuid4().hex
+    run = None
     try:
         inspected = await asyncio.to_thread(
             container.prepare_container, image, name, policy
@@ -312,15 +362,22 @@ async def invoke_isolated_codex(
             "auth_delivery": "host-only subscription broker; no guest credentials",
         }
         return run
+    except BaseException as error:
+        if run is not None:
+            error.partial_run = run
+        raise
     finally:
+        primary_error = sys.exc_info()[1]
         try:
             await asyncio.to_thread(container.remove_container, name)
         except Exception as error:
-            if "run" in locals():
+            if run is not None:
                 error.partial_run = run
-            raise
+            if primary_error is None:
+                raise
+            primary_error.add_note(f"Container cleanup also failed: {error!r}")
         else:
-            if "run" in locals():
+            if run is not None and "container" in run:
                 run["container"]["cleanup_verified"] = True
 
 
@@ -558,13 +615,13 @@ async def run_one_attempt(
     opened = await client.open(
         task_id, participant=f"codex-{model}-{effort}", mcp_layout=mcp_layout
     )
-    run: dict
+    run = None
     try:
         from tau2.domains.banking_ru.mcp_systems import SINGLE_SERVER
 
         if opened.mcp_layout != "directory" or set(opened.mcp_urls) != {SINGLE_SERVER}:
             raise ValueError("Platform did not provide the directory-only MCP surface")
-        with tempfile.TemporaryDirectory(
+        with temporary_run_directory(
             prefix=f"codex-{task_id}-", dir=work_root
         ) as temp_dir:
             (Path(temp_dir) / "AGENTS.md").write_text(opened.policy, encoding="utf-8")
@@ -594,24 +651,69 @@ async def run_one_attempt(
             )
         state = await client.state(opened.token)
         finish = await finish_attempt(client, opened, state)
+        journal = collect_attempt_journal(
+            run["stdout"],
+            run["stderr"],
+            finish["result"].get("mcp_events", []),
+            run["output_observations"],
+        )
+        return {
+            "task_id": task_id,
+            "ticket": opened.ticket,
+            "token": opened.token,
+            "max_calls": opened.max_calls,
+            "max_errors": opened.max_errors,
+            "max_discovery_calls": opened.max_discovery_calls,
+            "discovery": finish["result"].get("discovery", state.get("discovery")),
+            "mcp_layout": opened.mcp_layout,
+            "mcp_systems": list(opened.mcp_urls),
+            "state": state,
+            "closed_by_harness": finish["closed_by_harness"],
+            "protocol_status": "done" if state["status"] == "done" else "missing_done",
+            "result": finish["result"],
+            "run": run,
+            "attempt_journal": journal,
+            "platform_event_status": "not_loaded",
+            "bank_reward": finish["result"].get("reward"),
+            "confirmed_external_refusal": bool(journal["external_refusals"]),
+            "final_reward": 0.0
+            if journal["external_refusals"]
+            else finish["result"].get("reward"),
+            "technical_failure": bool(run["timed_out"] or run["exit_code"] != 0),
+            "event_observation": {
+                "argument_capture_status": journal["argument_capture_status"],
+                "argument_capture_complete": journal["argument_capture_complete"],
+                "boundary": journal["boundary"],
+                "unknown_cases_require_audit": True,
+            },
+            "attempt_reward": 0.0
+            if journal["external_refusals"]
+            else finish["result"].get("reward"),
+            "classification": classify_result(
+                state,
+                finish["result"],
+                timed_out=run["timed_out"],
+                exit_code=run["exit_code"],
+                closed_by_harness=finish["closed_by_harness"],
+                external_refusals=journal["external_refusals"],
+            ),
+        }
     except Exception as error:
+        saved_run = run if run is not None else getattr(error, "partial_run", None)
         # A failed harness cannot be passed off as an unsolved task.  Closing
         # the session is still best-effort so transient network faults do not
         # leak live MCP mounts on the platform.
         try:
             await client.close(opened.token)
-        except Exception:
-            pass
+        except Exception as cleanup_error:
+            error.add_note(f"Session cleanup also failed: {cleanup_error!r}")
         return {
             "task_id": task_id,
-            **(
-                {"run": error.partial_run}
-                if getattr(error, "partial_run", None) is not None
-                else {}
-            ),
+            **({"run": saved_run} if saved_run is not None else {}),
             "token": opened.token,
             "classification": "invalid_harness",
             "error": repr(error),
+            "error_notes": getattr(error, "__notes__", []),
             "bank_reward": None,
             "confirmed_external_refusal": None,
             "final_reward": None,
@@ -621,54 +723,6 @@ async def run_one_attempt(
                 "unknown_cases_require_audit": True,
             },
         }
-
-    journal = collect_attempt_journal(
-        run["stdout"],
-        run["stderr"],
-        finish["result"].get("mcp_events", []),
-        run["output_observations"],
-    )
-    return {
-        "task_id": task_id,
-        "ticket": opened.ticket,
-        "token": opened.token,
-        "max_calls": opened.max_calls,
-        "max_errors": opened.max_errors,
-        "max_discovery_calls": opened.max_discovery_calls,
-        "discovery": finish["result"].get("discovery", state.get("discovery")),
-        "mcp_layout": opened.mcp_layout,
-        "mcp_systems": list(opened.mcp_urls),
-        "state": state,
-        "closed_by_harness": finish["closed_by_harness"],
-        "protocol_status": "done" if state["status"] == "done" else "missing_done",
-        "result": finish["result"],
-        "run": run,
-        "attempt_journal": journal,
-        "platform_event_status": "not_loaded",
-        "bank_reward": finish["result"].get("reward"),
-        "confirmed_external_refusal": bool(journal["external_refusals"]),
-        "final_reward": 0.0
-        if journal["external_refusals"]
-        else finish["result"].get("reward"),
-        "technical_failure": bool(run["timed_out"] or run["exit_code"] != 0),
-        "event_observation": {
-            "argument_capture_status": journal["argument_capture_status"],
-            "argument_capture_complete": journal["argument_capture_complete"],
-            "boundary": journal["boundary"],
-            "unknown_cases_require_audit": True,
-        },
-        "attempt_reward": 0.0
-        if journal["external_refusals"]
-        else finish["result"].get("reward"),
-        "classification": classify_result(
-            state,
-            finish["result"],
-            timed_out=run["timed_out"],
-            exit_code=run["exit_code"],
-            closed_by_harness=finish["closed_by_harness"],
-            external_refusals=journal["external_refusals"],
-        ),
-    }
 
 
 def write_json(path: Path, value: object) -> None:
