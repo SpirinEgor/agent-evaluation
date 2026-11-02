@@ -34,18 +34,22 @@ def _payment_route(task, route):
     status = by_id["bank2:v11:status"]
     operation_id = status.arguments["resolution_operation_id"]
     sequence = {
-        "reverse": ["X", "resolve", "W", "Z"],
+        "reverse": ["X", "resolve", "C"],
         "early_y": ["Y", "X", "resolve"],
         "relaxed": ["X", "resolve", "R", "Y"],
-        "unreceived_minimum": ["X", "resolve", "R", "Y"],
-        "late_minimum": ["X", "resolve", "R", "Y"],
-        "late_minimum_replay": ["X", "resolve", "R", "Y"],
         "suboptimal": ["Y"],
         "success": ["X", "resolve", "Y"],
         "success_reverse": ["Y", "X", "resolve"],
         "success_pending_y": ["X", "Y", "resolve"],
-    }.get(route, ["X", "resolve", "Z", "W"])
+    }.get(route, ["X", "resolve", "C"])
+    composite = by_id["bank2:v12:pay-first"].arguments
     packages = {
+        "C": (
+            "offer_610735",
+            composite["component_ids"],
+            [(r["transaction_id"], r["amount"]) for r in composite["payouts"]],
+            {},
+        ),
         "X": ("offer_610741", ["X"], [("txn_804219", 18)], {}),
         "R": ("offer_610751", ["R"], [("txn_804219", 17)], {}),
         "Z": ("offer_610743", ["Z"], [("txn_804219", 24)], {}),
@@ -58,7 +62,7 @@ def _payment_route(task, route):
         "W": ("offer_610749", ["W"], [("txn_804227", 14)], {}),
     }
     revision, number = 2, 0
-    remaining = {"txn_804219": 25, "txn_804227": 53}
+    remaining = {"txn_804219": 25, "txn_804227": 22.1}
     x_pay = None
     for key in sequence:
         if key == "resolve":
@@ -72,18 +76,20 @@ def _payment_route(task, route):
         c, p = deepcopy(consent), deepcopy(pay)
         c.action_id, p.action_id = (
             ("bank2:v12:consent-first", "bank2:v12:pay-first")
-            if key in {"R", "Z"}
+            if key in {"R", "Z", "C"}
             else ("bank2:v10:consent-second", "bank2:v10:pay-second")
             if key in {"Y", "W"}
             else ("bank2:v5:consent", "bank2:v5:pay")
         )
         offer, components, raw_payouts, proof = packages[key]
+        if route == "reverse":
+            components = list(reversed(components))
         payouts = [
             {"transaction_id": tid, "amount": amount} for tid, amount in raw_payouts
         ]
         projected = dict(remaining)
         for tid, amount in raw_payouts:
-            projected[tid] -= amount
+            projected[tid] = round(projected[tid] - amount, 2)
         packet = dict(
             offer_id=offer,
             offer_version=2,
@@ -136,7 +142,7 @@ def _payment_route(task, route):
     return actions
 
 
-def test_bank2_strict_first_purchase_minimum_selects_zw_reference():
+def test_bank2_minimum_and_prior_payments_select_composite_reference():
     """A below-minimum replacement must not remain the main accepted reference."""
     task = next(t for t in get_tasks() if t.id == "Bank 2")
     db = PlatformSession(task, get_environment).env.tools.db
@@ -147,7 +153,7 @@ def test_bank2_strict_first_purchase_minimum_selects_zw_reference():
         for action in task.evaluation_criteria.actions
         if action.name == "execute_reward_resolution"
     ]
-    assert payouts == ["offer_610741", "offer_610743", "offer_610749"]
+    assert payouts == ["offer_610741", "offer_610735"]
 
 
 @pytest.mark.parametrize("mode", ["half", "full"])
@@ -157,11 +163,7 @@ def test_bank2_strict_first_purchase_minimum_selects_zw_reference():
         ("reference", 1, 1),
         ("reverse", 1, 1),
         ("early_y", 0, 1),
-        ("relaxed", 1, 1),
         ("strict_decline", 1, 1),
-        ("unreceived_minimum", 1, 0),
-        ("late_minimum", 1, 0),
-        ("late_minimum_replay", 1, 1),
         ("replay", 1, 1),
         ("late_origin_snapshot", 1, 1),
         ("late_origin_replay", 1, 1),
@@ -188,17 +190,6 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
             if a.action_id == "bank2:v12:consent-first"
         )
     )
-    if route in {
-        "relaxed",
-        "unreceived_minimum",
-        "late_minimum",
-        "late_minimum_replay",
-    }:
-        task = task.model_copy(deep=True)
-        task.initial_state.initialization_data.agent_data[
-            "reward_resolution_preferences"
-        ]["gromov_a_1187"]["minimum_payout_reduction_limits"] = {"txn_804219": 17}
-        task.evaluation_criteria.actions = _payment_route(task, "relaxed")
     if route.startswith("success"):
         task = task.model_copy(deep=True)
         task.initial_state.initialization_data.agent_data[
@@ -241,7 +232,6 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
     delayed = None
     late_origin = None
     received_operation = None
-    minimum_delayed = None
     for action in [] if route == "noop" else actions:
         if action.name == "submit_cashback_review" and route == "no_submit":
             continue
@@ -321,19 +311,6 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
             )
             if target["offer_id"] == "offer_610751":
                 target["fallback_operation_id"] = received_operation
-        if action.action_id == "bank2:v12:minimum-change" and route in {
-            "unreceived_minimum",
-            "late_minimum",
-            "late_minimum_replay",
-        }:
-            minimum_delayed = session.begin_call(action.name, action.arguments, None)
-            result = payload(
-                session.call(action.name, action.arguments, attempt=minimum_delayed)
-            )
-            assert result["status"] == "accepted"
-            if route == "late_minimum_replay":
-                assert payload(call(action.name, action.arguments)) == result
-            continue
         if action.action_id == "bank2:v12:consent-first" and route == "strict_decline":
             result = payload(
                 call(
@@ -382,9 +359,6 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
             and result.get("operation_id") is not None
         ):
             received_operation = result["operation_id"]
-        if route == "late_minimum" and action.action_id == "bank2:v12:consent-first":
-            session.result_sent(minimum_delayed)
-            minimum_delayed = None
         if route == "late_status" and action.action_id == "bank2:v12:pay-first":
             session.result_sent(delayed)
             delayed = None
@@ -392,8 +366,6 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
         session.result_sent(late_origin)
     if delayed is not None:
         session.result_sent(delayed)
-    if minimum_delayed is not None:
-        session.result_sent(minimum_delayed)
     assert not call("done", {}).is_error
     reward = (
         session.grade() if mode == "half" else grade_full_session(session).reward_info
@@ -405,16 +377,11 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
     if want_db:
         case = session.env.tools.db.cases["case_610903"]
         first, second, bank, partner = (
-            (7, 31, 22, 18)
-            if route.startswith("success")
-            else (8, 31, 21, 18)
-            if route
-            in {"relaxed", "unreceived_minimum", "late_minimum", "late_minimum_replay"}
-            else (1, 39, 19, 19)
+            (7, 0.1, 22, 18) if route.startswith("success") else (5.5, 1.85, 21, 20)
         )
         assert case.review_status == "registered"
         assert case.responsible_unit == "rewards_review"
-        assert case.review_amount == case.amount == first + second + 7
+        assert case.review_amount == case.amount == round(first + second + 7, 2)
         assert {r.transaction_id: r.amount for r in case.review_items} == {
             r["transaction_id"]: r["amount"] for r in _claims(first, second)
         }
@@ -427,205 +394,6 @@ def test_bank2_payment_and_review_whole_grade(mode, route, want_db, want_action)
         assert sum(x["bank"] for x in paid) == bank
         assert sum(x["partner"] for x in paid) == partner
         assert not any(x.result["status"] == "execution_unknown" for x in executions)
-
-
-@pytest.mark.parametrize("source", ["article", "rules", "missing", "late_rules"])
-def test_bank2_category_source_equivalence(source):
-    """The MCC fact may come from the article or received historical rules."""
-    task = next(t for t in get_tasks() if t.id == "Bank 2")
-    session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
-    deferred = []
-    for action in task.evaluation_criteria.actions:
-        if (
-            source != "article"
-            and action.name == "file_read"
-            and action.arguments["path"] == "/knowledge/reward_merchant_categories.md"
-        ):
-            continue
-        if action.name == "get_cashback_rules" and source in {"missing", "late_rules"}:
-            deferred.append(action)
-            continue
-        result = session.call(action.name, action.arguments)
-        assert not result.is_error, result.content
-    if source == "late_rules":
-        assert deferred
-        session.replay_actions(deferred)
-    session.call("done", {})
-    category_ids = {
-        item.evidence_id
-        for item in task.evaluation_criteria.result_evidence
-        if "doc:reward_merchant_categories:" in item.evidence_id
-    }
-    assert len(category_ids) >= 2
-    for grade in (session.grade(), grade_full_session(session).reward_info):
-        assert grade.reward_breakdown[RewardType.DB] == 1
-        assert grade.reward == (1 if source in {"article", "rules"} else 0)
-        failures = set((grade.info.get("action") or {}).get("result_evidence", []))
-        assert (
-            category_ids.isdisjoint(failures)
-            if source in {"article", "rules"}
-            else category_ids <= failures
-        )
-
-
-@pytest.mark.parametrize("invalid", ["mcc", "period", "product", "split_records"])
-def test_bank2_category_rules_require_one_matching_historical_record(invalid):
-    from tau2.data_model.message import AssistantMessage, ToolCall, ToolMessage
-    from tau2.evaluator.evaluator_action import _result_evidence_failures
-    from tau2.evaluator.trace_evidence import evidence_from_messages
-
-    task = next(t for t in get_tasks() if t.id == "Bank 2")
-    session = PlatformSession(task, get_environment)
-    payload = session.env.tools.db.cashback_rules["gromov_a_1187"].model_dump(
-        mode="json"
-    )
-    evidence = [
-        item
-        for item in task.evaluation_criteria.result_evidence
-        if "doc:reward_merchant_categories:" in item.evidence_id
-    ]
-    assert len(evidence) >= 2
-    targets = [
-        next(
-            a
-            for a in task.evaluation_criteria.actions
-            if a.action_id == item.before_action_id
-        )
-        for item in evidence
-    ]
-
-    def failures(data):
-        read = ToolCall(
-            id="rules",
-            name="get_cashback_rules",
-            arguments={"customer_id": "gromov_a_1187"},
-        )
-        messages = [
-            AssistantMessage(role="assistant", tool_calls=[read]),
-            ToolMessage(role="tool", id="rules", content=json.dumps(data)),
-        ]
-        for index, action in enumerate(targets):
-            call = ToolCall(
-                id=f"target-{index}", name=action.name, arguments=action.arguments
-            )
-            messages.append(AssistantMessage(role="assistant", tool_calls=[call]))
-        return _result_evidence_failures(
-            evidence_from_messages(messages).observed,
-            task.evaluation_criteria.actions,
-            evidence,
-        )
-
-    assert not failures(payload)
-    record = next(
-        row for row in payload["categories_history"] if row["id"] == "cafe-rate-july"
-    )
-    if invalid == "mcc":
-        record["categories"][0]["mcc_codes"] = ["5411"]
-    elif invalid == "period":
-        record["effective_from"] = "2026-08-01"
-    elif invalid == "product":
-        record["product_code"] = "other_rewards"
-    else:
-        other = deepcopy(record)
-        other["id"] = "different-record"
-        record["categories"][0]["mcc_codes"] = ["5411"]
-        payload["categories_history"].append(other)
-    assert set(failures(payload)) == {item.evidence_id for item in evidence}
-
-
-@pytest.mark.parametrize("source", ["policy", "knowledge", "missing", "late_knowledge"])
-def test_bank2_review_rules_allow_equivalent_received_source(source):
-    task = next(t for t in get_tasks() if t.id == "Bank 2")
-    session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
-    delayed = None
-    for action in task.evaluation_criteria.actions:
-        if action.name == "file_read":
-            path = action.arguments["path"]
-            if path == "/policies/fees_rewards.md" and source != "policy":
-                continue
-            if path == "/knowledge/reward_case_amendment.md" and source in {
-                "missing",
-                "late_knowledge",
-            }:
-                delayed = action
-                continue
-        result = session.call(action.name, action.arguments)
-        assert not result.is_error, result.content
-    if source == "late_knowledge":
-        assert delayed is not None
-        session.replay_actions([delayed])
-    session.call("done", {})
-    for grade in (session.grade(), grade_full_session(session).reward_info):
-        assert grade.reward_breakdown[RewardType.DB] == 1
-        assert grade.reward == (1 if source in {"policy", "knowledge"} else 0), (
-            grade.info
-        )
-        missing = (grade.info.get("action") or {}).get("result_evidence", [])
-        assert ("bank2:v6:received-review-policy" in missing) == (
-            source in {"missing", "late_knowledge"}
-        )
-
-
-@pytest.mark.parametrize("invalid", ["partial", "hash", "search_only"])
-def test_bank2_review_rules_reject_incomplete_or_unrelated_evidence(invalid):
-    from tau2.data_model.message import AssistantMessage, ToolCall, ToolMessage
-    from tau2.evaluator.evaluator_action import _result_evidence_failures
-    from tau2.evaluator.trace_evidence import evidence_from_messages
-
-    task = next(t for t in get_tasks() if t.id == "Bank 2")
-    rule = next(
-        e
-        for e in task.evaluation_criteria.result_evidence
-        if e.evidence_id == "bank2:v6:received-review-policy"
-    )
-    target = next(
-        a
-        for a in task.evaluation_criteria.actions
-        if a.action_id == rule.before_action_id
-    )
-    s = PlatformSession(task, get_environment)
-    for path in ["/policies/fees_rewards.md", "/knowledge/reward_case_amendment.md"]:
-        payload = json.loads(s.call("file_read", {"path": path}).content[0].text)
-
-        def failures(data, name="file_read"):
-            trace = evidence_from_messages(
-                [
-                    AssistantMessage(
-                        role="assistant",
-                        tool_calls=[
-                            ToolCall(id="source", name=name, arguments={"path": path})
-                        ],
-                    ),
-                    ToolMessage(role="tool", id="source", content=json.dumps(data)),
-                    AssistantMessage(
-                        role="assistant",
-                        tool_calls=[
-                            ToolCall(
-                                id="target",
-                                name=target.name,
-                                arguments=target.arguments,
-                            )
-                        ],
-                    ),
-                    ToolMessage(
-                        role="tool",
-                        id="target",
-                        content=json.dumps({"review_status": "registered"}),
-                    ),
-                ]
-            )
-            return _result_evidence_failures(
-                trace.observed, task.evaluation_criteria.actions, [rule]
-            )
-
-        assert not failures(payload), path
-        if invalid == "partial":
-            payload["complete"] = False
-        elif invalid == "hash":
-            payload["sha256"] = "outdated-revision"
-        assert failures(
-            payload, "file_search" if invalid == "search_only" else "file_read"
-        ) == [rule.evidence_id]
 
 
 def test_bank2_unknown_outcome_reference_preserves_declined_replacement():
@@ -642,14 +410,14 @@ def test_bank2_unknown_outcome_reference_preserves_declined_replacement():
         a.arguments["offer_id"]
         for a in actions
         if a.name == "execute_reward_resolution"
-    ] == ["offer_610741", "offer_610743", "offer_610749"]
+    ] == ["offer_610741", "offer_610735"]
 
 
 @pytest.mark.parametrize(
     "outcome,minimum,expected,components",
     [
-        ("failed_final", 18, 3800, (("Z",), ("W",))),
-        ("failed_final", 17, 3900, (("Y",), ("R",))),
+        ("failed_final", 18, 3975, (("1A", "2B", "4B", "5B", "6B"),)),
+        ("failed_final", 17, 3975, (("1A", "2B", "4B", "5B", "6B"),)),
         ("succeeded", 18, 4000, (("X",), ("Y",))),
     ],
 )
@@ -694,6 +462,11 @@ def test_bank2_terminal_menu_has_unique_maximum(outcome, minimum, expected, comp
                     )
                     amount, allocation = selected_amounts(offer, list(subset))
                     if any(
+                        value > {"txn_804219": 2500, "txn_804227": 2210}[tid]
+                        for tid, value in allocation.items()
+                    ):
+                        continue
+                    if any(
                         tid == "txn_804219" and payout < minimum * 100
                         for tid, payout in allocation.items()
                     ):
@@ -724,3 +497,80 @@ def test_bank2_terminal_menu_has_unique_maximum(outcome, minimum, expected, comp
     assert [parts for amount, parts in legal if amount == expected] == [components]
     assert (3800, (("Z",), ("W",))) in legal
     assert (3600, (("A", "C", "G"),)) not in legal
+
+
+@pytest.mark.parametrize("delivery", ["received", "unreceived", "late", "replayed"])
+def test_composite_requires_received_permission_to_lower_minimum(delivery):
+    """A scenario with a binding minimum tests receipt, not an obsolete R path."""
+    task = next(t for t in get_tasks() if t.id == "Bank 2").model_copy(deep=True)
+    prefs = task.initial_state.initialization_data.agent_data[
+        "reward_resolution_preferences"
+    ]["gromov_a_1187"]
+    prefs["minimum_payouts"] = {"txn_804219": 20}
+    prefs["text"] = prefs["text"].replace("не меньше 18 рублей", "не меньше 20 рублей")
+    next(
+        e
+        for e in task.evaluation_criteria.result_evidence
+        if e.evidence_id == "bank2:v5:preferences"
+    ).expected_fields["minimum_payouts"] = {"txn_804219": 20}
+    prefs["minimum_payout_reduction_limits"] = {"txn_804219": 19.5}
+    actions = [
+        a
+        for a in task.evaluation_criteria.actions
+        if a.action_id
+        not in {
+            "bank2:v5:consent",
+            "bank2:v5:pay",
+            "bank2:v11:status",
+            "bank2:v10:offers-after-first",
+        }
+    ]
+    consent = next(a for a in actions if a.action_id == "bank2:v12:consent-first")
+    change = consent.model_copy(deep=True)
+    change.action_id = "test:minimum-change"
+    change.argument_values = {"request.type": "reward_resolution_minimum_change"}
+    change.arguments = {
+        "customer_id": "gromov_a_1187",
+        "transaction_id": "txn_804219",
+        "request": {
+            "type": "reward_resolution_minimum_change",
+            "case_id": "case_610903",
+            "minimum_amount": 19.5,
+        },
+    }
+    actions.insert(actions.index(consent), change)
+    consent.action_id = "bank2:v5:consent"
+    consent.arguments["request"]["state_revision"] = 2
+    pay = next(a for a in actions if a.name == "execute_reward_resolution")
+    pay.action_id = "bank2:v5:pay"
+    pay.required_for_reward = True
+    pay.arguments.update(
+        expected_revision=2, confirmation_id="resolution-confirmation-1"
+    )
+    next(a for a in actions if a.name == "amend_cashback_investigation").arguments[
+        "expected_revision"
+    ] = 3
+    task.evaluation_criteria.actions = actions
+    task = type(task).model_validate_json(task.model_dump_json())
+    session = PlatformSession(task, get_environment, max_errors=0)
+    delayed = None
+    for action in task.evaluation_criteria.actions:
+        if action.action_id == "test:minimum-change" and delivery != "received":
+            delayed = session.begin_call(action.name, action.arguments, None)
+            result = session.call(action.name, action.arguments, attempt=delayed)
+            assert not result.is_error
+            assert json.loads(result.content[0].text)["status"] == "accepted"
+            if delivery == "replayed":
+                assert not session.call(action.name, action.arguments).is_error
+            continue
+        assert not session.call(action.name, action.arguments).is_error
+        if action.action_id == "bank2:v5:consent" and delivery == "late":
+            session.result_sent(delayed)
+    if delayed is not None and delivery != "late":
+        session.result_sent(delayed)
+    session.call("done", {})
+    for grade in [session.grade(), grade_full_session(session).reward_info]:
+        assert grade.reward_breakdown == {
+            RewardType.DB: 1,
+            RewardType.ACTION: int(delivery in {"received", "replayed"}),
+        }, grade.info

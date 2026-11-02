@@ -19,6 +19,10 @@ from tau2.domains.banking_ru.document_service_models import (
     DocumentDelivery,
     DocumentServiceProfile,
 )
+from tau2.domains.banking_ru.reward_payment_register import (
+    RewardPaymentAllocation,
+    RewardPostingRole,
+)
 from tau2.domains.banking_ru.reward_resolution_models import (
     PartnerConfirmation,
     RewardResolutionExecution,
@@ -225,6 +229,7 @@ class CardLimits(BaseModel):
 
 
 class Transaction(BaseModel):
+    reward_posting_role: RewardPostingRole | None = None
     reward_discrepancy_type: str | None = None
     id: str = Field(description="Идентификатор операции")
     customer_id: str = Field(description="Клиент, которому принадлежит операция")
@@ -813,6 +818,7 @@ class Document(BaseModel):
     нарушение видно в состоянии БД.
     """
 
+    reward_payment_allocations: list[RewardPaymentAllocation] = Field(default_factory=list)
     id: str = Field(description="Идентификатор документа")
     customer_id: str = Field(description="Клиент, к которому относится документ")
     title: str = Field(description="Название документа")

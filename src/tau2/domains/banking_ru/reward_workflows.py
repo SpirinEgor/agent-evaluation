@@ -152,6 +152,13 @@ def reward_obligations(db, customer_id, period):
         key=lambda t: (datetime.fromisoformat(t.posted_at), t.id),
     )
     available = cents(cycle["limit"])
+    from tau2.domains.banking_ru.reward_payment_register import (
+        allocated_reward_payments,
+    )
+
+    allocated_paid = allocated_reward_payments(
+        db, customer_id, cycle.get("settlement_as_of", db.today)
+    )
     rows = {}
     for tx in purchases:
         linked = linked_posted(db, tx, cycle)
@@ -238,6 +245,7 @@ def reward_obligations(db, customer_id, period):
             for t in linked
             if t.kind == "cashback" or t.compensates_cashback
         )
+        paid += allocated_paid.get(tx.id, 0)
         rows[tx.id] = {
             "program": program,
             "entitlement": entitlement,
