@@ -521,6 +521,18 @@ class ResponseStream:
             if self.completed or event["response"].get("status") != "completed":
                 raise ValueError("Invalid response completion")
             self.guard.complete(event["response"].get("output"))
+            usage = event["response"].get("usage")
+            if isinstance(usage, dict):
+                # Preserve only numerical accounting, never arbitrary provider fields.
+                self.guard.events[-1]["usage"] = {
+                    key: value
+                    for key, value in usage.items()
+                    if key in {"input_tokens", "output_tokens", "total_tokens"}
+                    and isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                }
+
             self.completed = True
         elif kind in {"response.failed", "response.incomplete", "error"}:
             raise BrokerFailure(

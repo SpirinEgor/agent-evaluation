@@ -120,7 +120,7 @@ The target contract requires received current sources before dependent actions,
 without a prescribed search path. Rejected no-effect, no-disclosure calls are
 neutral in that contract, but current ownership checks still need migration.
 Do not relabel existing results or silently disable checks to match the target.
-Business-profile completion does not require final prose or automatic zero for missing done.
+Banking completion does not require final prose; as of 2 November 2026 missing agent done zeros DB and ACTION.
 
 Fixtures must be self-contained; maintained tests cannot read ignored artifacts.
 The explicit inventory is [run_basic_tests.py](../scripts/banking_ru/run_basic_tests.py).

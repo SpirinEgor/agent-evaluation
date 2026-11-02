@@ -124,14 +124,15 @@ def evaluate_simulation(
     # Completion-only does not require customer prose. Keep the original text:
     # outgoing disclosures are safety evidence even in a diagnostic message.
     if domain == "banking_ru":
-        if (
-            not business_only
-            and simulation.termination_reason != TerminationReason.AGENT_STOP
-        ):
+        if simulation.termination_reason != TerminationReason.AGENT_STOP:
             return RewardInfo(
                 reward=0.0,
-                reward_basis=None,
-                info={"note": "Banking completion-only requires actual done"},
+                reward_basis=[RewardType.DB, RewardType.ACTION],
+                reward_breakdown={RewardType.DB: 0.0, RewardType.ACTION: 0.0},
+                info={
+                    "note": "Banking requires agent done",
+                    "protocol_status": "missing_done",
+                },
             )
     if not business_only and simulation.termination_reason not in {
         TerminationReason.AGENT_STOP,

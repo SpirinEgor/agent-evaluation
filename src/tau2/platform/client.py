@@ -110,6 +110,11 @@ class PlatformClient:
                 )
             yield servers
 
+    async def abort(self, token: str) -> dict:
+        response = await self._http.post(f"{self.base_url}/sessions/{token}/abort")
+        response.raise_for_status()
+        return response.json()
+
     async def result(self, token: str) -> dict:
         response = await self._http.get(f"{self.base_url}/sessions/{token}/result")
         response.raise_for_status()

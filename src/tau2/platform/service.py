@@ -335,6 +335,13 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             **({"discovery": s.discovery_metrics()} if s.directory is not None else {}),
         )
 
+    @app.post("/sessions/{token}/abort")
+    async def abort_session(token: str) -> dict[str, str]:
+        # Host control plane only: cleanup must never impersonate agent done.
+        session = _get(token).session
+        session.finish(SessionStatus.ABORTED)
+        return {"status": session.status.value}
+
     @app.delete("/sessions/{token}")
     async def close_session(token: str) -> dict[str, bool]:
         item = live.pop(token, None)

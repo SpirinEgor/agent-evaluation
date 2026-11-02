@@ -18,7 +18,7 @@ DB проверяет конечное состояние, включая объ
 эффекта не снижает балл; текущая проверка доступа ещё требует миграции.
 Не представляй это решение как уже реализованное поведение.
 
-В бизнес-профиле отсутствие done само по себе не обнуляет достигнутые цели;
+По решению 2 ноября 2026 отсутствие агентского done обнуляет DB и ACTION;
 финальная проза не требуется. Общие правила ниже не переопределяют эти
 банковские решения. Документацию обновляй вместе с изменением оценки.
 
@@ -75,7 +75,7 @@ The `evaluate_simulation()` function in `evaluator.py` is the main entry point. 
 
 4. **Handle missing criteria gracefully**: If `task.evaluation_criteria` is `None` or a specific criterion is absent, return `reward=1.0` (not 0). Missing criteria means "not evaluated", not "failed".
 
-5. **Termination depends on profile**: The ordinary path returns 0 for termination outside `AGENT_STOP`/`USER_STOP`. Banking `business_process_only` bypasses this automatic zero; evaluate actual goals and violations and keep the technical outcome separate.
+5. **Termination depends on profile**: The ordinary path returns 0 for termination outside `AGENT_STOP`/`USER_STOP`. Banking requires AGENT_STOP even in `business_process_only`; missing agent done zeros DB and ACTION. Other domains retain their profile behavior.
 
 6. **`evaluation_criteria.actions` is *one* reference trajectory, not a per-action requirement**: `EnvironmentEvaluator` replays `actions` on a fresh env to derive the target DB hash, then compares against the predicted DB hash. Other agent trajectories producing an equivalent end state also pass. ACTION matches declared required actions (`required_for_reward=True`) when that component is enabled; optional reference steps may still supply separately required evidence. See [the shared evaluation guide](../../../docs/evaluation.md).
 

@@ -47,6 +47,7 @@ from tau2.platform.mcp_bridge import (
 class SessionStatus(str, Enum):
     OPEN = "open"
     DONE = "done"
+    ABORTED = "aborted"
     BUDGET_EXHAUSTED = "budget_exhausted"
     TOO_MANY_ERRORS = "too_many_errors"
 
@@ -680,10 +681,37 @@ class PlatformSession:
     def termination_reason(self) -> TerminationReason:
         return {
             SessionStatus.OPEN: TerminationReason.USER_STOP,
+            SessionStatus.ABORTED: TerminationReason.USER_STOP,
             SessionStatus.DONE: TerminationReason.AGENT_STOP,
             SessionStatus.BUDGET_EXHAUSTED: TerminationReason.MAX_STEPS,
             SessionStatus.TOO_MANY_ERRORS: TerminationReason.TOO_MANY_ERRORS,
         }[self.status]
+
+    def attempt_metrics(self) -> dict:
+        from tau2.environment.toolkit import ToolType
+        from tau2.platform.attempt_metrics import tool_metrics
+
+        tools = self.env.tools
+        names = tools.get_tools()
+        result = tool_metrics(
+            self.mcp_events,
+            read_tools={
+                n
+                for n in names
+                if tools.tool_type(n) == ToolType.READ
+                and not tools.tool_mutates_state(n)
+            }
+            | set(KNOWLEDGE_TOOLS)
+            | {"bank_directory"},
+            mutating_tools={n for n in names if tools.tool_mutates_state(n)},
+        )
+        end = self.finished_at or datetime.now(timezone.utc)
+        result.update(
+            version="banking_metrics_v1",
+            protocol_completion=self.status is SessionStatus.DONE,
+            resolution_seconds=(end - self.created_at).total_seconds(),
+        )
+        return result
 
     def to_simulation_run(self) -> SimulationRun:
         """Запись в формате results.json: её понимают tau2 view и evaluate_trajectories."""
@@ -706,6 +734,7 @@ class PlatformSession:
                 "mcp_events": self.mcp_events,
                 "transport_complete": self.transport_complete,
                 "discovery": self.discovery_metrics(),
+                "metrics": self.attempt_metrics(),
                 "tool_call_errors": deepcopy(self.tool_call_errors),
                 **(
                     {"environment_errors": deepcopy(self.environment_errors)}

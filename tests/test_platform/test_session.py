@@ -108,13 +108,17 @@ def test_other_domain_keeps_default_error_stop_and_explicit_override():
     assert overridden.status is SessionStatus.BUDGET_EXHAUSTED
 
 
-def test_business_success_without_done_survives_protocol_cleanup():
+def test_business_success_requires_agent_done():
     s = make()
     s.task = s.task.model_copy(deep=True)
     s.task.evaluation_criteria.business_process_only = True
     s.replay_actions(s.task.evaluation_criteria.actions)
     assert s.status is SessionStatus.OPEN
     assert s.errors == 0
-    assert s.grade().final_reward == 1.0
+    assert s.grade().final_reward == 0.0
+    assert {k.value: v for k, v in s.grade().reward_breakdown.items()} == {
+        "DB": 0.0,
+        "ACTION": 0.0,
+    }
     s.call("done", {})
     assert s.grade().final_reward == 1.0

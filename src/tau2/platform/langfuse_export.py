@@ -119,6 +119,7 @@ def export_attempt(record, *, model, ticket, metadata=None, client=None, events=
                 "final_reward",
                 "technical_failure",
                 "protocol_status",
+                "metrics",
             )
         }
         with (
@@ -209,6 +210,21 @@ def export_attempt(record, *, model, ticket, metadata=None, client=None, events=
         scores = dict(result.get("reward_breakdown") or {})
         if record.get("final_reward") is not None:
             scores = {"bank_reward": record["final_reward"], **scores}
+        metrics = record.get("metrics") or {}
+        scores.update(
+            {
+                "resolution_seconds": metrics.get("resolution_seconds"),
+                "tool_calls": metrics.get("calls", {}).get("total"),
+                "discovery_calls": metrics.get("calls", {}).get("discovery"),
+                "format_accuracy": metrics.get("format_accuracy", {}).get("rate"),
+                "recovery_rate": metrics.get("recovery", {}).get("rate"),
+                "repeated_reads": metrics.get("repeated_reads"),
+                "state_mutating_attempts": metrics.get("calls", {}).get(
+                    "state_mutating_attempts"
+                ),
+                "model_requests": metrics.get("compute", {}).get("model_requests"),
+            }
+        )
         for name, value in scores.items():
             if isinstance(value, (int, float)):
                 client.create_score(trace_id=trace_id, name=name, value=value)

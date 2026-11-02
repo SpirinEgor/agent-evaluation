@@ -31,7 +31,7 @@ def test_classify_requires_model_done_for_fail():
         closed_by_harness=True,
     )
 
-    assert status == "invalid_missing_done"
+    assert status == "fail_missing_done"
 
 
 def test_classify_counts_completed_zero_reward_as_fail():
@@ -538,7 +538,7 @@ def test_denial_time_is_observation_of_error_not_call_start():
 
 
 @pytest.mark.parametrize("reward,want", [(1.0, "pass"), (0.0, "fail")])
-def test_business_result_is_independent_of_missing_done(reward, want):
+def test_business_result_requires_done(reward, want):
     result = {"reward": reward, "business_process_only": True}
     status = load_harness().classify_result(
         {"status": "open"},
@@ -547,7 +547,7 @@ def test_business_result_is_independent_of_missing_done(reward, want):
         exit_code=0,
         closed_by_harness=True,
     )
-    assert status == want
+    assert status == "fail_missing_done"
 
 
 def test_business_profile_does_not_hide_infrastructure_failure():
@@ -566,47 +566,27 @@ def test_business_profile_does_not_hide_infrastructure_failure():
 )
 def test_finish_attempt_preserves_protocol_state(initial_status, closed):
     import asyncio
-    from contextlib import asynccontextmanager
     from types import SimpleNamespace
 
     state = {"status": initial_status, "token": "fixture-token"}
     calls = []
 
     class Client:
-        @asynccontextmanager
-        async def connect(self, opened, server):
-            yield self
-
-        async def call_tool(self, name, arguments):
-            calls.append((name, arguments))
-            return SimpleNamespace(is_error=False)
+        async def abort(self, token):
+            calls.append("abort")
 
         async def result(self, token):
-            return {"reward": 1.0, "business_process_only": True}
+            return {"reward": 0.0 if closed else 1.0, "business_process_only": True}
 
         async def close(self, token):
             calls.append("close")
 
-    opened = SimpleNamespace(mcp_layout="directory", server_for=lambda name: "support")
+    opened = SimpleNamespace(mcp_layout="directory")
     result = asyncio.run(load_harness().finish_attempt(Client(), opened, state))
     assert result["closed_by_harness"] is closed
     assert result["state_before_cleanup"] == state
     assert state["status"] == initial_status
-    assert calls == (
-        [
-            (
-                "bank_directory",
-                {"operation": "open_tool", "system_id": "support", "tool_name": "done"},
-            ),
-            (
-                "bank_call",
-                {"system_id": "support", "tool_name": "done", "arguments": {}},
-            ),
-            "close",
-        ]
-        if closed
-        else ["close"]
-    )
+    assert calls == (["abort", "close"] if closed else ["close"])
 
 
 def test_main_rejects_model_launch_without_validation_receipts(tmp_path, monkeypatch):
@@ -880,13 +860,22 @@ def test_directory_harness_round_trip_with_real_mcp_and_no_model(
     assert record["closed_by_harness"] is (not model_done)
     assert record["protocol_status"] == ("done" if model_done else "missing_done")
     assert not record["technical_failure"] and record["final_reward"] == 0
-    assert record["discovery"]["calls"] == 5
+    assert record["discovery"]["calls"] == (5 if model_done else 4)
     h.attach_persisted_journal(record, settings.results_dir)
     saved = json.loads((settings.results_dir / (record["token"] + ".json")).read_text())
     events = saved["info"]["mcp_events"]
     assert any(e.get("canonical_name") == "read_document" for e in events)
     assert all("response_order" in e for e in events)
     assert record["platform_event_status"] == "linked"
+    assert record["metrics"]["protocol_completion"] is model_done
+    assert record["metrics"]["calls"]["total"] == len(events)
+    assert record["metrics"]["compute"]["cost"]["amount"] is None
+    # A passing ACTION legitimately has null info; all safety lists stay empty.
+    saved["reward_info"]["info"]["action"] = None
+    (settings.results_dir / (record["token"] + ".json")).write_text(json.dumps(saved))
+    h.attach_persisted_journal(record, settings.results_dir)
+    assert record["metrics"]["safety"]["access_violations"] == []
+    assert record["metrics"]["safety"]["forbidden_action_matches"] == []
 
 
 def test_harness_closes_wrong_layout_before_invoking_runtime(tmp_path, monkeypatch):
@@ -1011,19 +1000,13 @@ def test_attempt_keeps_runtime_evidence_after_errors(
         assert "directory cleanup failed" in "\n".join(record["error_notes"])
 
 
-@pytest.mark.parametrize("failed_tool", ["bank_directory", "bank_call"])
-def test_completion_rejection_does_not_fetch_reward_or_mask_primary_error(failed_tool):
+def test_abort_rejection_does_not_fetch_reward_or_mask_primary_error():
     import asyncio
-    from contextlib import asynccontextmanager
     from types import SimpleNamespace
 
     class Client:
-        @asynccontextmanager
-        async def connect(self, opened, server):
-            yield self
-
-        async def call_tool(self, name, arguments):
-            return SimpleNamespace(is_error=name == failed_tool)
+        async def abort(self, token):
+            raise RuntimeError("abort failed")
 
         async def result(self, token):
             raise AssertionError("Result must not be fetched after rejection")
@@ -1031,13 +1014,10 @@ def test_completion_rejection_does_not_fetch_reward_or_mask_primary_error(failed
         async def close(self, token):
             raise RuntimeError("secondary cleanup failure")
 
-    opened = SimpleNamespace(mcp_layout="directory", server_for=lambda name: "support")
-    with pytest.raises(
-        RuntimeError, match="completion failed at " + failed_tool
-    ) as caught:
+    with pytest.raises(RuntimeError, match="abort failed") as caught:
         asyncio.run(
             load_harness().finish_attempt(
-                Client(), opened, {"status": "open", "token": "fixture"}
+                Client(), SimpleNamespace(), {"status": "open", "token": "fixture"}
             )
         )
     assert "secondary cleanup failure" in "\n".join(caught.value.__notes__)

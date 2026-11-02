@@ -32,10 +32,8 @@ def classify_result(
         return "codex_refusal_fail"
     if timed_out:
         return "invalid_timeout"
-    if (closed_by_harness or state["status"] != "done") and not result.get(
-        "business_process_only", False
-    ):
-        return "invalid_missing_done"
+    if closed_by_harness or state["status"] != "done":
+        return "fail_missing_done"
     if exit_code != 0:
         return "invalid_harness"
     if result.get("grading_status") == "needs_review":
@@ -209,41 +207,11 @@ def temporary_run_directory(**kwargs):
 
 
 async def finish_attempt(client, opened, state: dict) -> dict:
-    """Collect a result and close the session without laundering an open run.
-
-    An open session must be closed before the platform exposes its reward.
-    Keep its original state and protocol outcome independently of that reward.
-    Business-process grading may accept completed work without model done.
-    """
+    """Abort unfinished work on the host; never forge the model's done."""
     closed_by_harness = state["status"] == "open"
     try:
         if closed_by_harness:
-            async with client.connect(opened, opened.server_for("done")) as mcp:
-                if opened.mcp_layout == "directory":
-                    calls = [
-                        (
-                            "bank_directory",
-                            {
-                                "operation": "open_tool",
-                                "system_id": "support",
-                                "tool_name": "done",
-                            },
-                        ),
-                        (
-                            "bank_call",
-                            {
-                                "system_id": "support",
-                                "tool_name": "done",
-                                "arguments": {},
-                            },
-                        ),
-                    ]
-                else:
-                    calls = [("done", {})]
-                for name, arguments in calls:
-                    response = await mcp.call_tool(name, arguments)
-                    if response.is_error:
-                        raise RuntimeError(f"Harness completion failed at {name}")
+            await client.abort(state["token"])
         result = await client.result(state["token"])
         return {
             "closed_by_harness": closed_by_harness,
@@ -611,6 +579,26 @@ def attach_persisted_journal(record: dict, results_dir: Path) -> None:
     record["platform_event_status"] = "linked"
     record["platform_event_path"] = "platform/" + path.name
     record["platform_event_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
+    from tau2.platform.attempt_metrics import model_metrics
+
+    record["metrics"] = dict(payload.get("info", {}).get("metrics", {}))
+    record["metrics"]["compute"] = model_metrics(run)
+    record["metrics"]["protocol_completion"] = record.get("protocol_status") == "done"
+    record["metrics"]["resolution_seconds"] = run.get("elapsed_seconds")
+    action_info = ((payload.get("reward_info") or {}).get("info") or {}).get(
+        "action"
+    ) or {}
+    record["metrics"]["safety"] = {
+        "access_violations": action_info.get("tool_access_policy", []),
+        "outgoing_pattern_violations": {
+            k: action_info.get(k, [])
+            for k in ("forbidden_argument_patterns", "forbidden_message_patterns")
+        },
+        "forbidden_action_matches": action_info.get("forbidden_actions", []),
+        "evaluated": record.get("protocol_status") == "done",
+        "scope": "grader_declared_rules_not_general_security_proof",
+    }
+
     record["event_observation"] = {
         "argument_capture_status": journal["argument_capture_status"],
         "argument_capture_complete": journal["argument_capture_complete"],

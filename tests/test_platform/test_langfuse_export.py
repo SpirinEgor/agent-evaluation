@@ -157,3 +157,19 @@ def test_export_loads_only_hash_bound_platform_events(tmp_path):
     path.write_text("{}")
     with pytest.raises(ValueError, match="hash"):
         recorded_events(record, tmp_path)
+
+
+def test_exports_observed_metrics_and_skips_unknown_values():
+    c = Client()
+    original = record()
+    original["metrics"] = {
+        "resolution_seconds": 12.5,
+        "calls": {"total": 7, "discovery": 2},
+        "format_accuracy": {"rate": 1.0},
+        "compute": {"model_requests": None},
+    }
+    export_attempt(original, model="fixture-model", ticket="ticket", client=c)
+    scores = {s["name"]: s["value"] for s in c.scores}
+    assert scores["tool_calls"] == 7
+    assert scores["resolution_seconds"] == 12.5
+    assert "model_requests" not in scores
