@@ -102,6 +102,11 @@ TOOL_OWNERS = {
     "get_cashback_rules": "loyalty",
     "get_promotions": "loyalty",
     "get_reward_contracts": "loyalty",
+    "get_reward_reprocessing_cases": "loyalty",
+    "repair_reward_binding": "loyalty",
+    "reprocess_rewards": "loyalty",
+    "retry_reward_resolution": "loyalty",
+
     "get_service_incidents": "crm",
     "get_partner_confirmations": "loyalty",
     "get_promotion_activations": "loyalty",

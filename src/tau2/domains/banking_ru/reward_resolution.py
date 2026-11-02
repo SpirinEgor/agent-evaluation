@@ -76,12 +76,14 @@ def _post_credits(tools, credits):
         tools.db.transactions[credit.original_transaction_id].cashback_granted = True
 
 
-def _settle(tools, operation):
+def _settle(tools, operation, *, retry_pending=False):
     if operation.result.get("status") != "execution_unknown":
         return deepcopy(operation.result)
     from tau2.domains.banking_ru.data_model import Transaction
 
     plan = operation.pending_settlement
+    if plan.retry_required and not retry_pending:
+        return deepcopy(operation.result)
     result = {
         k: deepcopy(v) for k, v in operation.result.items() if k != "funding_hold"
     }
@@ -89,7 +91,12 @@ def _settle(tools, operation):
     if plan.final_status == "succeeded":
         credits = [Transaction.model_validate(row) for row in plan.ledger]
         _post_credits(tools, credits)
-        result.update(total_amount=plan.total_amount, ledger=deepcopy(plan.ledger))
+        result.update(
+            total_amount=plan.total_amount,
+            ledger=deepcopy(operation.result.get("ledger", []) + plan.ledger),
+        )
+        result.pop("retry_required", None)
+        result.pop("failed_transaction_ids", None)
         if plan.funding_charge is not None:
             result["funding_charge"] = deepcopy(plan.funding_charge)
     elif plan.funding_charge is not None:
@@ -108,6 +115,14 @@ def get_status(tools, resolution_operation_id):
         raise ToolExecutionRejected("ERR_NOT_FOUND: Операция урегулирования не найдена")
     tools._require_verified(operation.customer_id)
     return _settle(tools, operation)
+
+
+def retry(tools, resolution_operation_id):
+    operation = tools.db.reward_resolution_executions.get(resolution_operation_id)
+    if operation is None:
+        raise ToolExecutionRejected("ERR_NOT_FOUND: Операция урегулирования не найдена")
+    tools._require_verified(operation.customer_id)
+    return _settle(tools, operation, retry_pending=True)
 
 
 def normalized(items):
@@ -689,8 +704,19 @@ def execute(
                 channel="online",
             )
         )
+    deferred_tid = tools.db.reward_resolution_partial_profiles.get(offer_id)
+    if deferred_tid is not None and deferred_tid not in expected:
+        reject("Неверный профиль частичного исполнения")
+    partial = deferred_tid is not None and profile is None
     if profile is None:
-        _post_credits(tools, credits)
+        _post_credits(
+            tools,
+            [
+                c
+                for c in credits
+                if not partial or c.original_transaction_id != deferred_tid
+            ],
+        )
     current = advance(tools.db, offer.customer_id, offer.period)
     result = dict(
         id=execution_id,
@@ -705,16 +731,29 @@ def execute(
         offer_version=offer_version,
     )
     settlement = None
-    if profile is not None:
+    if profile is not None or partial:
         settlement = RewardResolutionSettlement(
-            final_status=profile,
-            ledger=[x.model_dump() for x in credits],
+            final_status=profile or "succeeded",
+            retry_required=partial,
+            ledger=[
+                x.model_dump()
+                for x in credits
+                if not partial or x.original_transaction_id == deferred_tid
+            ],
             total_amount=money(total),
             funding_charge=funding_charge,
         )
         result.update(operation_id=execution_id, status="execution_unknown")
         result.pop("total_amount")
         result.pop("ledger")
+        if partial:
+            posted = [x for x in credits if x.original_transaction_id != deferred_tid]
+            result.update(
+                ledger=[x.model_dump() for x in posted],
+                total_amount=money(sum(cents(x.amount) for x in posted)),
+                retry_required=True,
+                failed_transaction_ids=[deferred_tid],
+            )
         if funding_charge is not None:
             result["funding_hold"] = funding_charge
     elif funding_charge is not None:

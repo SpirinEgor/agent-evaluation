@@ -116,6 +116,33 @@ def rules_with_register(db, customer_id):
     return rules
 
 
+def purchase_total(db, tx):
+    """Aggregate explicit processing fragments, never infer a group by merchant."""
+    fragments = [t for t in db.transactions.values() if t.purchase_group_id == tx.id]
+    for part in fragments:
+        if (
+            any(
+                getattr(part, key) != getattr(tx, key)
+                for key in (
+                    "customer_id",
+                    "account_id",
+                    "card_id",
+                    "receipt_id",
+                    "date",
+                    "kind",
+                    "status",
+                )
+            )
+            or part.kind != "purchase"
+            or not part.posted_at
+            or part.posted_at[:7] != tx.posted_at[:7]
+        ):
+            raise ValueError(
+                "ERR_INVALID_PURCHASE_GROUP: Несогласованные проводки покупки"
+            )
+    return cents(tx.amount) + sum(cents(t.amount) for t in fragments)
+
+
 def reward_obligations(db, customer_id, period):
     """Calculate contract obligations in integer kopecks; never return via MCP."""
     from datetime import datetime
@@ -143,6 +170,7 @@ def reward_obligations(db, customer_id, period):
             and t.account_id == contract.account_id
             and t.card_id in contract.card_ids
             and t.kind == "purchase"
+            and t.purchase_group_id is None
             and t.status == "posted"
             and t.posted_at
             and cycle["posting_from"] <= t.posted_at[:10] <= cycle["posting_to"]
@@ -164,7 +192,7 @@ def reward_obligations(db, customer_id, period):
         linked = linked_posted(db, tx, cycle)
         base = max(
             0,
-            cents(tx.amount)
+            purchase_total(db, tx)
             - sum(cents(t.amount) for t in linked if t.kind == "refund"),
         )
         partners = []

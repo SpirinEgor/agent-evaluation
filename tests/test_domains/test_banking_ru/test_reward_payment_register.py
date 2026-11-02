@@ -203,8 +203,8 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
                 )
                 if "resulting_claims" in packet:
                     packet["resulting_claims"] = [
-                        {"transaction_id": "txn_804219", "amount": 5.75},
-                        {"transaction_id": "txn_804227", "amount": 8.75},
+                        {"transaction_id": "txn_804219", "amount": 0.75},
+                        {"transaction_id": "txn_804227", "amount": 7.55},
                         {"transaction_id": "txn_804205", "amount": 7},
                     ]
             elif (
@@ -216,8 +216,8 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
                         row["amount"] = 31
             if action.name == "amend_cashback_investigation":
                 action.arguments["items"] = [
-                    {"transaction_id": "txn_804219", "amount": 5.75},
-                    {"transaction_id": "txn_804227", "amount": 8.75},
+                    {"transaction_id": "txn_804219", "amount": 0.75},
+                    {"transaction_id": "txn_804227", "amount": 7.55},
                 ]
     session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
     for action in original_packets if wrong else task.evaluation_criteria.actions:
@@ -235,10 +235,10 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
             }, reward.info
     if not wrong:
         case = session.env.tools.db.cases["case_610903"]
-        assert case.review_amount == (21.5 if different else 14.35)
+        assert case.review_amount == (15.3 if different else 8.15)
         assert {r.transaction_id: r.amount for r in case.review_items} == {
-            "txn_804219": 5.75 if different else 5.5,
-            "txn_804227": 8.75 if different else 1.85,
+            "txn_804219": 0.75 if different else 0.5,
+            "txn_804227": 7.55 if different else 0.65,
             "txn_804205": 7,
         }
 

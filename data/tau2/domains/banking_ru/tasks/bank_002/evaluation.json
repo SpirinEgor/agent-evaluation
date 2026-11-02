@@ -3464,6 +3464,48 @@
       ]
     },
     {
+      "action_id": "bank2:v16:repair-policy",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_card_reissue.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v16:reprocessing",
+      "name": "get_reward_reprocessing_cases",
+      "arguments": {
+        "customer_id": "gromov_a_1187"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v16:repair",
+      "name": "repair_reward_binding",
+      "arguments": {
+        "reprocessing_id": "reprocessing_610482",
+        "contract_id": "rc_610482",
+        "replacement_card_id": "card_804217"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v16:recalculate",
+      "name": "reprocess_rewards",
+      "arguments": {
+        "reprocessing_id": "reprocessing_610482",
+        "transaction_ids": [
+          "txn_804219",
+          "txn_804227"
+        ]
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
       "action_id": "bank2:v5:offers",
       "name": "get_reward_resolution_offers",
       "arguments": {
@@ -3566,18 +3608,18 @@
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 5.5
+              "amount": 0.5
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 1.85
+              "amount": 0.65
             },
             {
               "transaction_id": "txn_804205",
               "amount": 7
             }
           ],
-          "state_revision": 2,
+          "state_revision": 4,
           "component_ids": [
             "1A",
             "2B",
@@ -3615,7 +3657,7 @@
         "total_amount": 39.75,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-1",
-        "expected_revision": 2,
+        "expected_revision": 4,
         "idempotency_key": "candidate-composite",
         "component_ids": [
           "1A",
@@ -3632,6 +3674,24 @@
       ]
     },
     {
+      "action_id": "bank2:v16:partial-status",
+      "name": "get_reward_resolution_status",
+      "arguments": {
+        "resolution_operation_id": "resolution:case_610903:offer_610735"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v16:retry",
+      "name": "retry_reward_resolution",
+      "arguments": {
+        "resolution_operation_id": "resolution:case_610903:offer_610735"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
       "action_id": "bank2:v4:amend",
       "name": "amend_cashback_investigation",
       "arguments": {
@@ -3639,14 +3699,14 @@
         "items": [
           {
             "transaction_id": "txn_804219",
-            "amount": 5.5
+            "amount": 0.5
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 1.85
+            "amount": 0.65
           }
         ],
-        "expected_revision": 3
+        "expected_revision": 6
       },
       "required_for_reward": true,
       "compare_args": [
@@ -3885,54 +3945,6 @@
     }
   ],
   "result_evidence": [
-    {
-      "evidence_id": "bank2:v4:selection:bank2:v4:amend",
-      "tool_names": [
-        "ask_client",
-        "get_documents",
-        "get_document_status"
-      ],
-      "record_id": "customer-purchase-selection",
-      "expected_fields": {
-        "merchant": "Кофемания",
-        "amount": 1400,
-        "date": "2026-07-26",
-        "receipt": "CF-2607-1188"
-      },
-      "recoverable_result_statuses": [
-        "settlement_pending",
-        "state_changed"
-      ],
-      "target_item_ids": [
-        "txn_804227"
-      ],
-      "only_if_target_attempted": true,
-      "before_action_id": "bank2:v4:amend"
-    },
-    {
-      "evidence_id": "bank2:v4:selection:bank2:v4:amend:resolution",
-      "tool_names": [
-        "ask_client",
-        "get_documents",
-        "get_document_status"
-      ],
-      "record_id": "customer-purchase-selection",
-      "expected_fields": {
-        "merchant": "Кофемания",
-        "amount": 1400,
-        "date": "2026-07-26",
-        "receipt": "CF-2607-1188"
-      },
-      "recoverable_result_statuses": [
-        "settlement_pending",
-        "state_changed",
-        "consent_stale",
-        "funding_pending",
-        "offer_changed"
-      ],
-      "only_if_target_attempted": true,
-      "before_action_id": "bank2:v12:pay-first"
-    },
     {
       "evidence_id": "common_discovery_Bank 2",
       "tool_names": [

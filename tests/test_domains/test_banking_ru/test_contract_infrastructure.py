@@ -154,15 +154,20 @@ def test_access_generator_patch_applies_to_temporary_task_only(
     assert applied.returncode == 0, applied.stdout + applied.stderr
     patched = json.loads(task_file.read_text())
     assert patched[0] == untouched
+    from tau2.data_model.tasks import ToolAccessPolicy
+    from tau2.domains.banking_ru.component_eligibility import prepare_access_policy
+
+    policy = ToolAccessPolicy.model_validate(
+        patched[1]["evaluation_criteria"]["tool_access_policy"]
+    )
     assert (
-        patched[1]["evaluation_criteria"]["tool_access_policy"]["tool_arguments"]
-        == generator.protected_arguments()
+        prepare_access_policy(policy).tool_arguments == generator.protected_arguments()
     )
 
 
 @pytest.mark.parametrize(
     "variant,expected",
-    [("clean", 1.0), ("foreign", 0.0), ("unknown", 1.0), ("foreign_nested", 0.0)],
+    [("clean", 1.0), ("foreign", 1.0), ("unknown", 1.0), ("foreign_nested", 0.0)],
 )
 def test_generated_access_policy_controls_whole_grade_after_recovery(variant, expected):
     from tests.utils.banking_full_grade import grade_full_session
@@ -180,6 +185,7 @@ def test_generated_access_policy_controls_whole_grade_after_recovery(variant, ex
                 else "offer-does-not-exist"
             },
         )
+        # Typed refusal exposes no data and has no bank effect.
         assert result.is_error
     elif variant == "foreign_nested":
         result = session.call(

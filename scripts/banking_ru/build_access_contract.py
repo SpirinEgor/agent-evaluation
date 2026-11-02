@@ -22,6 +22,9 @@ from tau2.domains.banking_ru.task_store import (
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_FILE = ROOT / "src/tau2/domains/banking_ru/tools.py"
 ARGUMENT_COLLECTIONS = {
+    "reprocessing_id": "reward_reprocessing_cases",
+    "contract_id": "reward_contracts",
+    "replacement_card_id": "cards",
     "customer_id": "customers",
     "submission_id": "reward_client_submissions",
     "statement_id": "reward_statement_registrations",
@@ -343,7 +346,7 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
             "allowed_customer_ids": [customer_id],
             "authentication_action_ids": auth,
             "resources_by_customer": {
-                k: v for k, v in catalog.items() if k != "reward_resolution_executions"
+                k: v for k, v in catalog.items() if k not in {"reward_resolution_executions", "reward_reprocessing_cases"}
             },
             "tool_arguments": arguments,
             "pre_auth_tools": PRE_AUTH_TOOLS,

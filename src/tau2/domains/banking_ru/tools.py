@@ -3092,6 +3092,39 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         }
 
     @is_tool(ToolType.READ)
+    def get_reward_reprocessing_cases(self, customer_id: str) -> list[dict]:
+        """Получить записи инцидентов обработки вознаграждений клиента."""
+        from tau2.domains.banking_ru.reward_reprocessing import list_cases
+
+        return list_cases(self, customer_id)
+
+    @is_tool(ToolType.WRITE)
+    def repair_reward_binding(
+        self, reprocessing_id: str, contract_id: str, replacement_card_id: str
+    ) -> dict:
+        """Изменить привязку обработки вознаграждений к карте договора."""
+        from tau2.domains.banking_ru.reward_reprocessing import repair
+
+        return repair(self, reprocessing_id, contract_id, replacement_card_id)
+
+    @is_tool(ToolType.WRITE)
+    def reprocess_rewards(
+        self, reprocessing_id: str, transaction_ids: list[str]
+    ) -> dict:
+        """Повторно обработать начисления по покупкам инцидента."""
+        from tau2.domains.banking_ru.reward_reprocessing import reprocess
+
+        return reprocess(self, reprocessing_id, transaction_ids)
+
+    @is_tool(ToolType.WRITE)
+    def retry_reward_resolution(self, resolution_operation_id: str) -> dict:
+        """Возобновить неисполненные позиции ранее принятого пакета урегулирования."""
+        from tau2.domains.banking_ru.data_model import CashbackStateResult
+        from tau2.domains.banking_ru.reward_resolution import retry
+
+        return CashbackStateResult(retry(self, resolution_operation_id))
+
+    @is_tool(ToolType.READ)
     def get_reward_resolution_offers(
         self, customer_id: str, case_id: str
     ) -> list[dict]:

@@ -135,6 +135,7 @@ def _resolution_receipts(observed, target, policy):
         if source.call.name not in {
             "execute_reward_resolution",
             "get_reward_resolution_status",
+            "retry_reward_resolution",
         }:
             continue
         result = payload(source)
@@ -163,7 +164,10 @@ def _resolution_receipts(observed, target, policy):
         if not origins:
             continue
         origin = min(origins, key=lambda row: row.call_position)
-        if source.call.name == "get_reward_resolution_status":
+        if source.call.name in {
+            "get_reward_resolution_status",
+            "retry_reward_resolution",
+        }:
             if source.call.arguments.get("resolution_operation_id") != operation:
                 continue
         elif _execution_packet(
@@ -423,6 +427,15 @@ def reward_business_failures(trace, policy):
         ):
             continue
         name, args, ident = target.call.name, target.call.arguments, target.call.id
+        if name == "retry_reward_resolution":
+            operation_id = args.get("resolution_operation_id")
+            proof = _resolution_receipts(observed, target, policy).get(operation_id)
+            if not proof or proof[0].get("status") not in {
+                "execution_unknown",
+                "succeeded",
+                "failed_final",
+            }:
+                failures.append(f"{ident}:retry_operation_not_received")
         if name == "refresh_cashback_settlement" and isinstance(result, dict):
             for decision in result.get("funding_decisions", []):
                 accepted = any(

@@ -125,6 +125,7 @@ class RewardResolutionSettlement(BaseModel):
     ledger: list[dict]
     total_amount: float
     funding_charge: dict | None = None
+    retry_required: bool = False
 
 
 class RewardResolutionExecution(BaseModel):
@@ -137,3 +138,19 @@ class RewardResolutionExecution(BaseModel):
     packet: dict
     result: dict
     pending_settlement: RewardResolutionSettlement | None = None
+
+
+class RewardReprocessingCase(BaseModel):
+    """Processing binding incident; correction rates are bank-authorized terms."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    customer_id: str
+    case_id: str
+    contract_id: str
+    period: str
+    bound_card_id: str
+    transaction_ids: list[str]
+    recovery_rates: dict[str, Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]]
+    status: Literal["binding_mismatch", "repaired", "reprocessed"] = "binding_mismatch"
+    ledger_ids: list[str] = Field(default_factory=list)

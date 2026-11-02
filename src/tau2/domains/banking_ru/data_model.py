@@ -25,6 +25,7 @@ from tau2.domains.banking_ru.reward_payment_register import (
 )
 from tau2.domains.banking_ru.reward_resolution_models import (
     PartnerConfirmation,
+    RewardReprocessingCase,
     RewardResolutionExecution,
     RewardResolutionOffer,
     RewardResolutionPreferences,
@@ -229,6 +230,7 @@ class CardLimits(BaseModel):
 
 
 class Transaction(BaseModel):
+    purchase_group_id: str | None = None
     reward_posting_role: RewardPostingRole | None = None
     reward_discrepancy_type: str | None = None
     id: str = Field(description="Идентификатор операции")
@@ -818,7 +820,9 @@ class Document(BaseModel):
     нарушение видно в состоянии БД.
     """
 
-    reward_payment_allocations: list[RewardPaymentAllocation] = Field(default_factory=list)
+    reward_payment_allocations: list[RewardPaymentAllocation] = Field(
+        default_factory=list
+    )
     id: str = Field(description="Идентификатор документа")
     customer_id: str = Field(description="Клиент, к которому относится документ")
     title: str = Field(description="Название документа")
@@ -1159,6 +1163,10 @@ class BankingDB(DB):
     reward_resolution_executions: dict[str, RewardResolutionExecution] = Field(
         default_factory=dict
     )
+    reward_reprocessing_cases: dict[str, RewardReprocessingCase] = Field(
+        default_factory=dict
+    )
+    reward_resolution_partial_profiles: dict[str, str] = Field(default_factory=dict)
     bank_operations: dict[str, dict] = Field(default_factory=dict)
     session: Session = Field(default_factory=Session, exclude=True)
 
