@@ -400,7 +400,14 @@ def test_provider_metadata_is_removed_only_from_trusted_outputs():
                 "http_status": 429,
             },
         ),
-        ("failed", {"stage": "response_stream", "code": "upstream_response_failed"}),
+        (
+            "failed",
+            {
+                "stage": "response_stream",
+                "code": "upstream_response_failed",
+                "upstream_reason": "unknown",
+            },
+        ),
         (
             "truncated",
             {"stage": "response_stream", "code": "stream_missing_completion"},
@@ -483,3 +490,46 @@ def test_transport_and_bad_json_have_safe_codes():
         diagnostic = b.diagnostic(error, "response_stream")
     assert diagnostic == {"stage": "response_stream", "code": "invalid_sse_json"}
     assert "SECRET" not in json.dumps(diagnostic)
+
+
+@pytest.mark.parametrize(
+    "frame,reason",
+    [
+        (
+            {"type": "error", "code": "context_length_exceeded", "message": "SECRET"},
+            "context_length_exceeded",
+        ),
+        (
+            {
+                "type": "response.failed",
+                "response": {
+                    "error": {"code": "rate_limit_exceeded", "message": "SECRET"}
+                },
+            },
+            "rate_limit_exceeded",
+        ),
+        (
+            {
+                "type": "response.incomplete",
+                "response": {"incomplete_details": {"reason": "max_output_tokens"}},
+            },
+            "max_output_tokens",
+        ),
+        (
+            {"type": "error", "error": {"code": "server_error", "message": "SECRET"}},
+            "server_error",
+        ),
+        ({"type": "error", "code": "SECRET", "message": "PRIVATE"}, "unknown"),
+        ({"type": "error", "error": ["SECRET"], "response": "PRIVATE"}, "unknown"),
+    ],
+)
+def test_provider_error_reason_allowlist(frame, reason):
+    import json
+
+    b = broker()
+    stream = b.ResponseStream(None)
+    with pytest.raises(b.BrokerFailure) as caught:
+        stream.feed(("data: " + json.dumps(frame) + "\n\n").encode())
+    result = b.diagnostic(caught.value, "response_stream")
+    assert result["upstream_reason"] == reason
+    assert "SECRET" not in json.dumps(result) and "PRIVATE" not in json.dumps(result)

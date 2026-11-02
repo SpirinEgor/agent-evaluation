@@ -19,10 +19,49 @@ MAX_TRANSCRIPT = 128 * 1024 * 1024
 class BrokerFailure(ValueError):
     """Known failure metadata only; never retain upstream text or credentials."""
 
-    def __init__(self, code, status=None):
+    def __init__(self, code, status=None, upstream_reason=None):
         super().__init__(code)
         self.code = code
         self.status = status
+        self.upstream_reason = upstream_reason
+
+
+# Only these known literals can be emitted from an untrusted provider event.
+SAFE_UPSTREAM_REASONS = frozenset(
+    {
+        "context_length_exceeded",
+        "rate_limit_exceeded",
+        "insufficient_quota",
+        "server_error",
+        "overloaded",
+        "invalid_request_error",
+        "authentication_error",
+        "model_not_found",
+        "content_filter",
+        "max_output_tokens",
+        "timeout",
+    }
+)
+
+
+def upstream_reason(event):
+    response = event.get("response")
+    response = response if isinstance(response, dict) else {}
+    nested = event.get("error")
+    nested = nested if isinstance(nested, dict) else {}
+    response_error = response.get("error")
+    response_error = response_error if isinstance(response_error, dict) else {}
+    incomplete = response.get("incomplete_details")
+    incomplete = incomplete if isinstance(incomplete, dict) else {}
+    for value in (
+        event.get("code"),
+        nested.get("code"),
+        response_error.get("code"),
+        incomplete.get("reason"),
+    ):
+        if isinstance(value, str) and value in SAFE_UPSTREAM_REASONS:
+            return value
+    return "unknown"
 
 
 def diagnostic(error, stage):
@@ -59,6 +98,10 @@ def diagnostic(error, stage):
     elif isinstance(error, json.JSONDecodeError) and stage == "response_stream":
         code = "invalid_sse_json"
     result = {"stage": stage, "code": code}
+    if isinstance(
+        error, BrokerFailure
+    ) and error.upstream_reason in SAFE_UPSTREAM_REASONS | {"unknown"}:
+        result["upstream_reason"] = error.upstream_reason
     if (
         isinstance(error, BrokerFailure)
         and isinstance(error.status, int)
@@ -434,7 +477,8 @@ class ResponseStream:
                     "response.failed": "upstream_response_failed",
                     "response.incomplete": "upstream_response_incomplete",
                     "error": "upstream_error_event",
-                }[kind]
+                }[kind],
+                upstream_reason=upstream_reason(event),
             )
 
     def finish(self):
