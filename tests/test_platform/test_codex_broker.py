@@ -533,3 +533,70 @@ def test_provider_error_reason_allowlist(frame, reason):
     result = b.diagnostic(caught.value, "response_stream")
     assert result["upstream_reason"] == reason
     assert "SECRET" not in json.dumps(result) and "PRIVATE" not in json.dumps(result)
+
+
+def test_empty_reasoning_content_only_normalized_from_trusted_output():
+    guard, initial = setup_guard()
+    guard.check(initial)
+    reasoning = dict(
+        type="reasoning",
+        id="rs",
+        summary=[],
+        content=[],
+        encrypted_content="OWN_REASONING",
+    )
+    call = call_item()
+    guard.observe_item(reasoning)
+    guard.observe_item(call)
+    guard.complete([reasoning, call])
+    guard.finish_response()
+    guard.authorize_tool("c1", "bank_directory", {"operation": "list_systems"})
+    guard.tool_result("c1", "REAL")
+    follow = deepcopy(initial)
+    expected = deepcopy(reasoning)
+    expected.pop("content")
+    follow["input"] += [
+        expected,
+        call,
+        dict(type="function_call_output", call_id="c1", output="REAL"),
+    ]
+    for key, value in [
+        ("encrypted_content", "FOREIGN"),
+        ("summary", [{"type": "summary_text", "text": "FOREIGN"}]),
+        ("content", []),
+        ("content", [{"type": "text", "text": "FOREIGN"}]),
+    ]:
+        bad = deepcopy(follow)
+        bad["input"][-3][key] = value
+        with pytest.raises(ValueError):
+            guard.check(bad)
+    assert guard.check(follow) == 2
+
+
+def test_nonempty_reasoning_content_remains_bound_to_host_response():
+    guard, initial = setup_guard()
+    guard.check(initial)
+    reasoning = dict(
+        type="reasoning",
+        summary=[],
+        content=[{"type": "text", "text": "trusted"}],
+        encrypted_content="OWN",
+    )
+    call = call_item()
+    guard.observe_item(reasoning)
+    guard.observe_item(call)
+    guard.complete([reasoning, call])
+    guard.finish_response()
+    guard.authorize_tool("c1", "bank_directory", {"operation": "list_systems"})
+    guard.tool_result("c1", "REAL")
+    follow = deepcopy(initial)
+    follow["input"] += [
+        reasoning,
+        call,
+        dict(type="function_call_output", call_id="c1", output="REAL"),
+    ]
+    bad = deepcopy(follow)
+    bad["input"][-3]["content"][0]["text"] = "FORGED"
+    with pytest.raises(ValueError):
+        guard.check(bad)
+    assert guard.check(follow) == 2

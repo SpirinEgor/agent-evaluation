@@ -123,6 +123,9 @@ def canonical(items, *, model_output=False):
             # trusted response side; guest-supplied extra fields still fail.
             item.pop("metadata", None)
             item.pop("internal_chat_message_metadata_passthrough", None)
+            # Codex omits the provider's empty reasoning content in history.
+            if item.get("type") == "reasoning" and item.get("content") == []:
+                item.pop("content")
         # Codex omits empty response annotations when serializing history.
         # Nonempty annotations remain significant and must match exactly.
         if item.get("type") == "message":

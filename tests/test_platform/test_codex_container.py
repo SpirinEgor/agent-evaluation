@@ -209,7 +209,7 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
 
 
 @pytest.mark.parametrize(
-    "case", ["success", "upstream_failure", "tool_error", "large_result"]
+    "case", ["success", "upstream_failure", "tool_error", "large_result", "reasoning"]
 )
 def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     """Real Codex must consume MCP output, with no native tools or model call."""
@@ -366,6 +366,35 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                             and value["item"] is item
                         ):
                             value["output_index"] = 1
+                    if case == "reasoning":
+                        reasoning = dict(
+                            type="reasoning",
+                            id="rs_fixture",
+                            content=[],
+                            summary=[],
+                            encrypted_content="synthetic-opaque-reasoning",
+                        )
+                        response["output"].insert(1, reasoning)
+                        for kind, value in events:
+                            if (
+                                kind
+                                in (
+                                    "response.output_item.added",
+                                    "response.output_item.done",
+                                )
+                                and value["item"] is item
+                            ):
+                                value["output_index"] = 2
+                        events[3:3] = [
+                            (
+                                "response.output_item.added",
+                                {"output_index": 1, "item": reasoning},
+                            ),
+                            (
+                                "response.output_item.done",
+                                {"output_index": 1, "item": reasoning},
+                            ),
+                        ]
                 body = "".join(
                     "event: "
                     + kind
