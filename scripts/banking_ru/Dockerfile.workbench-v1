@@ -1,0 +1,4 @@
+# Build only after verifying local base image ID bf4a8941bcffd627ecf4eb7c30ac30c9e423b44e7547fcde57271b6ad3258ebc.
+FROM banking-codex-isolated:0.166.0-alpha.5.1
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends python3 && rm -rf /var/lib/apt/lists/*

@@ -212,6 +212,7 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
     "case",
     [
         "success",
+        "v1",
         "upstream_failure",
         "tool_error",
         "large_result",
@@ -316,9 +317,17 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                         type="function_call",
                         id="fc_second",
                         call_id="call_second",
-                        name="bank_call",
+                        name="workbench" if case == "v1" else "bank_call",
                         namespace="functions",
-                        arguments="{}",
+                        arguments=json.dumps(
+                            {
+                                "operation": "compute",
+                                "code": "result = sum(data)",
+                                "data": [19, 23, 31],
+                            }
+                        )
+                        if case == "v1"
+                        else "{}",
                     )
                 else:
                     item = dict(
@@ -563,6 +572,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 "BANK STARTUP",
                 30,
                 inference_forward=forward,
+                **({"agent_profile": "v1"} if case == "v1" else {}),
             )
         )
         assert run["exit_code"] == (1 if upstream_failure or late_failure else 0), (
@@ -574,7 +584,11 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         module.validate_model_request(payloads[0], run["request_contract"])
         expected_calls = [("bank_directory", {"operation": "list_systems"})]
         if not upstream_failure:
-            expected_calls.append(("bank_call", {}))
+            if case != "v1":
+                expected_calls.append(("bank_call", {}))
+            else:
+                assert run["agent_profile"]["version"] == "V1"
+                assert run["workbench_events"][0]["output"] == "73"
             assert len(payloads) == (2 if late_failure else 3)
         assert [(c["name"], c["arguments"]) for c in calls] == expected_calls
         if case != "policy_error":

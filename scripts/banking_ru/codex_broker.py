@@ -266,9 +266,9 @@ class ConversationGuard:
             ):
                 raise ValueError("Only authoritative assistant text is supported")
             if row["type"] == "function_call":
-                if row.get("name") not in {"bank_directory", "bank_call"} or row.get(
-                    "namespace"
-                ) not in (None, "functions"):
+                if row.get("name") not in {
+                    s["name"] for s in self.contract["schemas"]
+                } or row.get("namespace") not in (None, "functions"):
                     raise ValueError("Non-banking model tool call")
                 if any(x["type"] == "function_call" for x in self.current):
                     raise ValueError("Parallel function calls are forbidden")

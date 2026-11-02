@@ -295,6 +295,7 @@ async def invoke_isolated_codex(
     *,
     expected_image_id: str | None = None,
     inference_forward=None,
+    agent_profile="baseline",
 ) -> dict:
     """Run full-access Codex in a fresh container without any host mounts."""
     spec = importlib.util.spec_from_file_location(
@@ -317,6 +318,7 @@ async def invoke_isolated_codex(
             policy,
             timeout_seconds,
             inference_forward=inference_forward,
+            **({"agent_profile": agent_profile} if agent_profile != "baseline" else {}),
         )
         run["container"] = {
             "name": name,
@@ -619,10 +621,14 @@ async def run_one_attempt(
     mcp_layout: str = "directory",
     container_image: str = "banking-codex-isolated:0.166.0-alpha.5.1",
     expected_image_id: str | None = None,
+    agent_profile: str = "baseline",
 ) -> dict:
     """Open, run, classify and close one session exactly once."""
     if mcp_layout != "directory":
         raise ValueError("Supported banking harness requires directory layout")
+    from tau2.platform.agents import profile, prompt_for
+
+    profile(agent_profile)
     opened = await client.open(
         task_id, participant=f"codex-{model}-{effort}", mcp_layout=mcp_layout
     )
@@ -643,17 +649,25 @@ async def run_one_attempt(
                     mcp_urls=opened.mcp_urls,
                     workdir=Path(temp_dir),
                 ),
-                build_prompt(
-                    policy=opened.policy,
-                    ticket=opened.ticket,
-                    mcp_urls=opened.mcp_urls,
-                    max_calls=opened.max_calls,
-                    max_errors=opened.max_errors,
-                    max_discovery_calls=opened.max_discovery_calls,
+                prompt_for(
+                    build_prompt(
+                        policy=opened.policy,
+                        ticket=opened.ticket,
+                        mcp_urls=opened.mcp_urls,
+                        max_calls=opened.max_calls,
+                        max_errors=opened.max_errors,
+                        max_discovery_calls=opened.max_discovery_calls,
+                    ),
+                    agent_profile,
                 ),
                 timeout_seconds,
                 container_image,
                 opened.policy,
+                **(
+                    {"agent_profile": agent_profile}
+                    if agent_profile != "baseline"
+                    else {}
+                ),
                 **(
                     {"expected_image_id": expected_image_id}
                     if expected_image_id is not None
@@ -669,6 +683,7 @@ async def run_one_attempt(
             run["output_observations"],
         )
         return {
+            "agent_profile": agent_profile,
             "task_id": task_id,
             "ticket": opened.ticket,
             "token": opened.token,

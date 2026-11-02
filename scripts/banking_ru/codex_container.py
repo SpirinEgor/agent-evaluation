@@ -42,9 +42,20 @@ def banking_model_catalog(catalog: dict, model: str) -> dict:
     return {"models": models}
 
 
-def dynamic_bank_tools(schemas: list[dict]) -> list[dict]:
-    if len(schemas) != 2 or {s["name"] for s in schemas} != BANK_TOOLS:
-        raise ValueError("Exactly bank_directory and bank_call are required")
+def dynamic_bank_tools(schemas: list[dict], agent_profile="baseline") -> list[dict]:
+    from tau2.platform.agents import profile
+
+    profile(agent_profile)
+    from tau2.platform.agents.v1 import SCHEMA
+
+    banking = [s for s in schemas if s["name"] in BANK_TOOLS]
+    local = [s for s in schemas if s["name"] not in BANK_TOOLS]
+    if (
+        len(banking) != 2
+        or {s["name"] for s in banking} != BANK_TOOLS
+        or (local != ([SCHEMA] if agent_profile == "v1" else []))
+    ):
+        raise ValueError("Only banking tools and the exact V1 workbench are allowed")
     return [
         dict(
             type="function",
@@ -85,7 +96,7 @@ def validate_model_request(request: dict, contract: dict) -> dict:
         )
     if set(request.get("text", {})) - {"verbosity"}:
         raise ValueError("Unexpected model output instructions")
-    dynamic_bank_tools(contract["schemas"])
+    dynamic_bank_tools(contract["schemas"], contract.get("agent_profile", "baseline"))
     expected_tools = [
         dict(
             type="function",
@@ -141,7 +152,11 @@ def validate_model_request(request: dict, contract: dict) -> dict:
         raise ValueError(
             "Model input contains unexpected instructions, history or tools"
         )
-    return {"passed": True, "tools": sorted(BANK_TOOLS), "messages": 2}
+    return {
+        "passed": True,
+        "tools": sorted(s["name"] for s in contract["schemas"]),
+        "messages": 2,
+    }
 
 
 def create_command(image: str, name: str) -> list[str]:
@@ -347,12 +362,30 @@ def app_server_command(command):
 
 
 async def invoke_app_server(
-    name, command, prompt, policy, timeout_seconds, *, inference_forward=None
+    name,
+    command,
+    prompt,
+    policy,
+    timeout_seconds,
+    *,
+    inference_forward=None,
+    agent_profile="baseline",
 ):
     """Route only two explicit dynamic tools to the fresh session's real MCP."""
     from mcp import ClientSession
     from mcp.client.streamable_http import streamable_http_client
 
+    from tau2.platform.agents import profile
+
+    agent = profile(agent_profile)
+    workspace = agent.Workspace() if agent else None
+    if agent:
+        await asyncio.to_thread(
+            subprocess.run,
+            ["docker", "exec", name, "python3", "--version"],
+            check=True,
+            capture_output=True,
+        )
     actual, urls, model = app_server_command(command)
     if inference_forward is None and any(
         c.startswith("model_provider=") and c != 'model_provider="openai"'
@@ -483,9 +516,16 @@ async def invoke_app_server(
             schemas = [
                 t.model_dump(mode="json") for t in (await mcp.list_tools()).tools
             ]
-            tools = dynamic_bank_tools(schemas)
+            if agent:
+                schemas.append(agent.SCHEMA)
+            tools = dynamic_bank_tools(schemas, agent_profile)
+            allowed_tools = {s["name"] for s in schemas}
             contract = dict(
-                **model, startup=policy.strip(), prompt=prompt, schemas=schemas
+                **model,
+                startup=policy.strip(),
+                prompt=prompt,
+                schemas=schemas,
+                agent_profile=agent_profile,
             )
             guard = broker.ConversationGuard(contract, validate_model_request)
             relay = await stack.enter_async_context(
@@ -572,7 +612,7 @@ async def invoke_app_server(
                         if "id" in event and method:
                             if (
                                 method != "item/tool/call"
-                                or params.get("tool") not in BANK_TOOLS
+                                or params.get("tool") not in allowed_tools
                                 or params.get("namespace") not in (None, "functions")
                                 or params.get("threadId") != tid
                                 or params.get("turnId") != turn_id
@@ -593,8 +633,12 @@ async def invoke_app_server(
                                 params["callId"], params["tool"], params["arguments"]
                             )
                             emit(dict(type="item.started", item=item))
-                            result = await mcp.call_tool(
-                                params["tool"], params["arguments"]
+                            result = (
+                                await workspace.call(name, params["arguments"])
+                                if params["tool"] == "workbench" and workspace
+                                else await mcp.call_tool(
+                                    params["tool"], params["arguments"]
+                                )
                             )
                             content = [
                                 dict(type="inputText", text=c.text)
@@ -688,6 +732,10 @@ async def invoke_app_server(
         timed_out=timed_out,
         exit_code=exit_code,
         elapsed_seconds=time.monotonic() - started,
+        agent_profile=agent.manifest()
+        if agent
+        else {"id": "codex_baseline", "version": "baseline"},
+        workbench_events=workspace.events if workspace else [],
         app_server_events=raw_events,
         request_contract=contract,
         broker_evidence=dict(

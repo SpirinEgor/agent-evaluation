@@ -361,12 +361,19 @@ def boundary_check(spec):
     runtime_spec.loader.exec_module(runtime)
     contract = read(parent / "request-contract.json")
     capture = read(parent / "cli-request.json")
+    if spec.get("agent_profile", "baseline") != contract.get(
+        "agent_profile", "baseline"
+    ):
+        raise ValueError("Physical proof belongs to a different agent profile")
     thread = capture.get("thread_start", {})
     if (
         thread.get("model") != contract["model"]
         or thread.get("baseInstructions") != contract["startup"]
         or thread.get("developerInstructions") != ""
-        or thread.get("dynamicTools") != runtime.dynamic_bank_tools(contract["schemas"])
+        or thread.get("dynamicTools")
+        != runtime.dynamic_bank_tools(
+            contract["schemas"], contract.get("agent_profile", "baseline")
+        )
         or thread.get("allowProviderModelFallback") is not False
     ):
         raise ValueError("Codex launch differs from the captured request contract")
@@ -603,6 +610,7 @@ def surface_child(spec, out):
     from run_codex_harness import build_prompt
 
     from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.platform.agents import prompt_for
     from tau2.platform.session import PlatformSession
 
     task = next(t for t in get_tasks() if t.id == spec["task_id"])
@@ -630,12 +638,15 @@ def surface_child(spec, out):
                 for tool in tools
             ]
         ),
-        "prompt": build_prompt(
-            policy=startup,
-            ticket=task.agent_ticket(),
-            max_calls=session.max_calls,
-            max_errors=session.max_errors,
-            max_discovery_calls=session.max_discovery_calls,
+        "prompt": prompt_for(
+            build_prompt(
+                policy=startup,
+                ticket=task.agent_ticket(),
+                max_calls=session.max_calls,
+                max_errors=session.max_errors,
+                max_discovery_calls=session.max_discovery_calls,
+            ),
+            spec.get("agent_profile", "baseline"),
         ),
         **bodies,
     }
@@ -859,13 +870,18 @@ async def probe(spec, out):
                     async def capture(*args, **kwargs):
                         opened = await original(*args, **kwargs)
                         try:
-                            actual_prompt = build_prompt(
-                                policy=opened.policy,
-                                ticket=opened.ticket,
-                                mcp_urls=opened.mcp_urls,
-                                max_calls=opened.max_calls,
-                                max_errors=opened.max_errors,
-                                max_discovery_calls=opened.max_discovery_calls,
+                            from tau2.platform.agents import prompt_for
+
+                            actual_prompt = prompt_for(
+                                build_prompt(
+                                    policy=opened.policy,
+                                    ticket=opened.ticket,
+                                    mcp_urls=opened.mcp_urls,
+                                    max_calls=opened.max_calls,
+                                    max_errors=opened.max_errors,
+                                    max_discovery_calls=opened.max_discovery_calls,
+                                ),
+                                spec.get("agent_profile", "baseline"),
                             )
                             expected = read(out / "surface-packet.json")
                             schemas = {}
@@ -907,6 +923,11 @@ async def probe(spec, out):
                             mcp_layout="directory",
                             container_image=model["image"],
                             expected_image_id=boundary["image"],
+                            **(
+                                {"agent_profile": spec["agent_profile"]}
+                                if spec.get("agent_profile", "baseline") != "baseline"
+                                else {}
+                            ),
                         )
                         # Persist before journal enrichment or server cleanup can fail.
                         write(folder / "record.json", record)
