@@ -199,17 +199,17 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
                 and "resolution_operation_id" not in packet
             ):
                 packet.update(
-                    component_ids=["1A", "2A", "5B", "6B"],
-                    total_amount=33.5,
+                    component_ids=["1A", "2A", "5A", "6B"],
+                    total_amount=33,
                     payouts=[
                         {"transaction_id": "txn_804219", "amount": 18.25},
-                        {"transaction_id": "txn_804227", "amount": 15.25},
+                        {"transaction_id": "txn_804227", "amount": 14.75},
                     ],
                 )
                 if "resulting_claims" in packet:
                     packet["resulting_claims"] = [
                         {"transaction_id": "txn_804219", "amount": 0.75},
-                        {"transaction_id": "txn_804227", "amount": 0.65},
+                        {"transaction_id": "txn_804227", "amount": 1.15},
                         {"transaction_id": "txn_804205", "amount": 7},
                     ]
             if packet.get("resolution_operation_id") and "payouts" in packet:
@@ -221,7 +221,15 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
                     ],
                 )
                 if "component_ids" in packet:
-                    packet["component_ids"] = ["1A", "2A", "5B", "6B"]
+                    packet["component_ids"] = ["1A", "2A", "5A", "6B"]
+        for action in task.evaluation_criteria.actions:
+            packet = action.arguments.get("request", action.arguments)
+            if packet.get("resolution_operation_id") and "resulting_claims" in packet:
+                packet["resulting_claims"] = [
+                    {"transaction_id": "txn_804205", "amount": 7}
+                ]
+            if action.name == "amend_cashback_investigation":
+                action.arguments["items"][1]["amount"] = 0
     session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
     for action in original_packets if wrong else task.evaluation_criteria.actions:
         result = session.call(action.name, action.arguments)
@@ -238,16 +246,17 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
             }, reward.info
     if not wrong:
         case = session.env.tools.db.cases["case_610903"]
-        assert case.review_amount == 7
+        assert case.review_amount == (7 if different else 7.4)
         assert {r.transaction_id: r.amount for r in case.review_items} == {
-            "txn_804205": 7
+            "txn_804205": 7,
+            **({} if different else {"txn_804227": 0.4}),
         }
         operation = next(
             o
             for o in session.env.tools.db.reward_resolution_executions.values()
             if o.packet["offer_id"] == "offer_610735"
         )
-        assert operation.result["total_amount"] == (30.9 if different else 35.9)
+        assert operation.result["total_amount"] == (30.9 if different else 35.5)
 
 
 @pytest.mark.parametrize(

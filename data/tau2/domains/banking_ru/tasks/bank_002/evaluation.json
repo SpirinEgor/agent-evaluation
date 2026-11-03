@@ -3083,6 +3083,15 @@
       ]
     },
     {
+      "action_id": "bank2:v23:applicability-rules",
+      "requestor": "assistant",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_resolution_rights.md"
+      },
+      "required_for_reward": false
+    },
+    {
       "action_id": "find_customer_1",
       "requestor": "assistant",
       "name": "find_customer",
@@ -3358,6 +3367,34 @@
       ]
     },
     {
+      "action_id": "bank2:v23:registry:0",
+      "requestor": "assistant",
+      "name": "get_partner_confirmations",
+      "arguments": {
+        "customer_id": "gromov_a_1187"
+      },
+      "required_for_reward": false
+    },
+    {
+      "action_id": "bank2:v23:registry:1",
+      "requestor": "assistant",
+      "name": "get_partner_confirmations",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "cursor": "5"
+      },
+      "required_for_reward": false
+    },
+    {
+      "action_id": "bank2:v23:registry:2",
+      "requestor": "assistant",
+      "name": "get_service_incidents",
+      "arguments": {
+        "customer_id": "gromov_a_1187"
+      },
+      "required_for_reward": false
+    },
+    {
       "action_id": "bank2:v12:consent-first",
       "name": "ask_client",
       "arguments": {
@@ -3369,23 +3406,23 @@
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 18.75
+              "amount": 15.5
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 18.5
+              "amount": 20
             }
           ],
-          "total_amount": 37.25,
+          "total_amount": 35.5,
           "case_id": "case_610903",
           "resulting_claims": [
             {
               "transaction_id": "txn_804219",
-              "amount": 0.25
+              "amount": 3.5
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 2.4
+              "amount": 0.9
             },
             {
               "transaction_id": "txn_804205",
@@ -3395,10 +3432,9 @@
           "state_revision": 5,
           "component_ids": [
             "1A",
-            "2B",
-            "3A",
-            "4A",
-            "5B"
+            "2A",
+            "5A",
+            "6A"
           ],
           "eligibility_evidence": {}
         }
@@ -3420,24 +3456,23 @@
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 18.75
+            "amount": 15.5
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 18.5
+            "amount": 20
           }
         ],
-        "total_amount": 37.25,
+        "total_amount": 35.5,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-1",
         "expected_revision": 5,
         "idempotency_key": "candidate-composite",
         "component_ids": [
           "1A",
-          "2B",
-          "3A",
-          "4A",
-          "5B"
+          "2A",
+          "5A",
+          "6A"
         ],
         "eligibility_evidence": {}
       },
@@ -3483,15 +3518,19 @@
           "payouts": [
             {
               "transaction_id": "txn_804219",
-              "amount": 0.25
+              "amount": 3.5
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 16.9
+              "amount": 16.5
             }
           ],
-          "total_amount": 17.15,
+          "total_amount": 20,
           "resulting_claims": [
+            {
+              "transaction_id": "txn_804227",
+              "amount": 0.4
+            },
             {
               "transaction_id": "txn_804205",
               "amount": 7
@@ -3500,10 +3539,9 @@
           "state_revision": 7,
           "component_ids": [
             "1A",
-            "2B",
-            "3A",
-            "4A",
-            "5B"
+            "2A",
+            "5A",
+            "6A"
           ],
           "eligibility_evidence": {}
         }
@@ -3519,14 +3557,14 @@
         "payouts": [
           {
             "transaction_id": "txn_804219",
-            "amount": 0.25
+            "amount": 3.5
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 16.9
+            "amount": 16.5
           }
         ],
-        "total_amount": 17.15,
+        "total_amount": 20,
         "confirmation_id": "resolution-confirmation-2",
         "expected_revision": 7
       },
@@ -3554,7 +3592,7 @@
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 0
+            "amount": 0.4
           }
         ],
         "expected_revision": 9

@@ -1065,37 +1065,29 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         return [d for d in self.db.devices.values() if d.customer_id == customer_id]
 
     @is_tool(ToolType.READ)
-    def get_service_incidents(self, customer_id: str) -> EligibilityRegistry:
-        """Получить полный реестр инцидентов обслуживания своего клиента."""
+    def get_service_incidents(
+        self, customer_id: str, cursor: Optional[str] = None
+    ) -> EligibilityRegistry:
+        """Получить страницу инцидентов клиента; next_cursor продолжает реестр."""
+        from tau2.domains.banking_ru.component_eligibility import registry_page
+
         self._get_customer(customer_id)
         self._require_verified(customer_id)
         return EligibilityRegistry(
-            {
-                "customer_id": customer_id,
-                "complete": True,
-                "records": [
-                    r.model_dump()
-                    for r in self.db.service_incidents.values()
-                    if r.customer_id == customer_id
-                ],
-            }
+            registry_page(self.db.service_incidents, customer_id, cursor)
         )
 
     @is_tool(ToolType.READ)
-    def get_partner_confirmations(self, customer_id: str) -> EligibilityRegistry:
-        """Получить полный реестр подтверждений покупок партнёром своего клиента."""
+    def get_partner_confirmations(
+        self, customer_id: str, cursor: Optional[str] = None
+    ) -> EligibilityRegistry:
+        """Получить страницу подтверждений партнёра; next_cursor продолжает реестр."""
+        from tau2.domains.banking_ru.component_eligibility import registry_page
+
         self._get_customer(customer_id)
         self._require_verified(customer_id)
         return EligibilityRegistry(
-            {
-                "customer_id": customer_id,
-                "complete": True,
-                "records": [
-                    r.model_dump()
-                    for r in self.db.partner_confirmations.values()
-                    if r.customer_id == customer_id
-                ],
-            }
+            registry_page(self.db.partner_confirmations, customer_id, cursor)
         )
 
     @is_tool(ToolType.READ)

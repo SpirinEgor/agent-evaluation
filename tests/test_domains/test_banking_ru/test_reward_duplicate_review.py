@@ -229,7 +229,7 @@ def test_decision_after_amendment_requires_fresh_consent():
         data(session.call("retry_reward_resolution", {"resolution_operation_id": OP}))[
             "total_amount"
         ]
-        == 35.9
+        == 35.5
     )
 
 

@@ -40,6 +40,8 @@ class PartnerConfirmation(BaseModel):
     receipt_id: str
     enrollment_card_id: str
     status: Literal["registered", "accepted", "rejected"]
+    revision: int = Field(default=1, ge=1)
+    superseded_by: str | None = None
 
 
 class RewardResolutionComponent(BaseModel):

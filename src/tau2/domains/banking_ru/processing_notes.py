@@ -22,6 +22,9 @@ class ProcessingNote(BaseModel):
     source_ref: str
     created_at: str
     text: str
+    revision: int = 1
+    supersedes: str | None = None
+    recommended_evidence_id: str | None = None
 
 
 def with_processing_notes(db, row, customer_id, subject_type, subject_id):

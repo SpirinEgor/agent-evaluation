@@ -142,6 +142,7 @@ def validate_eligibility(
             elif condition["kind"] == "partner_confirmation":
                 if (
                     record["status"] != "accepted"
+                    or record.get("superseded_by") is not None
                     or not tx.get("receipt_id")
                     or record["receipt_id"] != tx["receipt_id"]
                 ):
@@ -174,3 +175,28 @@ def prepare_access_policy(policy):
             set(policy.result_resource_collections.get(name, [])) | set(collections)
         )
     return type(policy).model_validate(policy.model_dump())
+
+
+def registry_page(collection, customer_id, cursor=None):
+    """Deterministic pages; the cursor is a public offset, never authorization."""
+    from tau2.environment.tool import ToolExecutionRejected
+
+    records = sorted(
+        (r.model_dump() for r in collection.values() if r.customer_id == customer_id),
+        key=lambda r: r["id"],
+    )
+    try:
+        offset = 0 if cursor is None else int(cursor)
+        if offset < 0 or offset % 5 or (cursor is not None and str(offset) != cursor):
+            raise ValueError()
+        if offset and offset >= len(records):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise ToolExecutionRejected("ERR_CURSOR: Неверный курсор реестра")
+    end = offset + 5
+    return {
+        "customer_id": customer_id,
+        "records": records[offset:end],
+        "complete": end >= len(records),
+        "next_cursor": str(end) if end < len(records) else None,
+    }
