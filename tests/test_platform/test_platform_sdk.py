@@ -7,6 +7,7 @@ import importlib.util
 import json
 import os
 import runpy
+import shutil
 import subprocess
 import sys
 import threading
@@ -280,9 +281,16 @@ def test_generated_bundle_excludes_gold_and_runs(task, tmp_path):
         builder["build_bundle"](Path(source), bundle)
     task_path = tmp_path / "input.json"
     task_path.write_text(json.dumps(sdk.task_input_projection(task)))
+    # Match the Dockerfile's /app layout and the platform's PYTHONPATH override.
+    # Do not add a source path: that masked a real image import failure.
+    image = tmp_path / "execution-app"
+    shutil.copytree(bundle / "execute/src", image)
+    shutil.copy2(bundle / "platform_benchmark.py", image)
     env = {
         **os.environ,
-        "PYTHONPATH": str(bundle / "execute/src"),
+        "PYTHONPATH": str(
+            Path(source) / "platform/external_contracts/platform-harness"
+        ),
         "TAU2_DATA_DIR": str(bundle / "execute/data"),
         "PLATFORM_CONTRACT_VERSION": "2",
         "PLATFORM_TASK_PATH": str(task_path),
@@ -298,15 +306,18 @@ def test_generated_bundle_excludes_gold_and_runs(task, tmp_path):
     )
     subprocess.run(
         [sys.executable, "-c", script],
-        cwd=bundle,
+        cwd=image,
         env=env,
         check=True,
         capture_output=True,
         text=True,
     )
+    evaluation_image = tmp_path / "evaluation-app"
+    shutil.copytree(bundle / "evaluate/src", evaluation_image)
+    for name in ("platform_tasks.py", "platform_evaluator.py"):
+        shutil.copy2(bundle / name, evaluation_image)
     eval_env = {
         **env,
-        "PYTHONPATH": str(bundle / "evaluate/src"),
         "TAU2_DATA_DIR": str(bundle / "evaluate/data"),
     }
     subprocess.run(
@@ -318,7 +329,7 @@ def test_generated_bundle_excludes_gold_and_runs(task, tmp_path):
                 "assert len(COLLECT()) == 61; assert 'DB' in EVALUATOR.run_metrics"
             ),
         ],
-        cwd=bundle,
+        cwd=evaluation_image,
         env=eval_env,
         check=True,
         capture_output=True,
