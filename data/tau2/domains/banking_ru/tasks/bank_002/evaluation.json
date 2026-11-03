@@ -3050,10 +3050,32 @@
   ],
   "actions": [
     {
-      "action_id": "bank2:v6:review-policy",
+      "action_id": "bank2:v22:product-scope",
       "name": "file_read",
       "arguments": {
-        "path": "/policies/fees_rewards.md"
+        "path": "/knowledge/reward_product_scope.md"
+      },
+      "required_for_reward": false,
+      "compare_args": [
+        "path"
+      ]
+    },
+    {
+      "action_id": "bank2:v5:doc:reward_resolution_amounts",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_resolution_amounts.md"
+      },
+      "required_for_reward": false,
+      "compare_args": [
+        "path"
+      ]
+    },
+    {
+      "action_id": "bank2:v5:doc:reward_resolution_execution",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_resolution_execution.md"
       },
       "required_for_reward": false,
       "compare_args": [
@@ -3110,24 +3132,6 @@
       "attempt_requires_result": false
     },
     {
-      "action_id": "bank2:v4:date",
-      "name": "get_bank_date",
-      "arguments": {},
-      "required_for_reward": false,
-      "compare_args": []
-    },
-    {
-      "action_id": "bank2:v4:cards",
-      "name": "get_cards",
-      "arguments": {
-        "customer_id": "gromov_a_1187"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id"
-      ]
-    },
-    {
       "action_id": "bank2:v4:contract",
       "name": "get_reward_contracts",
       "arguments": {
@@ -3141,17 +3145,6 @@
     {
       "action_id": "bank2:v4:rules",
       "name": "get_cashback_rules",
-      "arguments": {
-        "customer_id": "gromov_a_1187"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:offers",
-      "name": "get_promotions",
       "arguments": {
         "customer_id": "gromov_a_1187"
       },
@@ -3177,23 +3170,6 @@
       "arguments": {
         "customer_id": "gromov_a_1187",
         "posted_from": "2026-07-01",
-        "posted_to": "2026-07-31",
-        "limit": 50
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id",
-        "posted_from",
-        "posted_to",
-        "limit"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:related",
-      "name": "get_transactions",
-      "arguments": {
-        "customer_id": "gromov_a_1187",
-        "posted_from": "2026-08-01",
         "posted_to": "2026-08-28",
         "limit": 50
       },
@@ -3203,23 +3179,6 @@
         "posted_from",
         "posted_to",
         "limit"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:selection",
-      "name": "ask_client",
-      "arguments": {
-        "customer_id": "gromov_a_1187",
-        "request": {
-          "type": "transaction_selection",
-          "merchant": "Кофемания",
-          "amount": 1400
-        }
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id",
-        "request"
       ]
     },
     {
@@ -3243,16 +3202,6 @@
       "compare_args": [
         "customer_id"
       ]
-    },
-    {
-      "action_id": "bank2:v8:preliminary-offers",
-      "name": "get_reward_resolution_offers",
-      "arguments": {
-        "customer_id": "gromov_a_1187",
-        "case_id": "case_610903"
-      },
-      "required_for_reward": false,
-      "compare_args": []
     },
     {
       "action_id": "bank2:v8:give-statement",
@@ -3321,158 +3270,6 @@
       ]
     },
     {
-      "action_id": "bank2:v4:late",
-      "name": "get_transaction_details",
-      "arguments": {
-        "transaction_id": "txn_804287"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "transaction_id"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_product_scope",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_product_scope.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_rate_history",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_rate_history.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_posting_period",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_posting_period.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_standard_limits",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_standard_limits.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_merchant_categories",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_merchant_categories.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_partner_offer",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_partner_offer.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_program_priority",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_program_priority.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_refund_adjustments",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_refund_adjustments.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_card_reissue",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_card_reissue.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_payment_reconciliation",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_payment_reconciliation.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_adjustment_authority",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_adjustment_authority.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v4:reward_case_amendment",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_case_amendment.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v16:repair-policy",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_card_reissue.md"
-      },
-      "required_for_reward": false,
-      "compare_args": []
-    },
-    {
       "action_id": "bank2:v16:reprocessing",
       "name": "get_reward_reprocessing_cases",
       "arguments": {
@@ -3516,61 +3313,6 @@
       "compare_args": [
         "customer_id",
         "case_id"
-      ]
-    },
-    {
-      "action_id": "bank2:v5:doc:reward_resolution_amounts",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_resolution_amounts.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v5:doc:reward_resolution_rights",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_resolution_rights.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v5:doc:reward_resolution_execution",
-      "name": "file_read",
-      "arguments": {
-        "path": "/knowledge/reward_resolution_execution.md"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "path"
-      ]
-    },
-    {
-      "action_id": "bank2:v9:incidents",
-      "name": "get_service_incidents",
-      "arguments": {
-        "customer_id": "gromov_a_1187"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id"
-      ]
-    },
-    {
-      "action_id": "bank2:v9:partner",
-      "name": "get_partner_confirmations",
-      "arguments": {
-        "customer_id": "gromov_a_1187"
-      },
-      "required_for_reward": false,
-      "compare_args": [
-        "customer_id"
       ]
     },
     {
@@ -3705,15 +3447,6 @@
       ]
     },
     {
-      "action_id": "bank2:v16:partial-status",
-      "name": "get_reward_resolution_status",
-      "arguments": {
-        "resolution_operation_id": "resolution:case_610903:offer_610735"
-      },
-      "required_for_reward": false,
-      "compare_args": []
-    },
-    {
       "action_id": "bank2:v17:reconcile-postings",
       "name": "get_transactions",
       "arguments": {
@@ -3724,15 +3457,6 @@
       },
       "required_for_reward": false,
       "compare_args": []
-    },
-    {
-      "action_id": "bank2:v21:reviews",
-      "name": "get_reward_duplicate_reviews",
-      "arguments": {
-        "customer_id": "gromov_a_1187",
-        "case_id": "case_610903"
-      },
-      "required_for_reward": false
     },
     {
       "action_id": "bank2:v21:resolve",

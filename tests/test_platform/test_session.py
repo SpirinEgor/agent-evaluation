@@ -122,3 +122,51 @@ def test_business_success_requires_agent_done():
     }
     s.call("done", {})
     assert s.grade().final_reward == 1.0
+
+
+@pytest.mark.parametrize("configured,expected", [(None, 50), (100, 50), (20, 20)])
+def test_scenario_call_ceiling_is_effective_and_cannot_be_raised(configured, expected):
+    session = make("Bank 2", max_calls=configured, mcp_layout="directory")
+    assert session.max_calls == expected
+    session.call("bank_directory", {"operation": "list_systems"})
+    assert session.discovery_calls == 1
+    assert len(session.log) == 0
+    for _ in range(expected):
+        session.call(
+            "bank_directory",
+            {
+                "operation": "open_tool",
+                "system_id": "crm",
+                "tool_name": "find_customer",
+            },
+        )
+        session.call(
+            "bank_call",
+            {
+                "system_id": "crm",
+                "tool_name": "find_customer",
+                "arguments": {"phone": "+7 926 118-77-30"},
+            },
+        )
+    assert len(session.log) == expected
+    assert session.status is SessionStatus.BUDGET_EXHAUSTED
+    assert session.call(
+        "bank_call",
+        {
+            "system_id": "crm",
+            "tool_name": "find_customer",
+            "arguments": {"phone": "+7 926 118-77-30"},
+        },
+    ).is_error
+
+
+@pytest.mark.parametrize("invalid", [0, -1, True, "50", 1.5])
+def test_scenario_call_ceiling_rejects_invalid_values(invalid):
+    from pydantic import ValidationError
+
+    from tau2.data_model.tasks import Task
+
+    raw = TASKS["Bank 2"].model_dump()
+    raw["max_bank_calls"] = invalid
+    with pytest.raises(ValidationError):
+        Task.model_validate(raw)

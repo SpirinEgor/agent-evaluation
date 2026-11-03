@@ -260,3 +260,12 @@ def test_bank2_public_context_survives_task_list_and_session(app):
         assert "Сообщение клиента:" in opened["ticket"]
 
     run_with_app(app, go)
+
+
+def test_service_advertises_task_ceiling_instead_of_server_default(app):
+    async def go(http):
+        return await open_session(http, task_id="Bank 2")
+
+    info = run_with_app(app, go)
+    assert info["max_calls"] == 50
+    assert info["max_errors"] == 0

@@ -869,4 +869,8 @@ def execute(
         result=result,
         pending_settlement=settlement,
     )
-    return result
+    from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
+    return with_processing_notes(
+        tools.db, result, offer.customer_id, "resolution", offer_id
+    )

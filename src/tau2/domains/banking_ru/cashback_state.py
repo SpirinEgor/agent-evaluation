@@ -308,9 +308,9 @@ def refresh(tools, customer_id, period):
             else {}
         ),
         "changed_transaction_ids": [t.id for t in credits],
-        "changed_records": [
-            {"id": t.id, "customer_id": t.customer_id} for t in credits
-        ],
+        # Return the actual posted facts, not just IDs requiring another read.
+        # These are this customer's validated credits, never calculated gaps.
+        "changed_records": [t.model_dump() for t in credits],
     }
 
 

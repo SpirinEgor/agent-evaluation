@@ -93,6 +93,8 @@ class PlatformSession:
         self.max_calls, self.max_errors = platform_budgets(
             self.env.domain_name, max_calls, max_errors
         )
+        if self.env.domain_name == "banking_ru" and task.max_bank_calls is not None:
+            self.max_calls = min(self.max_calls, task.max_bank_calls)
         if max_discovery_calls is not None and (
             type(max_discovery_calls) is not int or max_discovery_calls < 1
         ):

@@ -1486,6 +1486,12 @@ class Task(BaseModel):
     """
 
     id: str = Field(description="The unique identifier for the task.")
+    max_bank_calls: Optional[int] = Field(
+        default=None,
+        gt=0,
+        strict=True,
+        description="Optional banking platform call ceiling; discovery is separate. Run settings may lower, never raise it.",
+    )
     description: Annotated[
         Optional[Description],
         Field(

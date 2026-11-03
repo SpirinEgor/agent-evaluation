@@ -276,8 +276,8 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             mcp_path=item.paths.get(SINGLE_SERVER),
             mcp_paths=item.paths,
             mcp_layout=layout,
-            max_calls=settings.max_calls,
-            max_errors=settings.max_errors,
+            max_calls=session.max_calls,
+            max_errors=session.max_errors,
             **(
                 {"max_discovery_calls": settings.max_discovery_calls}
                 if layout == "directory"
