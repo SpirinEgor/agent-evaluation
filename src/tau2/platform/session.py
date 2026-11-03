@@ -30,7 +30,6 @@ from tau2.domains.banking_ru.mcp_systems import (
 )
 from tau2.environment.environment import Environment
 from tau2.environment.reference_bindings import reference_arguments
-from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
 from tau2.platform.bank_directory import BankDirectory, DirectoryError, directory_tools
 from tau2.platform.knowledge import TOOL_NAMES as KNOWLEDGE_TOOLS
 from tau2.platform.knowledge import KnowledgeMCP, knowledge_tools
@@ -66,8 +65,12 @@ class PlatformSession:
         participant: Optional[str] = None,
         on_finish: Optional[Callable[["PlatformSession"], None]] = None,
         mcp_layout: MCPLayout = "single",
+        token: str | None = None,
+        now: Callable[[], datetime] | None = None,
+        cursor_secret: bytes | None = None,
     ) -> None:
-        self.token = uuid.uuid4().hex
+        self.token = token if token is not None else uuid.uuid4().hex
+        self._now = now or (lambda: datetime.now(timezone.utc))
         self.task = task
         self._environment_constructor = environment_constructor
         env_kwargs = {"solo_mode": True}
@@ -109,7 +112,7 @@ class PlatformSession:
         self.log: list[tuple[ToolCall, ToolMessage]] = []
         self.errors = 0
         self._reward_info: Optional[RewardInfo] = None
-        self.created_at = datetime.now(timezone.utc)
+        self.created_at = self._now()
         self.finished_at: Optional[datetime] = None
         self.mcp_layout = mcp_layout
         self._call_lock = RLock()
@@ -148,10 +151,14 @@ class PlatformSession:
                 "call_discoverable_agent_tool",
             ):
                 native.pop(name, None)
-            self.knowledge = KnowledgeMCP(self.env.tools.corpus, token=self.token)
+            self.knowledge = KnowledgeMCP(
+                self.env.tools.corpus, token=self.token, cursor_secret=cursor_secret
+            )
             native.update({tool.name: tool for tool in knowledge_tools()})
             self.system_tools = partition_tools(list(native.values()))
-            self.directory = BankDirectory(self.system_tools, token=self.token)
+            self.directory = BankDirectory(
+                self.system_tools, token=self.token, cursor_secret=cursor_secret
+            )
             self.mcp_tools = directory_tools()
         self.policy = self.env.get_policy()
 
@@ -190,7 +197,7 @@ class PlatformSession:
             "canonical_name": name,
             "role": "assistant",
             "arguments": call.arguments,
-            "requested_at": datetime.now(timezone.utc).isoformat(),
+            "requested_at": self._now().isoformat(),
         }
         self._event_order += 1
         self.mcp_events.append(event)
@@ -288,7 +295,7 @@ class PlatformSession:
                 event.update(
                     response=result.content[0].text,
                     error=False,
-                    returned_at=datetime.now(timezone.utc).isoformat(),
+                    returned_at=self._now().isoformat(),
                 )
             elif name == "bank_call":
                 owner, target, values = self.directory.validate_call(call.arguments)
@@ -320,7 +327,7 @@ class PlatformSession:
                     event.update(
                         response=message.content,
                         error=False,
-                        returned_at=datetime.now(timezone.utc).isoformat(),
+                        returned_at=self._now().isoformat(),
                     )
                     if event.get("budget") != "discovery":
                         canonical.execution_order = len(self.log)
@@ -367,7 +374,7 @@ class PlatformSession:
                 error=True,
                 execution_rejected=True,
                 diagnostic_code=error.code,
-                returned_at=datetime.now(timezone.utc).isoformat(),
+                returned_at=self._now().isoformat(),
             )
             if event.get("budget") != "discovery":
                 canonical = self._canonical_trace_calls[call.id]
@@ -416,7 +423,7 @@ class PlatformSession:
         self._reward_info = None
         event.update(
             response_order=self._event_order,
-            transmitted_at=datetime.now(timezone.utc).isoformat(),
+            transmitted_at=self._now().isoformat(),
         )
         self._event_order += 1
         if call.id not in self._results and "response" not in event:
@@ -484,7 +491,7 @@ class PlatformSession:
                 event.update(
                     response="ERR_PENDING_RESULTS: receive outstanding tool results before done",
                     error=True,
-                    returned_at=datetime.now(timezone.utc).isoformat(),
+                    returned_at=self._now().isoformat(),
                 )
                 if direct:
                     self.result_sent(attempt)
@@ -492,7 +499,7 @@ class PlatformSession:
             event.update(
                 response=STOP_TOKEN,
                 error=False,
-                returned_at=datetime.now(timezone.utc).isoformat(),
+                returned_at=self._now().isoformat(),
             )
             if direct:
                 self.result_sent(attempt)
@@ -540,7 +547,7 @@ class PlatformSession:
             response=message.content,
             error=message.error,
             execution_rejected=message.execution_rejected,
-            returned_at=datetime.now(timezone.utc).isoformat(),
+            returned_at=self._now().isoformat(),
         )
         if direct:
             self.result_sent(attempt)
@@ -570,7 +577,7 @@ class PlatformSession:
             return
         self._reward_info = None
         self.status = status
-        self.finished_at = datetime.now(timezone.utc)
+        self.finished_at = self._now()
         self._notify_finish()
 
     # ------------------------------------------------------------- MCP
@@ -655,8 +662,10 @@ class PlatformSession:
         журнала. Новый запрос, полученный результат или завершение сбрасывает
         кэш; повторные grade()/to_simulation_run() используют готовую оценку.
         """
+        from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
+
         if self._reward_info is None:
-            end = self.finished_at or datetime.now(timezone.utc)
+            end = self.finished_at or self._now()
             simulation = SimulationRun(
                 id=self.token,
                 task_id=self.task.id,
@@ -707,7 +716,7 @@ class PlatformSession:
             | {"bank_directory"},
             mutating_tools={n for n in names if tools.tool_mutates_state(n)},
         )
-        end = self.finished_at or datetime.now(timezone.utc)
+        end = self.finished_at or self._now()
         result.update(
             version="banking_metrics_v1",
             protocol_completion=self.status is SessionStatus.DONE,
@@ -717,7 +726,7 @@ class PlatformSession:
 
     def to_simulation_run(self) -> SimulationRun:
         """Запись в формате results.json: её понимают tau2 view и evaluate_trajectories."""
-        end = self.finished_at or datetime.now(timezone.utc)
+        end = self.finished_at or self._now()
         return SimulationRun(
             id=self.token,
             task_id=self.task.id,

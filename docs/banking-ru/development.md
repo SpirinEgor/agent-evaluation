@@ -108,7 +108,82 @@ checkout не является зависимостью поддерживаем
 
 Старый локальный directory/MCP harness сохранён для прежних проверок; A2A —
 явный новый путь запуска. Исторические результаты и preflight не переименовывать.
-Поставка SDK-адаптера самого банковского бенчмарка — отдельный следующий этап.
+SDK-адаптер банковского бенчмарка описан ниже. Регистрация и запуск в кластере
+остаются отдельной операцией.
+
+### Banking.ru в SDK платформы
+
+Сверено 4 ноября 2026. Контракт платформы закреплён на коммите
+`914007cb79f3e3d5f39626a0209d6c1a2b6d7794` репозитория
+[lapalaba/eval-platform](https://github.com/lapalaba/eval-platform).
+Используются настоящий `platform-sdk-contract` 0.1.0 и `platform-harness`,
+а не локальная копия их типов. Они не нужны обычному tau2/MCP-запуску.
+
+| Файл | Ответственность |
+|---|---|
+| [benchmark.py](../../src/tau2/platform/sdk/benchmark.py) | SDK on_start/on_action/report_state поверх PlatformSession |
+| [tasks.py](../../src/tau2/platform/sdk/tasks.py) | Сборка существующих задач; скрытые критерии только в gold |
+| [evaluator.py](../../src/tau2/platform/sdk/evaluator.py) | Сверка журнала/состояния, общий оценщик и агрегация |
+| [benchmark.yaml](../../integrations/eval_platform/benchmark.yaml) | Объявление инструментального режима и бюджета ходов |
+| [runtime.yaml](../../integrations/eval_platform/runtime.yaml) | Провод v2 и два образа execute/evaluate |
+| [build_platform_bundle.py](../../scripts/banking_ru/build_platform_bundle.py) | Самостоятельный контекст сборки с закреплённым SDK и разделением файлов |
+
+SDK требует метку набора: `all` означает все существующие 61 задачи, без изменения
+их состава или восстановления старой логики split. YAML не является разрешением
+запустить все задачи. 500 ходов платформы включают discovery, run_timeout — 900s.
+Банковские лимиты берутся из общего config и сценария, для Bank 2 — не более50.
+Канал только tools; пакет вызовов отклоняется целиком. Полученный безопасный отказ
+можно исправить; сами технические ошибки не превращаются в новый критерий.
+
+Подготовить автономный bundle в новой игнорируемой папке:
+
+```sh
+python3 scripts/banking_ru/build_platform_bundle.py \
+  --platform-repo /path/to/eval-platform \
+  --output artifacts/banking-sdk/bundle
+```
+
+Каталог назначения должен отсутствовать: старые результаты не перезаписываются.
+Скрипт берёт SDK через `git archive` указанного коммита, зависимости — через
+`uv export --frozen` из текущего lock. Код, данные и критерии копируются без правок.
+Далее регистратору платформы передаётся этот bundle, не корень tau2-репозитория.
+Dockerfile имеет цели execute и evaluate; вторая принимает `EXEC_IMAGE` от платформы.
+Локальная сборка двух образов при необходимости:
+
+```sh
+docker build --target execute -t banking-ru:execute artifacts/banking-sdk/bundle
+docker build --target evaluate --build-arg EXEC_IMAGE=banking-ru:execute \
+  -t banking-ru:evaluate artifacts/banking-sdk/bundle
+```
+
+Банковский контейнер и контейнер агента — разные границы. Источники и report
+банковской среды не копируются агенту; Codex продолжает работать в своей
+изолированной среде без сети, host mounts, startup-файла и авторизации.
+Внешняя платформа подключается к его A2A endpoint и исполняет банковские вызовы
+через SDK. Регистрация образов и инфраструктурное развёртывание выполняются
+средствами eval-platform; локальная проверка не утверждает их готовность в кластере.
+
+Адресная проверка без модели (SDK пока не опубликован в package index):
+
+```sh
+EVAL_PLATFORM_REPO=/path/to/eval-platform uv run \
+  --with /path/to/eval-platform/platform/external_contracts/platform-sdk-contract \
+  --with /path/to/eval-platform/platform/external_contracts/platform-harness \
+  --with boto3 --with opentelemetry-exporter-otlp-proto-http==1.39.1 \
+  pytest tests/test_platform/test_platform_sdk.py -q
+```
+
+`uv --with` добавляет зависимости только окружению команды; общий lock не меняется.
+SDK и HTTP exporter OpenTelemetry здесь нужны импорту координатора, не банковским инструментам;
+версия согласована с opentelemetry-api текущего tau2 lock.
+Без переменной checkout выполняются проверки SDK без внешнего координатора;
+без установленного SDK файл явно пропускается как optional integration.
+Для приёмки интеграции нужны все сквозные случаи с настоящим координатором:
+эталон Bank 2 →1, ранний done →0, предел ходов без done →0. Тест использует
+HTTP провода SDK и A2A, стандартный сборщик журнала платформы и отдельный HTTP
+оценщика. Скрипт эталона и gold находятся только у авторской заглушки, не в
+сообщениях или runtime проверяемой модели. Дополнительно проверяются исправление
+неверного API-вызова и отказ при подмене журнала или итогового состояния.
 
 ## Skills в процессе разработки
 

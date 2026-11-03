@@ -1,0 +1,25 @@
+schema_version: 4
+benchmark:
+  id: banking-ru
+  version: 0.1.0
+  name: Banking.ru
+  description: Российская банковская поддержка — состояние DB и траектория ACTION
+  language: ru
+  domains: [customer-support, banking]
+  license: MIT
+tasks:
+  # SDK requires a split label; this is the existing complete set, not a new split.
+  splits:
+    all: {visibility: public}
+  evaluated_splits: [all]
+  trials: 1
+  seed_policy: fixed
+interaction:
+  mode: turn-based
+  channels: [tools]
+  max_turns: 500
+  run_timeout: 900s
+  parallel_tool_calls: reject
+evaluation:
+  needs: [report, action_journal]
+x-ext: {}

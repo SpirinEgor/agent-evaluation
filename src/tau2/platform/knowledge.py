@@ -113,7 +113,7 @@ class KnowledgeMCP:
     GREP_PAGE_SIZE = 50
     GREP_LINE_LIMIT = 800
 
-    def __init__(self, corpus, *, token):
+    def __init__(self, corpus, *, token, cursor_secret=None):
         self._files = {}
         for path, source in corpus.documents.items():
             if not path.startswith(("/knowledge/", "/policies/")):
@@ -135,7 +135,7 @@ class KnowledgeMCP:
                 sort_keys=True,
             ).encode()
         ).hexdigest()
-        self._pages = CatalogPages([token, signature])
+        self._pages = CatalogPages([token, signature], secret=cursor_secret)
         self._cards = None
 
     @staticmethod

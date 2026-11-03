@@ -46,6 +46,7 @@ GROUPS = {
                 "test_codex_broker.py",
                 "test_codex_harness.py",
                 "test_codex_a2a.py",
+                "test_platform_sdk.py",
                 "test_codex_workbench.py",
                 "test_attempt_metrics.py",
                 "test_main.py",

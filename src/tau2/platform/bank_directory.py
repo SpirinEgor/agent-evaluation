@@ -99,7 +99,13 @@ def directory_tools():
 class BankDirectory:
     PAGE_SIZE = 5
 
-    def __init__(self, systems: dict[str, list[t.Tool]], *, token: str):
+    def __init__(
+        self,
+        systems: dict[str, list[t.Tool]],
+        *,
+        token: str,
+        cursor_secret: bytes | None = None,
+    ):
         if set(systems) - SYSTEMS.keys():
             raise ValueError("Unknown banking systems")
         self._systems = {
@@ -136,7 +142,7 @@ class BankDirectory:
                 ensure_ascii=False,
             ).encode()
         ).hexdigest()
-        self._pages = CatalogPages(self._fingerprint)
+        self._pages = CatalogPages(self._fingerprint, secret=cursor_secret)
 
     def _tool(self, system, name):
         if not isinstance(system, str) or system not in self._systems:

@@ -1,0 +1,18 @@
+schema_version: 3
+runtime:
+  kind: container
+  contract_version: "2"
+  build:
+    context: .
+    dockerfile: ./Dockerfile
+    targets:
+      execute: execute
+      evaluate: evaluate
+resources:
+  limits:
+    memory: 2Gi
+    action_timeout: 30s
+    report_timeout: 60s
+    eval_timeout: 120s
+replay:
+  external_calls: strict

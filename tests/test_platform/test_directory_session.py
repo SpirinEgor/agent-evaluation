@@ -296,8 +296,20 @@ def test_schema_receipt_must_precede_dependent_request_not_just_execution(task):
 
 
 def test_legacy_profile_recognizes_gateway_completion():
-    task = next(t for t in get_tasks() if t.id == "Bank 4")
-    assert task.evaluation_criteria.business_process_only is False
+    # All shipped tasks use the business profile now. Keep the generic legacy
+    # completion branch under test with explicit synthetic criteria.
+    from tau2.data_model.tasks import EvaluationCriteria, Task, UserScenario
+
+    task = Task(
+        id="synthetic-legacy-gateway",
+        user_scenario=UserScenario(instructions=""),
+        evaluation_criteria=EvaluationCriteria(
+            business_process_only=False,
+            completion_mode="completion_only",
+            actions=[],
+            reward_basis=["DB", "ACTION"],
+        ),
+    )
     s = session(task)
     open_tool(s, "support", "done")
     assert not bank_call(s, "support", "done", {}).is_error

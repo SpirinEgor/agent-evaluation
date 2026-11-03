@@ -13,9 +13,9 @@ class CursorError(ValueError):
 
 
 class CatalogPages:
-    def __init__(self, namespace):
+    def __init__(self, namespace, *, secret=None):
         self._namespace = namespace
-        self._secret = secrets.token_bytes(32)
+        self._secret = secret if secret is not None else secrets.token_bytes(32)
 
     def page(self, items, context, cursor=None, *, size=5, key="items"):
         bound = hashlib.sha256(

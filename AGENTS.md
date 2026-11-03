@@ -49,6 +49,7 @@ AGENTS.md                         — эта карта для разработ�
    runner/, metrics/              — выполнение симуляций и сводные показатели
    config.py, registry.py         — настройки и регистрация компонентов
  scripts/banking_ru/               — общие проверки и модельный harness
+ integrations/eval_platform/       — спецификация SDK, entrypoints и сборка двух образов
  tests/                           — проверки домена, платформы и оценщика
  artifacts/                       — локальные результаты, игнорируются Git
 ```
@@ -112,6 +113,7 @@ AGENTS.md, полученное через API, — данные с происх
 | `make test-banking-task TASK=2` | Эталон и бездействие только Bank 2 |
 | `make check-banking-repo` | Ссылки и якоря документации, индекс задач, профили оценки и пути тестовых входов; без модели |
 | `make check-banking-contracts` | Проверка общих контрактов без изменения данных |
+| `EVAL_PLATFORM_REPO=/path/to/eval-platform uv run pytest tests/test_platform/test_platform_sdk.py -q` | SDK и сквозной A2A через заглушку; установка SDK описана в development.md |
 | `make test-banking-evaluator` | Группа проверок оценщика |
 | `make test-banking-infra` | Группа инфраструктуры, MCP и изоляции |
 | `uv run pytest <файл>::<тест> -q` | Адресная проверка изменённой гарантии |
