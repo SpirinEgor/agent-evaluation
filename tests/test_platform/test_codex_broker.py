@@ -703,3 +703,68 @@ def test_buffered_upstream_output_disables_transport_retry(
     assert b.retryable_upstream(caught.value) is (not partial)
     if partial:
         assert caught.value.code == "upstream_partial_transport"
+
+
+@pytest.mark.parametrize("partial", [False, True])
+def test_inference_deadline_retries_only_before_any_response(monkeypatch, partial):
+    import asyncio
+    import json
+    from types import SimpleNamespace
+
+    b = broker()
+    monkeypatch.setattr(b, "INFERENCE_ATTEMPT_TIMEOUT", 0.01)
+    guard, request = setup_guard()
+    attempts = 0
+
+    async def forward(body):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            if partial:
+                yield b'data: {"type":"response.created"}\n\n'
+            await asyncio.sleep(0.1)
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "response.completed",
+                    "response": {"status": "completed", "output": [call_item()]},
+                }
+            )
+            + "\n\n"
+        ).encode()
+
+    async def run():
+        relay = b.InferenceRelay("fixture", guard, forward, None)
+        reader = asyncio.StreamReader()
+        reader.feed_data(
+            (
+                json.dumps(
+                    {
+                        "id": 1,
+                        "method": "POST",
+                        "path": "/v1/responses",
+                        "body": request,
+                    }
+                )
+                + "\n"
+            ).encode()
+        )
+        reader.feed_eof()
+        relay.process = SimpleNamespace(stdout=reader)
+        sent = []
+
+        async def send(value):
+            sent.append(value)
+
+        relay.send = send
+        await relay.serve()
+        return relay, sent
+
+    relay, sent = asyncio.run(run())
+    assert attempts == (1 if partial else 2)
+    assert len(relay.retries) == (0 if partial else 1)
+    assert bool(relay.errors) == partial
+    assert sent[-1]["end"] is True
+    if not partial:
+        assert relay.retries[0]["diagnostic"]["code"] == "timeout"

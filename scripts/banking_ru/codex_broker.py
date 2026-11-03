@@ -14,6 +14,7 @@ MAX_BODY = 2 * 1024 * 1024
 MAX_RESPONSE = 16 * 1024 * 1024
 MAX_REQUESTS = 512
 MAX_TRANSCRIPT = 128 * 1024 * 1024
+INFERENCE_ATTEMPT_TIMEOUT = 300
 
 
 class BrokerFailure(ValueError):
@@ -103,7 +104,7 @@ def diagnostic(error, stage):
     # Unknown messages may contain secrets: only fixed allowlisted codes leave here.
     if isinstance(error, (TimeoutError, httpx.TimeoutException)):
         code = "timeout"
-    elif isinstance(error, httpx.TransportError):
+    elif isinstance(error, (TimeoutError, httpx.TransportError)):
         code = "transport_error"
     elif isinstance(error, json.JSONDecodeError) and stage == "response_stream":
         code = "invalid_sse_json"
@@ -123,7 +124,7 @@ def diagnostic(error, stage):
 
 def retryable_upstream(error):
     """Retry only a failed inference with no delivered or authoritative output."""
-    if isinstance(error, httpx.TransportError):
+    if isinstance(error, (TimeoutError, httpx.TransportError)):
         return True
     if not isinstance(error, BrokerFailure):
         return False
@@ -433,7 +434,9 @@ class SubscriptionInference:
         }
         filt = SecretFilter([v.encode() for v in tokens.values() if isinstance(v, str)])
         async with httpx.AsyncClient(
-            trust_env=False, follow_redirects=False, timeout=120
+            trust_env=False,
+            follow_redirects=False,
+            timeout=httpx.Timeout(INFERENCE_ATTEMPT_TIMEOUT, connect=20),
         ) as client:
             async with client.stream(
                 "POST", UPSTREAM, headers=headers, json=body
@@ -642,10 +645,10 @@ class InferenceRelay:
                     stage = "request_validation"
                     self.guard.check(event["body"])
                     started = True
-                    async with asyncio.timeout(120):
-                        for attempt in range(3):
-                            stream = ResponseStream(self.guard)
-                            try:
+                    for attempt in range(3):
+                        stream = ResponseStream(self.guard)
+                        try:
+                            async with asyncio.timeout(INFERENCE_ATTEMPT_TIMEOUT):
                                 if self.upstream_requests >= MAX_REQUESTS:
                                     raise ValueError(
                                         "Upstream attempt budget exhausted"
@@ -672,27 +675,27 @@ class InferenceRelay:
                                 stage = "relay_delivery"
                                 await self.send(dict(id=ident, end=True))
                                 break
-                            except Exception as error:
-                                if (
-                                    attempt == 2
-                                    or sent
-                                    or self.guard.current
-                                    or stream.output_started
-                                    or self.guard.response_complete
-                                    or self.guard.failed
-                                    or stage
-                                    not in {"upstream_transport", "response_stream"}
-                                    or not retryable_upstream(error)
-                                ):
-                                    raise
-                                self.retries.append(
-                                    dict(
-                                        request=self.guard.requests,
-                                        failed_attempt=attempt + 1,
-                                        diagnostic=diagnostic(error, stage),
-                                    )
+                        except Exception as error:
+                            if (
+                                attempt == 2
+                                or sent
+                                or self.guard.current
+                                or stream.output_started
+                                or self.guard.response_complete
+                                or self.guard.failed
+                                or stage
+                                not in {"upstream_transport", "response_stream"}
+                                or not retryable_upstream(error)
+                            ):
+                                raise
+                            self.retries.append(
+                                dict(
+                                    request=self.guard.requests,
+                                    failed_attempt=attempt + 1,
+                                    diagnostic=diagnostic(error, stage),
                                 )
-                                await asyncio.sleep(attempt + 1)
+                            )
+                            await asyncio.sleep(attempt + 1)
                 except Exception as error:
                     self.errors.append(diagnostic(error, stage))
                     self.guard.fail()
