@@ -756,6 +756,10 @@ def test_directory_harness_round_trip_with_real_mcp_and_no_model(
                 client.open = capture
 
                 async def local_stub(command, prompt, *args, **kwargs):
+                    # The adapter receives policy over the session API; no startup file.
+                    workspace = Path(command[command.index("-C") + 1])
+                    assert list(workspace.iterdir()) == []
+                    assert args[2] == observed["opened"].policy
                     opened = observed["opened"]
                     assert opened.mcp_layout == "directory"
                     assert "bank_directory" in prompt and "bank_call" in prompt

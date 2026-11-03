@@ -232,6 +232,7 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
     [
         "success",
         "v1",
+        "a2a_v1",
         "upstream_failure",
         "tool_error",
         "large_result",
@@ -290,6 +291,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if self.path == "/mcp":
+                assert case != "a2a_v1", "A2A must not connect to direct MCP"
                 method = request.get("method")
                 if "id" not in request:
                     self.send_response(202)
@@ -341,7 +343,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                         type="function_call",
                         id="fc_second",
                         call_id="call_second",
-                        name="workbench" if case == "v1" else "bank_call",
+                        name="workbench" if case in {"v1", "a2a_v1"} else "bank_call",
                         namespace="functions",
                         arguments=json.dumps(
                             {
@@ -350,7 +352,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                                 "data": [19, 23, 31],
                             }
                         )
-                        if case == "v1"
+                        if case in {"v1", "a2a_v1"}
                         else "{}",
                     )
                 else:
@@ -587,18 +589,57 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
 
     name = "banking-runtime-test-" + uuid.uuid4().hex
     try:
-        module.prepare_container(image, name, "BANK STARTUP")
-        run = asyncio.run(
-            module.invoke_app_server(
+        prepared = module.prepare_container(image, name)
+        assert all(not paths for paths in prepared["banking_fresh_state"].values())
+
+        async def invoke():
+            transport = None
+            coordinator = None
+            if case == "a2a_v1":
+                from tau2.platform.a2a import Exchange
+
+                transport = Exchange(
+                    {
+                        "tools": [
+                            {
+                                "type": "function",
+                                "function": {
+                                    "name": t["name"],
+                                    "description": t["description"],
+                                    "parameters": t["inputSchema"],
+                                },
+                            }
+                            for t in schemas
+                        ]
+                    }
+                )
+
+                async def answer():
+                    # The A2A coordinator, not an MCP server, executes the call.
+                    state, parts = await transport.outgoing.get()
+                    assert state == "input-required"
+                    call = parts[0]["data"]["calls"][0]
+                    calls.append({"name": call["name"], "arguments": call["arguments"]})
+                    transport.receive(
+                        [{"call_id": call["id"], "content": fixture_result}]
+                    )
+
+                coordinator = asyncio.create_task(answer())
+            result = await module.invoke_app_server(
                 name,
                 command,
                 "BANK TICKET",
                 "BANK STARTUP",
                 30,
                 inference_forward=forward,
-                **({"agent_profile": "v1"} if case == "v1" else {}),
+                **({"agent_profile": "v1"} if case in {"v1", "a2a_v1"} else {}),
+                **({"tool_transport": transport} if transport else {}),
             )
-        )
+            if coordinator:
+                await asyncio.wait_for(coordinator, 1)
+            return result
+
+        run = asyncio.run(invoke())
         assert run["exit_code"] == (1 if upstream_failure or late_failure else 0), (
             run["stderr"],
             run["stdout"],
@@ -608,7 +649,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         module.validate_model_request(payloads[0], run["request_contract"])
         expected_calls = [("bank_directory", {"operation": "list_systems"})]
         if not upstream_failure:
-            if case != "v1":
+            if case not in {"v1", "a2a_v1"}:
                 expected_calls.append(("bank_call", {}))
             else:
                 assert run["agent_profile"]["version"] == "V1"
@@ -679,7 +720,8 @@ def test_physical_network_credentials_and_apply_patch_boundary(tmp_path):
     canary.write_text("HOST_UNCHANGED\n")
     digest = hashlib.sha256(canary.read_bytes()).hexdigest()
     try:
-        inspected = module.prepare_container(image, name, "BANK STARTUP")
+        inspected = module.prepare_container(image, name)
+        assert inspected["banking_fresh_state"]["/workspace"] == []
         probe_js = r"""
 const fs=require('fs'),net=require('net');
 function tcp(h,p){return new Promise(r=>{let s=net.connect({host:h,port:p});s.setTimeout(1000);s.on('connect',()=>{s.destroy();r(true)});s.on('error',()=>r(false));s.on('timeout',()=>{s.destroy();r(false)})})}

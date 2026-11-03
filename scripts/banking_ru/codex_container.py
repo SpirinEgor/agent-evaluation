@@ -258,13 +258,12 @@ def copy_bytes(name: str, destination: str, content: bytes) -> None:
     )
 
 
-def prepare_container(image: str, name: str, policy: str) -> dict:
-    """Start a credential-free runtime, copying only the bank startup."""
+def prepare_container(image: str, name: str) -> dict:
+    """Start a credential-free runtime with an empty agent workspace."""
     subprocess.run(create_command(image, name), check=True, capture_output=True)
     try:
         inspected = inspect_container(name)
         subprocess.run(["docker", "start", name], check=True, capture_output=True)
-        copy_bytes(name, "/workspace/AGENTS.md", policy.encode())
         inventory = subprocess.run(
             [
                 "docker",
@@ -287,7 +286,7 @@ process.stdout.write(JSON.stringify(Object.fromEntries(['/root/.codex','/root/.a
             "/root/.codex": [],
             "/root/.agents": [],
             "/root/.cache": [],
-            "/workspace": ["/workspace/AGENTS.md"],
+            "/workspace": [],
         }:
             raise ValueError("Codex home/workspace contains pre-existing state")
         inspected["banking_fresh_state"] = fresh
@@ -385,6 +384,7 @@ async def invoke_app_server(
     *,
     inference_forward=None,
     agent_profile="baseline",
+    tool_transport=None,
 ):
     """Route only two explicit dynamic tools to the fresh session's real MCP."""
     from mcp import ClientSession
@@ -523,11 +523,17 @@ async def invoke_app_server(
     thread_start = {}
     try:
         async with AsyncExitStack() as stack:
-            streams = await stack.enter_async_context(
-                streamable_http_client(next(iter(urls.values())))
-            )
-            mcp = await stack.enter_async_context(ClientSession(streams[0], streams[1]))
-            await mcp.initialize()
+            if tool_transport is None:
+                streams = await stack.enter_async_context(
+                    streamable_http_client(next(iter(urls.values())))
+                )
+                mcp = await stack.enter_async_context(
+                    ClientSession(streams[0], streams[1])
+                )
+                await mcp.initialize()
+            else:
+                # A2A supplies schemas/results; never connect to the banking MCP.
+                mcp = tool_transport
             schemas = [
                 t.model_dump(mode="json") for t in (await mcp.list_tools()).tools
             ]

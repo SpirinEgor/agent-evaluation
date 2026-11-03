@@ -296,6 +296,7 @@ async def invoke_isolated_codex(
     expected_image_id: str | None = None,
     inference_forward=None,
     agent_profile="baseline",
+    tool_transport=None,
 ) -> dict:
     """Run full-access Codex in a fresh container without any host mounts."""
     spec = importlib.util.spec_from_file_location(
@@ -306,9 +307,7 @@ async def invoke_isolated_codex(
     name = "banking-codex-" + uuid.uuid4().hex
     run = None
     try:
-        inspected = await asyncio.to_thread(
-            container.prepare_container, image, name, policy
-        )
+        inspected = await asyncio.to_thread(container.prepare_container, image, name)
         if expected_image_id is not None:
             verify_container_image(inspected, expected_image_id)
         run = await container.invoke_app_server(
@@ -319,6 +318,9 @@ async def invoke_isolated_codex(
             timeout_seconds,
             inference_forward=inference_forward,
             **({"agent_profile": agent_profile} if agent_profile != "baseline" else {}),
+            **(
+                {"tool_transport": tool_transport} if tool_transport is not None else {}
+            ),
         )
         run["container"] = {
             "name": name,
@@ -641,7 +643,6 @@ async def run_one_attempt(
         with temporary_run_directory(
             prefix=f"codex-{task_id}-", dir=work_root
         ) as temp_dir:
-            (Path(temp_dir) / "AGENTS.md").write_text(opened.policy, encoding="utf-8")
             run = await invoke_isolated_codex(
                 build_codex_command(
                     model=model,
