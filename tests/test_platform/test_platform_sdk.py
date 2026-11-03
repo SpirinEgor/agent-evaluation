@@ -149,6 +149,12 @@ def test_projection_schemas_and_deterministic_pagination(task):
     assert set(a.tools) == {"bank_directory", "bank_call"}
     assert a.on_start().opening == task.input["ticket"]
     assert "evaluation_criteria" not in a.on_start().instructions
+    assert "Банковский лимит: 50 вызовов" in a.on_start().instructions
+    assert (
+        "Discovery: отдельный бюджет, числовой лимит не установлен"
+        in a.on_start().instructions
+    )
+    assert "число обычных банковских вызовов — не более 49" in a.on_start().instructions
     action = sdk.ToolCall("bank_directory", {"operation": "list_systems"})
     x, y = a.on_action(action), b.on_action(action)
     assert x == y and a.report_state() == b.report_state()
@@ -221,10 +227,45 @@ def test_noop_missing_done_and_recovery(task):
         )
 
 
-def test_local_bank_budget_is_not_platform_turn_budget(task):
-    bench = benchmark(task)
-    bench.session.max_calls = 1
+@pytest.mark.parametrize("limit", [None, 2])
+def test_announced_limits_match_execution_and_discovery_accounting(task, limit):
+    # Copies of task inputs, not changes to the supplied task files.
+    data = deepcopy(task.input)
+    data["scenario"]["max_bank_calls"] = limit
+    bench = benchmark(replace(task, input=data))
+    expected_limit = 100 if limit is None else 2
+    assert bench.session.max_calls == expected_limit
+    assert (
+        f"Банковский лимит: {expected_limit} вызовов" in bench.on_start().instructions
+    )
+    if limit is None:
+        return
+    bench.session.max_discovery_calls = 2
+    assert (
+        "Discovery: отдельный бюджет, лимит 2 вызовов" in bench.on_start().instructions
+    )
+    assert (
+        "число обычных банковских вызовов — не более 1" in bench.on_start().instructions
+    )
     execute(bench, path_for_find(task))
+    assert bench.report_state()["bank_calls"] == 1
+    assert bench.report_state()["status"] == "open"
+    for _ in range(2):
+        bench.on_action(sdk.ToolCall("bank_directory", {"operation": "list_systems"}))
+    assert bench.report_state()["discovery_calls"] == 3
+    assert bench.report_state()["bank_calls"] == 1
+    assert bench.report_state()["status"] == "open"
+    # Discovery exhausted; a schema opened earlier is still usable. The second
+    # bank call reaches the same old ceiling and does not silently raise it.
+    action = sdk.ToolCall(
+        "bank_call",
+        {
+            "system_id": "crm",
+            "tool_name": "find_customer",
+            "arguments": {"phone": "+7 926 118-77-30"},
+        },
+    )
+    assert bench.on_action(action).done
     assert bench.report_state()["status"] == "budget_exhausted"
 
 
@@ -389,6 +430,15 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
 
     async def engine(exchange):
         assert exchange.setup["instructions"] == bench.on_start().instructions
+        assert "Банковский лимит: 50 вызовов" in exchange.setup["instructions"]
+        assert (
+            "Discovery: отдельный бюджет, числовой лимит не установлен"
+            in exchange.setup["instructions"]
+        )
+        assert "Общие ходы (max_turns)" in exchange.setup["instructions"]
+        assert exchange.setup["rules"]["max_turns"] == (
+            1 if plan_name == "limit" else 500
+        )
         assert exchange.setup["opening"] == task.input["ticket"]
         assert {x["function"]["name"] for x in exchange.setup["tools"]} == {
             "bank_directory",

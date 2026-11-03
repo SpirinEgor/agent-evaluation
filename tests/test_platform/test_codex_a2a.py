@@ -271,6 +271,11 @@ def test_codex_engine_uses_api_setup_and_queue_transport(monkeypatch, agent_prof
     async def go():
         message = setup()
         data = message["parts"][0]["data"]
+        data["instructions"] = (
+            "BANK INSTRUCTIONS\nБанковский лимит: 50 вызовов. "
+            "Discovery: отдельный бюджет, числовой лимит не установлен."
+        )
+        data["rules"]["max_turns"] = 500
         exchange = a2a.Exchange({**data, "opening": "TICKET FROM API"})
         run = a2a.codex_engine(
             model="gpt-6.1-sol",
@@ -280,7 +285,8 @@ def test_codex_engine_uses_api_setup_and_queue_transport(monkeypatch, agent_prof
             timeout_seconds=900,
         )
         await run(exchange)
-        assert captured["args"][4] == "BANK INSTRUCTIONS"
+        assert captured["args"][4] == data["instructions"]
+        assert '"max_turns": 500' in captured["args"][1]
         assert "TICKET FROM API" in captured["args"][1]
         assert captured["args"][2] == 60
         assert captured["kwargs"]["tool_transport"] is exchange

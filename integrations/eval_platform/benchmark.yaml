@@ -1,7 +1,7 @@
 schema_version: 4
 benchmark:
   id: banking-ru
-  version: 0.1.0
+  version: 0.1.1
   name: Banking.ru
   description: Российская банковская поддержка — состояние DB и траектория ACTION
   language: ru

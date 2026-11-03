@@ -50,8 +50,31 @@ class BankingBenchmark(Benchmark):
         )
 
     def on_start(self) -> TaskStart:
+        bank_limit = self.session.max_calls
+        discovery_limit = self.session.max_discovery_calls
+        discovery = (
+            "числовой лимит не установлен"
+            if discovery_limit is None
+            else f"лимит {discovery_limit} вызовов"
+        )
+        budgets = (
+            "Бюджеты банковской среды:\n"
+            f"- Банковский лимит: {bank_limit} вызовов. "
+            "Полное чтение документов входит в этот бюджет.\n"
+            f"- Discovery: отдельный бюджет, {discovery}. "
+            "К нему относятся bank_directory и операции knowledge MCP: "
+            "list_documents, search_documents, list_revisions, "
+            "corpus_command с ls/find/grep. Они не расходуют банковский лимит. "
+            "Остальные bank_call, кроме done, расходуют банковский бюджет.\n"
+            "- Общие ходы (max_turns) задаются платформой отдельно и включают "
+            "банковские вызовы, discovery и done.\n"
+            f"При выполнении {bank_limit}-го банковского вызова сессия автоматически "
+            "завершается по бюджету. Для успешного завершения через bank_call(done) "
+            f"допустимое число обычных банковских вызовов — не более {bank_limit - 1}. "
+            "Сам done банковский бюджет не расходует."
+        )
         return TaskStart(
-            instructions=self.session.policy,
+            instructions=self.session.policy.rstrip() + "\n\n" + budgets,
             opening=self.task.input["ticket"],
         )
 
