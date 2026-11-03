@@ -10,6 +10,12 @@ from tau2.domains.banking_ru.cashback_state import (
     state_guard,
 )
 from tau2.domains.banking_ru.component_eligibility import validate_eligibility
+from tau2.domains.banking_ru.reward_duplicate_review import (
+    activate,
+    public_reviews,
+    require_unrestricted,
+    validate_trigger,
+)
 from tau2.domains.banking_ru.reward_funding import (
     reserve_key,
     reserve_members,
@@ -89,7 +95,20 @@ def _settle(tools, operation, *, retry_pending=False):
     }
     result.update(status=plan.final_status, ledger=[])
     if plan.final_status == "succeeded":
+        require_unrestricted(
+            tools.db,
+            operation.customer_id,
+            [row["original_transaction_id"] for row in plan.ledger],
+        )
         if plan.retry_required:
+            if public_reviews(
+                tools.db, operation.customer_id, operation.case_id
+            ) and operation.result.get("state_revision") != revision(
+                tools.db, operation.customer_id, operation.period
+            ):
+                raise ToolExecutionRejected(
+                    "ERR_RESOLUTION_CONSENT_STALE: После решения проверки требуется актуальное согласие и пересмотр намерения"
+                )
             gaps = standard_gaps(tools.db, operation.customer_id, operation.period)
             if any(
                 cents(row["amount"]) > gaps.get(row["original_transaction_id"], 0)
@@ -114,6 +133,9 @@ def _settle(tools, operation, *, retry_pending=False):
     result["state_revision"] = advance(
         tools.db, operation.customer_id, operation.period
     )
+    reviews = public_reviews(tools.db, operation.customer_id, operation.case_id)
+    if reviews:
+        result["duplicate_reviews"] = reviews
     operation.result = result
     operation.pending_settlement = None
     return deepcopy(result)
@@ -127,6 +149,9 @@ def get_status(tools, resolution_operation_id):
         raise ToolExecutionRejected("ERR_NOT_FOUND: Операция урегулирования не найдена")
     tools._require_verified(operation.customer_id)
     result = _settle(tools, operation)
+    reviews = public_reviews(tools.db, operation.customer_id, operation.case_id)
+    if reviews:
+        result["duplicate_reviews"] = reviews
     return with_processing_notes(
         tools.db,
         result,
@@ -757,6 +782,7 @@ def execute(
     partial = deferred_tid is not None and profile is None
     correction = None
     if partial:
+        validate_trigger(tools.db, offer)
         from tau2.domains.banking_ru.reward_resolution_amendment import (
             correction_credit,
         )
@@ -772,6 +798,9 @@ def execute(
             raise ToolExecutionRejected(
                 "ERR_CORRECTION_CONFLICT: ID корректировки совпадает с проводкой соглашения"
             )
+    require_unrestricted(
+        tools.db, offer.customer_id, [c.original_transaction_id for c in credits]
+    )
     if profile is None:
         _post_credits(
             tools,
@@ -783,6 +812,8 @@ def execute(
         )
     if correction is not None:
         _post_credits(tools, [correction])
+    if partial:
+        activate(tools.db, offer)
     current = advance(tools.db, offer.customer_id, offer.period)
     result = dict(
         id=execution_id,
@@ -824,6 +855,9 @@ def execute(
             result["funding_hold"] = funding_charge
     elif funding_charge is not None:
         result["funding_charge"] = funding_charge
+    reviews = public_reviews(tools.db, offer.customer_id, case_id)
+    if reviews:
+        result["duplicate_reviews"] = reviews
     tools.db.reward_resolution_executions[result["id"]] = RewardResolutionExecution(
         id=result["id"],
         customer_id=offer.customer_id,

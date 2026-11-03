@@ -5,6 +5,11 @@ from zoneinfo import ZoneInfo
 
 # Shared private reads are declared once, rather than copied into every task.
 COMMON_TOOL_ACCESS = {
+    "get_reward_duplicate_reviews": {"customer_id": "customers", "case_id": "cases"},
+    "resolve_reward_duplicate_review": {
+        "review_id": "reward_duplicate_reviews",
+        "basis_id": "payment_bases",
+    },
     "get_payment_basis": {"payment_id": "transactions"},
     "get_payment_allocations": {"payment_id": "transactions"},
     "reconcile_payment_allocation": {
@@ -44,6 +49,8 @@ COMMON_TOOL_ACCESS = {
 
 
 COMMON_RESULT_COLLECTIONS = {
+    "get_reward_duplicate_reviews": ["reward_duplicate_reviews"],
+    "resolve_reward_duplicate_review": ["reward_duplicate_reviews"],
     "get_payment_basis": ["payment_bases"],
     "get_payment_allocations": ["payment_allocations"],
     "reconcile_payment_allocation": ["payment_allocations"],
@@ -53,8 +60,14 @@ COMMON_RESULT_COLLECTIONS = {
     "retry_reward_resolution": ["reward_resolution_executions", "transactions"],
     "amend_reward_resolution": ["reward_resolution_executions", "transactions"],
     "get_reward_resolution_offers": ["reward_resolution_executions"],
-    "execute_reward_resolution": ["reward_resolution_executions"],
-    "get_reward_resolution_status": ["reward_resolution_executions"],
+    "execute_reward_resolution": [
+        "reward_resolution_executions",
+        "reward_duplicate_reviews",
+    ],
+    "get_reward_resolution_status": [
+        "reward_resolution_executions",
+        "reward_duplicate_reviews",
+    ],
 }
 
 

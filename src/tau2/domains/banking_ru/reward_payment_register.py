@@ -153,6 +153,8 @@ class PaymentBasisLine(BaseModel):
 
 class PaymentBasis(BaseModel):
     model_config = ConfigDict(extra="forbid")
+    external_reference: str | None = None
+    revision: int = Field(default=1, ge=1)
     id: str
     customer_id: str
     payment_id: str

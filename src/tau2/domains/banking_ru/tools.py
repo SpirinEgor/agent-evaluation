@@ -3179,6 +3179,28 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         )
 
     @is_tool(ToolType.READ)
+    def get_reward_duplicate_reviews(
+        self, customer_id: str, case_id: str
+    ) -> list[dict]:
+        """Получить опубликованные проверки возможного дублирования выплат по делу."""
+        self._require_verified(customer_id)
+        case = self.db.cases.get(case_id)
+        if case is None or case.customer_id != customer_id:
+            raise ToolExecutionRejected("ERR_REVIEW_SCOPE: Дело не принадлежит клиенту")
+        from tau2.domains.banking_ru.reward_duplicate_review import public_reviews
+
+        return public_reviews(self.db, customer_id, case_id)
+
+    @is_tool(ToolType.WRITE)
+    def resolve_reward_duplicate_review(
+        self, review_id: str, basis_id: str, expected_revision: int, basis_revision: int
+    ) -> dict:
+        """Завершить банковскую проверку дублирования по указанному основанию и версиям."""
+        from tau2.domains.banking_ru.reward_duplicate_review import resolve
+
+        return resolve(self, review_id, basis_id, expected_revision, basis_revision)
+
+    @is_tool(ToolType.READ)
     def get_payment_basis(self, payment_id: str) -> list[dict]:
         """Получить окончательные банковские основания проведённой выплаты."""
         payment = self.db.transactions.get(payment_id)

@@ -273,6 +273,10 @@ def banking_business_failures(trace, policy, *, initial_db=None):
     policy = _mapping(policy)
     observed = trace.observed
     failures = []
+    if policy.get("reward_duplicate_review"):
+        from tau2.evaluator.reward_duplicate_trace import duplicate_review_failures
+
+        failures.extend(duplicate_review_failures(observed, initial_db))
     if policy.get("case_review"):
         failures.extend(_review_failures(observed, policy["case_review"]))
     if policy.get("fee_refunds"):

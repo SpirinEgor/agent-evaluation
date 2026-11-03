@@ -198,7 +198,7 @@ def test_combined_process_whole_grade(mode, route, expected):
             if route == "early_settlement":
                 if packet.get("resolution_operation_id"):
                     packet.update(
-                        state_revision=4,
+                        state_revision=5,
                         total_amount=18.5,
                         payouts=[
                             {"transaction_id": "txn_804219", "amount": 5.25},
@@ -269,7 +269,7 @@ def test_combined_process_whole_grade(mode, route, expected):
         if name == "amend_reward_resolution":
             if route == "early_settlement":
                 args.update(
-                    expected_revision=4,
+                    expected_revision=5,
                     total_amount=18.5,
                     payouts=[
                         {"transaction_id": "txn_804219", "amount": 5.25},
@@ -296,7 +296,7 @@ def test_combined_process_whole_grade(mode, route, expected):
                 pending_results.append(pending)
                 continue
         if name == "amend_cashback_investigation" and route == "early_settlement":
-            args["expected_revision"] = 6
+            args["expected_revision"] = 7
             args["items"][0]["amount"] = 0
             args["items"][1]["amount"] = 4.85
         if name == "amend_cashback_investigation" and route == "only_clip_second":

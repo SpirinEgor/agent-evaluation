@@ -3726,6 +3726,26 @@
       "compare_args": []
     },
     {
+      "action_id": "bank2:v21:reviews",
+      "name": "get_reward_duplicate_reviews",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "case_id": "case_610903"
+      },
+      "required_for_reward": false
+    },
+    {
+      "action_id": "bank2:v21:resolve",
+      "name": "resolve_reward_duplicate_review",
+      "arguments": {
+        "review_id": "review_610903",
+        "basis_id": "decision_mixed_01",
+        "expected_revision": 2,
+        "basis_revision": 1
+      },
+      "required_for_reward": false
+    },
+    {
       "action_id": "bank2:v17:consent-amendment",
       "name": "ask_client",
       "arguments": {
@@ -3753,7 +3773,7 @@
               "amount": 7
             }
           ],
-          "state_revision": 6,
+          "state_revision": 7,
           "component_ids": [
             "1A",
             "2B",
@@ -3784,7 +3804,7 @@
         ],
         "total_amount": 17.15,
         "confirmation_id": "resolution-confirmation-2",
-        "expected_revision": 6
+        "expected_revision": 7
       },
       "required_for_reward": false,
       "compare_args": []
@@ -3813,7 +3833,7 @@
             "amount": 0
           }
         ],
-        "expected_revision": 8
+        "expected_revision": 9
       },
       "required_for_reward": true,
       "compare_args": [
@@ -4184,6 +4204,33 @@
           "reward_program": null
         }
       ]
+    },
+    {
+      "check_id": "duplicate-review-status",
+      "collection": "reward_duplicate_reviews",
+      "where": {
+        "id": "review_610903"
+      },
+      "field": "status",
+      "equals": "cleared"
+    },
+    {
+      "check_id": "duplicate-review-decision_basis_id",
+      "collection": "reward_duplicate_reviews",
+      "where": {
+        "id": "review_610903"
+      },
+      "field": "decision_basis_id",
+      "equals": "decision_mixed_01"
+    },
+    {
+      "check_id": "duplicate-review-decision_basis_revision",
+      "collection": "reward_duplicate_reviews",
+      "where": {
+        "id": "review_610903"
+      },
+      "field": "decision_basis_revision",
+      "equals": 1
     }
   ],
   "reward_business_contract": {
@@ -4206,7 +4253,8 @@
     "case_review": {
       "customer_id": "gromov_a_1187",
       "case_id": "case_610903"
-    }
+    },
+    "reward_duplicate_review": true
   },
   "forbidden_message_patterns": [
     {

@@ -25,6 +25,8 @@ SYSTEMS = {
 }
 
 TOOL_OWNERS = {
+    "get_reward_duplicate_reviews": "loyalty",
+    "resolve_reward_duplicate_review": "loyalty",
     "get_payment_basis": "payments",
     "get_payment_allocations": "crm",
     "reconcile_payment_allocation": "crm",

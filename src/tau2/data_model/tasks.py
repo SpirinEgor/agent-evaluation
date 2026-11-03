@@ -862,6 +862,7 @@ class BankingBusinessContract(BaseModel):
 
     case_referral: CaseReferralContract | None = None
     case_review: CaseReviewContract | None = None
+    reward_duplicate_review: bool = False
     pending_limit_changes: list[PendingLimitGuard] = Field(default_factory=list)
     fee_refunds: dict[NonemptyContractID, PositiveContractAmount] = Field(
         default_factory=dict
@@ -878,6 +879,7 @@ class BankingBusinessContract(BaseModel):
             or self.case_referral
             or self.case_review
             or self.pending_limit_changes
+            or self.reward_duplicate_review
         ):
             raise ValueError("Business contract must declare a guarded operation")
         return self

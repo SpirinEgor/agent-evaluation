@@ -20,6 +20,7 @@ from tau2.domains.banking_ru.document_service_models import (
     DocumentServiceProfile,
 )
 from tau2.domains.banking_ru.processing_notes import ProcessingNote
+from tau2.domains.banking_ru.reward_duplicate_review import RewardDuplicateReview
 from tau2.domains.banking_ru.reward_payment_register import (
     PaymentAllocation,
     PaymentBasis,
@@ -1120,6 +1121,9 @@ class BankingDB(DB):
     )
     tariffs: dict[str, Tariff] = Field(default_factory=dict)
     processing_notes: dict[str, ProcessingNote] = Field(default_factory=dict)
+    reward_duplicate_reviews: dict[str, RewardDuplicateReview] = Field(
+        default_factory=dict
+    )
     customers: dict[str, Customer] = Field(default_factory=dict)
     accounts: dict[str, Account] = Field(default_factory=dict)
     cards: dict[str, Card] = Field(default_factory=dict)

@@ -22,6 +22,7 @@ from tau2.domains.banking_ru.task_store import (
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_FILE = ROOT / "src/tau2/domains/banking_ru/tools.py"
 ARGUMENT_COLLECTIONS = {
+    "review_id": "reward_duplicate_reviews",
     "payment_id": "transactions",
     "basis_id": "payment_bases",
     "allocation_id": "payment_allocations",
@@ -265,7 +266,8 @@ def resource_catalog(db: dict) -> dict[str, dict[str, list[str]]]:
         # environment and received tool results by the shared access evaluator.
         # Do not add empty catalogs to every task when no base record exists.
         if (
-            collection in {"payment_bases", "payment_allocations"}
+            collection
+            in {"payment_bases", "payment_allocations", "reward_duplicate_reviews"}
             and collection not in db
         ):
             continue

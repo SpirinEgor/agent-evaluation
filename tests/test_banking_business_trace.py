@@ -337,3 +337,205 @@ def test_case_review_uses_received_version_and_accepts_idempotent_receipts():
         banking_business_failures(trace(rows[:1] + [conflict, submission]), policy)
         == []
     )
+
+
+def test_duplicate_restriction_checks_successful_history_even_after_release():
+    from copy import deepcopy
+
+    initial = {
+        "reward_duplicate_reviews": {
+            "r": {
+                "id": "r",
+                "status": "queued",
+                "revision": 1,
+                "customer_id": "c",
+                "case_id": "case",
+                "period": "2026-07",
+                "trigger_offer_id": "offer",
+                "transaction_id": "second",
+                "reward_program": "partner",
+                "external_reference": "ref",
+            }
+        },
+        "payment_bases": {
+            "b": {
+                "id": "b",
+                "customer_id": "c",
+                "period": "2026-07",
+                "external_reference": "ref",
+                "revision": 1,
+                "status": "final",
+                "lines": [
+                    {
+                        "purchase_id": "first",
+                        "purpose": "cashback",
+                        "reward_program": "standard",
+                    }
+                ],
+            }
+        },
+    }
+    first = {
+        "id": "credit1",
+        "customer_id": "c",
+        "original_transaction_id": "first",
+        "status": "posted",
+        "amount": 1,
+    }
+    second = {**first, "id": "credit2", "original_transaction_id": "second"}
+    partial = {
+        "offer_id": "offer",
+        "case_id": "case",
+        "customer_id": "c",
+        "retry_required": True,
+        "ledger": [first],
+    }
+    review = {
+        **initial["reward_duplicate_reviews"]["r"],
+        "revision": 2,
+        "status": "pending",
+    }
+    rows = [
+        ("execute_reward_resolution", {}, partial, False),
+        ("get_reward_duplicate_reviews", {}, [review], False),
+        ("get_payment_basis", {}, [initial["payment_bases"]["b"]], False),
+        (
+            "resolve_reward_duplicate_review",
+            {
+                "review_id": "r",
+                "basis_id": "b",
+                "expected_revision": 2,
+                "basis_revision": 1,
+            },
+            {"status": "cleared"},
+            False,
+        ),
+        (
+            "retry_reward_resolution",
+            {},
+            {"ledger": [first, second], "status": "succeeded"},
+            False,
+        ),
+    ]
+    policy = {"reward_duplicate_review": True}
+    assert not banking_business_failures(trace(rows), policy, initial_db=initial)
+    scheduled = (
+        "execute_reward_resolution",
+        {"payouts": [{"transaction_id": "second", "amount": 1}]},
+        {
+            "id": "new-operation",
+            "status": "execution_unknown",
+            "funding_hold": {"bank": 1},
+        },
+        False,
+    )
+    assert any(
+        "execution_under" in f
+        for f in banking_business_failures(
+            trace(rows[:3] + [scheduled] + rows[3:]), policy, initial_db=initial
+        )
+    )
+    early = rows[:3] + [rows[-1], rows[3]]
+    assert any(
+        "payout_under" in f
+        for f in banking_business_failures(trace(early), policy, initial_db=initial)
+    )
+    # A blocked attempt is neutral; replayed old ledger is not a fresh payment.
+    blocked = ("retry_reward_resolution", {}, "ERR_REWARD_REVIEW_PENDING", True)
+    assert not banking_business_failures(
+        trace(rows[:3] + [blocked, rows[0]] + rows[3:]), policy, initial_db=initial
+    )
+    delayed = trace(deepcopy(rows))
+    delayed.observed[2] = delayed.observed[2].model_copy(update={"result_position": 9})
+    assert any(
+        "evidence" in f
+        for f in banking_business_failures(delayed, policy, initial_db=initial)
+    )
+
+
+def test_duplicate_review_new_basis_invalidates_old_release_and_allows_new_decision():
+    initial = {
+        "reward_duplicate_reviews": {
+            "r": {
+                "id": "r",
+                "status": "cleared",
+                "revision": 3,
+                "customer_id": "c",
+                "case_id": "case",
+                "period": "2026-07",
+                "trigger_offer_id": "offer",
+                "transaction_id": "second",
+                "reward_program": "partner",
+                "external_reference": "ref",
+                "decision_basis_id": "b",
+                "decision_basis_revision": 1,
+            }
+        },
+        "payment_bases": {
+            "b": {
+                "id": "b",
+                "customer_id": "c",
+                "period": "2026-07",
+                "external_reference": "ref",
+                "revision": 1,
+                "status": "final",
+                "lines": [],
+            }
+        },
+    }
+    basis = {**initial["payment_bases"]["b"], "revision": 2}
+    review = {**initial["reward_duplicate_reviews"]["r"], "status": "pending"}
+    rows = [
+        ("get_payment_basis", {}, [basis], False),
+        ("get_reward_duplicate_reviews", {}, [review], False),
+        (
+            "resolve_reward_duplicate_review",
+            {
+                "review_id": "r",
+                "basis_id": "b",
+                "expected_revision": 3,
+                "basis_revision": 2,
+            },
+            {"status": "cleared"},
+            False,
+        ),
+        (
+            "retry_reward_resolution",
+            {},
+            {
+                "status": "succeeded",
+                "ledger": [
+                    {
+                        "id": "p",
+                        "status": "posted",
+                        "customer_id": "c",
+                        "original_transaction_id": "second",
+                    }
+                ],
+            },
+            False,
+        ),
+    ]
+    policy = {"reward_duplicate_review": True}
+    assert not banking_business_failures(trace(rows), policy, initial_db=initial)
+    assert banking_business_failures(
+        trace(rows[:2] + rows[3:]), policy, initial_db=initial
+    )
+    delayed = trace(rows)
+    delayed.observed[2] = delayed.observed[2].model_copy(update={"result_position": 9})
+    assert banking_business_failures(delayed, policy, initial_db=initial)
+    alternate = {
+        **review,
+        "status": "cleared",
+        "revision": 4,
+        "decision_basis_revision": 2,
+    }
+    recovered = trace(
+        rows[:3] + [("get_reward_duplicate_reviews", {}, [alternate], False)] + rows[3:]
+    )
+    recovered.observed[2] = recovered.observed[2].model_copy(
+        update={"result_position": 99}
+    )
+    assert not banking_business_failures(recovered, policy, initial_db=initial)
+    initial["payment_bases"]["b"]["revision"] = 2
+    assert banking_business_failures(trace(rows[3:]), policy, initial_db=initial)
