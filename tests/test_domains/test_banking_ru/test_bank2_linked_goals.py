@@ -762,3 +762,118 @@ def test_adversarial_correspondence_v19(mode, route):
         assert grade.reward_breakdown == {RewardType.DB: 1, RewardType.ACTION: 1}, (
             grade.info
         )
+
+
+@pytest.mark.parametrize("mode", ["half", "full"])
+def test_distributed_correspondence_is_available_and_solvable(mode):
+    """Receive every new message through owned MCP reads, then solve unchanged."""
+    session = PlatformSession(
+        task2(), get_environment, max_errors=0, mcp_layout="directory"
+    )
+    seen = set()
+
+    def observe(value):
+        if isinstance(value, list):
+            for item in value:
+                observe(item)
+        elif isinstance(value, dict):
+            for note in value.get("processing_notes", []):
+                seen.add(note["id"])
+                assert note["customer_id"] == C
+                assert note["source_ref"]
+                assert "available_after" not in note
+
+    for action in deepcopy(task2().evaluation_criteria.actions):
+        if action.name == "done":
+            continue
+        result = data(invoke(session, action.name, action.arguments))
+        observe(result)
+        if action.name == "verify_identity":
+            before = session.env.tools.get_db_hash()
+            observe(
+                data(invoke(session, "get_cashback_investigations", {"customer_id": C}))
+            )
+            assert "crm-intake-610903" in seen
+            assert "crm-summary-610903" not in seen
+            assert "closure-draft-610903" not in seen
+            assert session.env.tools.get_db_hash() == before
+        if action.name == "get_reward_statement_status":
+            before = session.env.tools.get_db_hash()
+            observe(
+                data(invoke(session, "get_cashback_investigations", {"customer_id": C}))
+            )
+            observe(
+                data(
+                    invoke(
+                        session,
+                        "get_reward_resolution_offers",
+                        {"customer_id": C, "case_id": "case_610903"},
+                    )
+                )
+            )
+            assert "crm-summary-610903" in seen
+            assert "consent-comment-610903" in seen
+            assert "processing-warning-610903" not in seen
+            assert session.env.tools.get_db_hash() == before
+    assert seen == set(session.env.tools.db.processing_notes)
+    data(invoke(session, "done", {}))
+    grade = (
+        session.grade() if mode == "half" else grade_full_session(session).reward_info
+    )
+    assert grade.reward_breakdown == {RewardType.DB: 1, RewardType.ACTION: 1}, (
+        grade.info
+    )
+
+
+def test_processing_notes_provenance_and_owner_boundaries():
+    from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
+    session = PlatformSession(task2(), get_environment, max_errors=0)
+    db = session.env.tools.db
+    # New notes never bypass the existing identification boundary.
+    for name, args in [
+        ("get_cashback_investigations", {"customer_id": C}),
+        ("get_payment_allocations", {"payment_id": "payment_mixed_01"}),
+        ("get_reward_reprocessing_cases", {"customer_id": C}),
+    ]:
+        result = invoke(session, name, args)
+        assert result.is_error
+        assert "processing_notes" not in str(result.content)
+    for note in db.processing_notes.values():
+        assert note.source_ref in db.processing_notes or note.source_ref in db.documents
+    original = {"id": "unrelated"}
+    assert (
+        with_processing_notes(db, original, "other", "case", "case_610903") == original
+    )
+    assert with_processing_notes(db, original, C, "case", "other") == original
+    assert original == {"id": "unrelated"}
+
+
+def test_reissue_search_exposes_scope_and_current_revision():
+    from pathlib import Path
+
+    from tau2.domains.banking_ru.file_corpus import FileCorpus
+    from tau2.platform.knowledge import KnowledgeMCP
+
+    root = Path(__file__).resolve().parents[3] / "data/tau2/domains/banking_ru"
+    knowledge = KnowledgeMCP(FileCorpus(root), token="scope-test")
+    found = []
+    page = knowledge.search_documents("перевыпуск")
+    while True:
+        found.extend(page["items"])
+        if page["next_cursor"] is None:
+            break
+        page = knowledge.search_documents("перевыпуск", cursor=page["next_cursor"])
+    revisions = [r for r in found if r["document_id"] == "reward_card_reissue"]
+    assert {r["revision_id"] for r in revisions} == {
+        "manual-compensation-v1",
+        "combined-process-v16-reward_card_reissue",
+    }
+    old = knowledge.read_document("reward_card_reissue", "manual-compensation-v1")[
+        "content"
+    ]
+    current = knowledge.read_document(
+        "reward_card_reissue", "combined-process-v16-reward_card_reissue"
+    )["content"]
+    assert "2025 года" in old and "rules_revision=manual-compensation-v1" in old
+    assert "repair_reward_binding" in current and "не антифрод-блокировку" in current

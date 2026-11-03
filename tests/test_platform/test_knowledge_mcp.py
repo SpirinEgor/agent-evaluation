@@ -286,7 +286,8 @@ def test_published_corpus_has_unambiguous_metadata_and_exact_reads():
         assert read["content"] == published[card["path"]]["content"]
         assert read["content_sha256"] == published[card["path"]]["sha256"]
     for group in groups.values():
-        assert min(c["updated_at"] for c in group) == group[0]["created_at"]
+        # Published history need not contain the document's first revision.
+        assert min(c["updated_at"] for c in group) >= group[0]["created_at"]
     assert not source._read_paths
 
 

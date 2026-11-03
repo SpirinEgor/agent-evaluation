@@ -120,11 +120,20 @@ def _settle(tools, operation, *, retry_pending=False):
 
 
 def get_status(tools, resolution_operation_id):
+    from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
     operation = tools.db.reward_resolution_executions.get(resolution_operation_id)
     if operation is None:
         raise ToolExecutionRejected("ERR_NOT_FOUND: Операция урегулирования не найдена")
     tools._require_verified(operation.customer_id)
-    return _settle(tools, operation)
+    result = _settle(tools, operation)
+    return with_processing_notes(
+        tools.db,
+        result,
+        operation.customer_id,
+        "resolution",
+        operation.packet["offer_id"],
+    )
 
 
 def retry(tools, resolution_operation_id):
@@ -237,6 +246,8 @@ def selected_amounts(offer, component_ids):
 
 
 def list_offers(tools, customer_id, case_id):
+    from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
     tools._get_customer(customer_id)
     tools._require_verified(customer_id)
     case = tools.db.cases.get(case_id)
@@ -268,7 +279,9 @@ def list_offers(tools, customer_id, case_id):
         reserve = reserve_snapshot(tools.db, offer)
         if reserve is not None:
             row["funding_reserve"] = reserve
-        results.append(row)
+        results.append(
+            with_processing_notes(tools.db, row, customer_id, "offer", offer.id)
+        )
     return results
 
 

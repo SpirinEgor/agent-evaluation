@@ -3,6 +3,7 @@
 from decimal import ROUND_HALF_UP, Decimal
 
 from tau2.domains.banking_ru.cashback_state import advance, revision
+from tau2.domains.banking_ru.processing_notes import with_processing_notes
 from tau2.domains.banking_ru.reward_workflows import (
     cents,
     linked_posted,
@@ -26,7 +27,9 @@ def list_cases(tools, customer_id):
     tools._get_customer(customer_id)
     tools._require_verified(customer_id)
     return [
-        r.model_dump()
+        with_processing_notes(
+            tools.db, r.model_dump(), customer_id, "reprocessing", r.id
+        )
         for r in tools.db.reward_reprocessing_cases.values()
         if r.customer_id == customer_id
     ]

@@ -19,6 +19,7 @@ from tau2.domains.banking_ru.document_service_models import (
     DocumentDelivery,
     DocumentServiceProfile,
 )
+from tau2.domains.banking_ru.processing_notes import ProcessingNote
 from tau2.domains.banking_ru.reward_payment_register import (
     PaymentAllocation,
     PaymentBasis,
@@ -581,6 +582,7 @@ class Case(BaseModel):
         default_factory=list,
         description="Стандартизированный список документов, запрошенных по делу",
     )
+    processing_notes: list[dict] = Field(default_factory=list)
     # Свободного описания у обращения нет намеренно: текст, который агент
     # формулирует своими словами, попал бы в хеш БД и обнулял бы задачу при
     # верном действии. Смысл обращения несут категория и операция.
@@ -1117,6 +1119,7 @@ class BankingDB(DB):
         description="Срок, в течение которого операцию можно оспорить, дней",
     )
     tariffs: dict[str, Tariff] = Field(default_factory=dict)
+    processing_notes: dict[str, ProcessingNote] = Field(default_factory=dict)
     customers: dict[str, Customer] = Field(default_factory=dict)
     accounts: dict[str, Account] = Field(default_factory=dict)
     cards: dict[str, Card] = Field(default_factory=dict)

@@ -1195,7 +1195,19 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         period: Optional[str] = None,
     ) -> list[Case]:
         """Получить свои расследования с программой, периодом, статусом и составом покупок."""
-        return self._get_reward_investigations(customer_id, program, period)
+        from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
+        cases = self._get_reward_investigations(customer_id, program, period)
+        return [
+            case.model_copy(
+                update={
+                    "processing_notes": with_processing_notes(
+                        self.db, {}, customer_id, "case", case.id
+                    ).get("processing_notes", [])
+                }
+            )
+            for case in cases
+        ]
 
     @is_tool(ToolType.WRITE)
     def amend_cashback_investigation(
@@ -3186,8 +3198,12 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         if payment is None:
             raise ValueError("ERR_NOT_FOUND: Выплата не найдена")
         self._require_verified(payment.customer_id)
+        from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
         return [
-            x.model_dump()
+            with_processing_notes(
+                self.db, x.model_dump(), payment.customer_id, "payment", payment_id
+            )
             for x in self.db.payment_allocations.values()
             if x.payment_id == payment_id and x.customer_id == payment.customer_id
         ]
