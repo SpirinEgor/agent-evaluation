@@ -128,6 +128,23 @@ def test_access_completeness_rejects_a_missing_protected_tool_mapping():
         generator.validate_protected_arguments(mappings)
 
 
+def test_reprocessing_method_is_local_but_its_case_and_payouts_are_protected():
+    generator = access_generator()
+    mappings = generator.protected_arguments()
+    assert (
+        mappings["reprocess_rewards"]["reprocessing_id"] == "reward_reprocessing_cases"
+    )
+    assert (
+        mappings["ask_client"]["request.reprocessing_id"] == "reward_reprocessing_cases"
+    )
+    assert mappings["ask_client"]["request.payouts.*.transaction_id"] == "transactions"
+    assert "method_id" not in mappings["reprocess_rewards"]
+    generator.validate_protected_arguments(mappings)
+    generator.LOCAL_ID_ARGUMENTS["reprocess_rewards"].remove("method_id")
+    with pytest.raises(ValueError, match="method_id"):
+        generator.protected_arguments()
+
+
 def test_access_generator_patch_applies_to_temporary_task_only(
     tmp_path, monkeypatch, capsys
 ):

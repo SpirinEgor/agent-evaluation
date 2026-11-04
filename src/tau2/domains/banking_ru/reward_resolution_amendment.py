@@ -172,7 +172,11 @@ def amend(
     expected_revision,
 ):
     from tau2.domains.banking_ru.data_model import Transaction
-    from tau2.domains.banking_ru.reward_resolution import minimum_snapshot, normalized
+    from tau2.domains.banking_ru.reward_resolution import (
+        minimum_snapshot,
+        normalized,
+        public_execution_result,
+    )
 
     operation, offer = operation_for_amendment(tools, resolution_operation_id)
     rows = normalized(payouts)
@@ -184,7 +188,7 @@ def amend(
     )
     previous = operation.result.get("amendment")
     if previous and previous["request"] == requested:
-        return deepcopy(operation.result)
+        return public_execution_result(tools, operation)
     plan = operation.pending_settlement
     if (
         plan is None
@@ -346,7 +350,7 @@ def amend(
     )
     if revised_funding is not None:
         operation.result["funding_hold"] = deepcopy(revised_funding)
-    return deepcopy(operation.result)
+    return public_execution_result(tools, operation)
 
 
 def validated_amendment(db, operation):

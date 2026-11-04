@@ -44,6 +44,7 @@ COMMON_TOOL_ACCESS = {
         "fallback_operation_id": "reward_resolution_executions"
     },
     "ask_client": {
+        "request.reprocessing_id": "reward_reprocessing_cases",
         "request.fallback_operation_id": "reward_resolution_executions",
         "request.resolution_operation_id": "reward_resolution_executions",
     },

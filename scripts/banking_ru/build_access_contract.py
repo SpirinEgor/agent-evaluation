@@ -73,8 +73,12 @@ LOCAL_ID_ARGUMENTS = {
     "case_workspace": {"source_ids"},  # checked against visible case sources
     "send_case_message": {"recipient_id"},  # checked against case participants
     "execute_reward_resolution": {"component_ids"},
-    "ask_client": {"component_ids"},
+    "reprocess_rewards": {"method_id"},  # member of the protected reprocessing case
+    "ask_client": {"component_ids", "method_id"},
 }
+# Bank-register allocation rows are scoped through the protected reprocessing
+# case, not the separate payment_allocations collection of mixed-payment records.
+LOCAL_ID_PATHS = {"ask_client": {"request.reversals.*.allocation_id"}}
 PRE_AUTH_TOOLS = ["verify_identity", "ask_client", "reply_to_ticket"]
 RESULT_COLLECTIONS = {
     "ask_client": ["reward_client_submissions"],
@@ -197,6 +201,7 @@ def protected_arguments() -> dict[str, dict[str, str]]:
     )
     result["amend_reward_resolution"]["payouts.*.transaction_id"] = "transactions"
     result["ask_client"]["request.offer_id"] = "reward_resolution_offers"
+    result["ask_client"]["request.reprocessing_id"] = "reward_reprocessing_cases"
     result["ask_client"]["request.case_id"] = "cases"
     result["ask_client"]["request.payouts.*.transaction_id"] = "transactions"
     result["ask_client"]["request.resulting_claims.*.transaction_id"] = "transactions"
@@ -249,6 +254,7 @@ def validate_protected_arguments(arguments):
                 selector in PUBLIC_ID_ARGUMENTS
                 or selector == "answer_id"
                 or selector in LOCAL_ID_ARGUMENTS.get(name, set())
+                or path in LOCAL_ID_PATHS.get(name, set())
             ):
                 continue
             collection = ARGUMENT_COLLECTIONS.get(selector)

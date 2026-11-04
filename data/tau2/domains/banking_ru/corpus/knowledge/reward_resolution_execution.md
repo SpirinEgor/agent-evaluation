@@ -3,7 +3,7 @@ id: "reward_resolution_execution"
 section: "Акции и кешбэк"
 title: "Согласие и исполнение предложения"
 keywords: ["кешбэк", "урегулирование", "предложения", "resolution"]
-revision_id: "2026-08-28-investigation-v27-reward_resolution_execution"
+revision_id: "v29-2026-08-28-investigation-v27-reward_resolution_execution"
 effective_from: "2026-06-01"
 effective_to: null
 document_type: "knowledge"
@@ -116,3 +116,13 @@ state_revision расчётного периода — разные версии
 результаты порученных действий. Безопасно отклонённый запрос без выплат или
 раскрытия данных допускает восстановление. Необоснованное повторение проверки
 не заменяет факты. Конкретные операции и их аргументы доступны в каталоге систем.
+
+## Согласие на восстановительный метод
+
+Оба эффекта входят в один согласуемый пакет. Для каждого метода отдельно определяют
+новые начисления и затрагиваемые прежние распределения. Клиенту через
+ask_client(request.type=reward_reprocessing_confirmation) показывают reprocessing_id,
+method_id, payouts (transaction_id, amount), reversals (allocation_id, amount) и
+state_revision. Полученный confirmation_id передают в reprocess_rewards вместе с
+method_id. Согласие клиента подтверждает показанный пакет, но не проверяет расчёт
+и не рекомендует метод. Исполнение атомарно проверяет действующий пакет.

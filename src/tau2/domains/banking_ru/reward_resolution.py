@@ -83,14 +83,23 @@ def _post_credits(tools, credits):
         tools.db.transactions[credit.original_transaction_id].cashback_granted = True
 
 
+def public_execution_result(tools, operation):
+    """Return the stored intent with current review facts, without mutating it."""
+    result = deepcopy(operation.result)
+    reviews = public_reviews(tools.db, operation.customer_id, operation.case_id)
+    if reviews or "duplicate_reviews" in result:
+        result["duplicate_reviews"] = reviews
+    return result
+
+
 def _settle(tools, operation, *, retry_pending=False):
     if operation.result.get("status") != "execution_unknown":
-        return deepcopy(operation.result)
+        return public_execution_result(tools, operation)
     from tau2.domains.banking_ru.data_model import Transaction
 
     plan = operation.pending_settlement
     if plan.retry_required and not retry_pending:
-        return deepcopy(operation.result)
+        return public_execution_result(tools, operation)
     result = {
         k: deepcopy(v) for k, v in operation.result.items() if k != "funding_hold"
     }

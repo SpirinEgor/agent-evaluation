@@ -210,6 +210,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
     def __init__(self, db: BankingDB) -> None:
         super().__init__(db)
         self._resolution_consents = {}
+        self._reprocessing_consents = {}
         self._resolution_minimum_overrides = {}
         self._resolution_minimum_revisions = {}
         self._resolution_minimum_answers = {}
@@ -3146,12 +3147,18 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
     @is_tool(ToolType.WRITE)
     def reprocess_rewards(
-        self, reprocessing_id: str, transaction_ids: list[str]
+        self,
+        reprocessing_id: str,
+        transaction_ids: list[str],
+        method_id: str | None = None,
+        confirmation_id: str | None = None,
     ) -> dict:
         """Повторно обработать начисления по покупкам инцидента."""
         from tau2.domains.banking_ru.reward_reprocessing import reprocess
 
-        return reprocess(self, reprocessing_id, transaction_ids)
+        return reprocess(
+            self, reprocessing_id, transaction_ids, method_id, confirmation_id
+        )
 
     @is_tool(ToolType.WRITE)
     def retry_reward_resolution(self, resolution_operation_id: str) -> dict:

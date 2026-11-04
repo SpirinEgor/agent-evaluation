@@ -110,6 +110,29 @@ def test_repeat_is_idempotent_and_changed_basis_reopens_authority():
     assert result["decision_basis_revision"] == 3
 
 
+def test_amendment_and_replayed_execution_report_current_review():
+    session = PlatformSession(task2(), get_environment, max_errors=0)
+    execution = None
+    amendment = None
+    for action in session.task.evaluation_criteria.actions:
+        if action.name == "execute_reward_resolution":
+            execution = action
+        result = data(session.call(action.name, deepcopy(action.arguments)))
+        if action.name == "amend_reward_resolution":
+            amendment = action
+            break
+    assert execution is not None and amendment is not None
+    db = session.env.tools.db
+    expected = public_reviews(db, C, "case_610903")
+    assert expected[0]["status"] == "cleared"
+    assert result["duplicate_reviews"] == expected
+    before = db.model_dump()
+    for action in (amendment, execution):
+        repeated = data(session.call(action.name, deepcopy(action.arguments)))
+        assert repeated["duplicate_reviews"] == expected
+        assert db.model_dump() == before
+
+
 def test_real_duplicate_does_not_get_automatic_clearance():
     session = pending()
     tools = session.env.tools
@@ -229,7 +252,7 @@ def test_decision_after_amendment_requires_fresh_consent():
         data(session.call("retry_reward_resolution", {"resolution_operation_id": OP}))[
             "total_amount"
         ]
-        == 35.5
+        == 35.25
     )
 
 

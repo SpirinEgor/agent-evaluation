@@ -530,6 +530,7 @@ def reward_business_failures(trace, policy):
     failures, executions, spent = [], {}, {}
     payments = []
     amendments = {}
+    recoveries = set()
     selected = set(policy["transaction_ids"])
     initial = policy["initial_case_items"]
 
@@ -559,6 +560,58 @@ def reward_business_failures(trace, policy):
         ):
             continue
         name, args, ident = target.call.name, target.call.arguments, target.call.id
+        if name == "reprocess_rewards" and args.get("method_id"):
+            recovery_key = args.get("reprocessing_id")
+            if recovery_key not in recoveries:
+
+                def monetary_rows(rows, key):
+                    return sorted(
+                        [(r.get(key), _money(r.get("amount"))) for r in rows],
+                        key=lambda r: str(r[0]),
+                    )
+
+                credits = [
+                    r
+                    for r in result.get("ledger", [])
+                    if r.get("original_transaction_id")
+                ]
+                consent_received = False
+                for source in received(target, "ask_client"):
+                    consent = payload(source)
+                    if not isinstance(consent, dict):
+                        continue
+                    packet = consent.get("data") or {}
+                    request = source.call.arguments.get("request") or {}
+                    if (
+                        request.get("type") == "reward_reprocessing_confirmation"
+                        and consent.get("status") == "confirmed"
+                        and consent.get("customer_id") == policy["customer_id"]
+                        and consent.get("confirmation_id")
+                        == args.get("confirmation_id")
+                        and packet.get("reprocessing_id") == recovery_key
+                        and packet.get("method_id") == args.get("method_id")
+                        and result.get("selected_method_id") == args.get("method_id")
+                        and all(
+                            request.get(k) == v
+                            for k, v in packet.items()
+                            if k not in {"payouts", "reversals"}
+                        )
+                        and monetary_rows(request.get("payouts", []), "transaction_id")
+                        == monetary_rows(packet.get("payouts", []), "transaction_id")
+                        and monetary_rows(request.get("reversals", []), "allocation_id")
+                        == monetary_rows(packet.get("reversals", []), "allocation_id")
+                        and monetary_rows(packet.get("payouts", []), "transaction_id")
+                        == monetary_rows(credits, "original_transaction_id")
+                        and monetary_rows(packet.get("reversals", []), "allocation_id")
+                        == monetary_rows(result.get("reversals", []), "allocation_id")
+                        and _money(packet.get("state_revision")) + 1
+                        == _money(result.get("state_revision"))
+                    ):
+                        consent_received = True
+                        break
+                if not consent_received:
+                    failures.append(f"{ident}:recovery_consent_not_received")
+                recoveries.add(recovery_key)
         if name == "amend_reward_resolution":
             amendment_key = args.get("resolution_operation_id")
             packet = _amendment_packet(args)

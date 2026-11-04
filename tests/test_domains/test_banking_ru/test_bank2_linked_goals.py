@@ -97,6 +97,7 @@ def test_combined_process_whole_grade(mode, route, expected):
                 "repair_reward_binding",
                 "reprocess_rewards",
             }
+            or a.action_id == "bank2:v29:recovery-consent"
         ]
         actions = [a for a in actions if a not in moved]
         i = next(
@@ -118,7 +119,7 @@ def test_combined_process_whole_grade(mode, route, expected):
                 total_amount=18,
                 payouts=[{"transaction_id": "txn_804219", "amount": 18}],
             )
-        consent.arguments["request"]["resulting_claims"][0]["amount"] = 1
+        consent.arguments["request"]["resulting_claims"][0]["amount"] = 2.7
         consent.arguments["request"]["resulting_claims"][1]["amount"] = 20.9
         status = Action(
             action_id="control:unknown-x-status",
@@ -183,6 +184,16 @@ def test_combined_process_whole_grade(mode, route, expected):
             continue
         if route == "no_file_reads" and name == "file_read":
             continue
+        if (
+            route == "early_settlement"
+            and action.action_id == "bank2:v29:recovery-consent"
+        ):
+            continue
+        if (
+            route == "reprocess_before_refresh"
+            and action.action_id == "bank2:v29:recovery-consent"
+        ):
+            args["request"]["state_revision"] = 2
         if route == "early_settlement" and name in {
             "get_reward_reprocessing_cases",
             "repair_reward_binding",
@@ -221,7 +232,7 @@ def test_combined_process_whole_grade(mode, route, expected):
                     payouts=[{"transaction_id": "txn_804227", "amount": 16.9}],
                     total_amount=16.9,
                     resulting_claims=[
-                        {"transaction_id": "txn_804219", "amount": 3.5},
+                        {"transaction_id": "txn_804219", "amount": 5.2},
                         {"transaction_id": "txn_804205", "amount": 7},
                     ],
                 )
@@ -254,9 +265,11 @@ def test_combined_process_whole_grade(mode, route, expected):
                 {
                     "reprocessing_id": RID,
                     "transaction_ids": ["txn_804219", "txn_804227"],
+                    "method_id": "individual_correction",
                 },
             )
             assert denied.is_error
+            assert "ERR_BINDING_MISMATCH" in str(denied.content)
             assert session.env.tools.get_db_hash() == before
         if name == "reprocess_rewards" and route == "wrong_scope":
             assert invoke(
@@ -303,7 +316,7 @@ def test_combined_process_whole_grade(mode, route, expected):
             args["items"][0]["amount"] = 0
             args["items"][1]["amount"] = 6.85
         if name == "amend_cashback_investigation" and route == "only_clip_second":
-            args["items"][0]["amount"] = 3.5
+            args["items"][0]["amount"] = 5.2
             args["items"][1]["amount"] = 0
         if name == "execute_reward_resolution" and route == "unreceived_partial":
             pending = session.begin_call(name, args, None)
@@ -360,7 +373,11 @@ def test_combined_process_whole_grade(mode, route, expected):
         denied = invoke(
             session,
             "reprocess_rewards",
-            {"reprocessing_id": RID, "transaction_ids": ["txn_804219", "txn_804227"]},
+            {
+                "reprocessing_id": RID,
+                "transaction_ids": ["txn_804219", "txn_804227"],
+                "method_id": "individual_correction",
+            },
         )
         assert denied.is_error and "ERR_REPROCESS_CLOSED" in str(denied.content)
     if route == "disclosure":
@@ -382,15 +399,15 @@ def test_combined_process_whole_grade(mode, route, expected):
     if expected[0]:
         db = session.env.tools.db
         assert db.reward_reprocessing_cases[RID].status == "reprocessed"
-        assert db.cases["case_610903"].review_amount == 7.65
+        assert db.cases["case_610903"].review_amount == 9.35
         payouts = [
             t
             for t in db.transactions.values()
             if t.id.startswith(("reward-reprocessing:", "reward-resolution:"))
         ]
-        assert round(sum(t.amount for t in payouts), 2) == 41.45
+        assert round(sum(t.amount for t in payouts), 2) == 39.75
         assert db.transactions["reward-correction:610735:txn_804227"].amount == 4
-        assert db.accounts["acc_1187"].balance == 138999.35
+        assert db.accounts["acc_1187"].balance == 138997.65
         charge = db.reward_resolution_executions[OP].result["funding_charge"]
         assert (charge["bank"], charge["partner"]) == (18, 19)
 
@@ -403,9 +420,9 @@ def test_correct_reprocessing_uses_fragments_refunds_and_program_specific_rates(
         if a.name == "reprocess_rewards":
             break
     db = s.env.tools.db
-    assert db.transactions[f"reward-reprocessing:{RID}:txn_804219"].amount == 5
+    assert db.transactions[f"reward-reprocessing:{RID}:txn_804219"].amount == 3.3
     assert db.transactions[f"reward-reprocessing:{RID}:txn_804227"].amount == 1.2
-    assert reward_obligations(db, C, "2026-07")["txn_804219"]["gap"] == 1900
+    assert reward_obligations(db, C, "2026-07")["txn_804219"]["gap"] == 2070
     assert reward_obligations(db, C, "2026-07")["txn_804227"]["gap"] == 2090
     # A missing fragment or wrong branch changes money, not a reading requirement.
     broken = deepcopy(db)
@@ -507,16 +524,16 @@ def test_initial_package_and_replanned_global_optimum():
                 continue
             if sum(x[3] for x in choice) <= 2300 and sum(x[4] for x in choice) <= 2000:
                 upper_bound = max(upper_bound, sum(x[2] for x in choice))
-    assert upper_bound == 3725
+    assert upper_bound == 3975
     assert {x[1] for x in legal if x[0] == 3525} == {
         (("1A", "2A", "3B", "6A"),),
     }
-    assert gaps["txn_804219"] + gaps["txn_804227"] == 3990
+    assert gaps["txn_804219"] + gaps["txn_804227"] == 4160
     # Even giving the manual plan the entire second obligation cannot beat
     # the agreement; its overlapping first purchase cannot be settled twice.
     manual = db.cashback_adjustment_permissions["cap_620184"]["remaining_amount"]
     assert round(manual * 100) + gaps["txn_804227"] == 3290 < 3525
-    assert not optimal_replanned  # No valid package can exhaust35.90 after correction.
+    assert not optimal_replanned  # No valid package can exhaust37.60 after correction.
 
 
 def test_reprocessing_authority_and_atomic_refusals():
@@ -555,17 +572,20 @@ def test_optimal_and_suboptimal_amended_packages(mode, components, total, first)
             packet["component_ids"] = components
             if "1A" not in components:
                 packet["eligibility_evidence"] = {}
-        if "payouts" in packet:
+        if (
+            "payouts" in packet
+            and packet.get("type") != "reward_reprocessing_confirmation"
+        ):
             amended = bool(packet.get("resolution_operation_id"))
             packet.update(
                 payouts=[
                     {
                         "transaction_id": "txn_804219",
-                        "amount": round(19 - first, 2) if amended else first,
+                        "amount": round(20.7 - first, 2) if amended else first,
                     },
                     {
                         "transaction_id": "txn_804227",
-                        "amount": round(total - 19, 2)
+                        "amount": round(total - 20.7, 2)
                         if amended
                         else round(total - first, 2),
                     },
@@ -574,12 +594,12 @@ def test_optimal_and_suboptimal_amended_packages(mode, components, total, first)
             )
             if "resulting_claims" in packet:
                 packet["resulting_claims"] = (
-                    [{"transaction_id": "txn_804227", "amount": round(35.9 - total, 2)}]
+                    [{"transaction_id": "txn_804227", "amount": round(37.6 - total, 2)}]
                     if amended
                     else [
                         {
                             "transaction_id": "txn_804219",
-                            "amount": round(19 - first, 2),
+                            "amount": round(20.7 - first, 2),
                         },
                         {
                             "transaction_id": "txn_804227",
@@ -588,7 +608,7 @@ def test_optimal_and_suboptimal_amended_packages(mode, components, total, first)
                     ]
                 ) + [{"transaction_id": "txn_804205", "amount": 7}]
         if action.name == "amend_cashback_investigation":
-            args["items"][1]["amount"] = round(35.9 - total, 2)
+            args["items"][1]["amount"] = round(37.6 - total, 2)
         data(invoke(session, action.name, args))
     data(invoke(session, "done", {}))
     grade = (
@@ -694,16 +714,16 @@ def test_adversarial_correspondence_v19(mode, route):
             ):
                 packet["total_amount"] = 14.75
                 packet["payouts"] = [
-                    {"transaction_id": "txn_804219", "amount": 3.5},
-                    {"transaction_id": "txn_804227", "amount": 11.25},
+                    {"transaction_id": "txn_804219", "amount": 5.2},
+                    {"transaction_id": "txn_804227", "amount": 9.55},
                 ]
                 if name == "ask_client":
                     packet["resulting_claims"] = [
-                        {"transaction_id": "txn_804227", "amount": 5.65},
+                        {"transaction_id": "txn_804227", "amount": 7.35},
                         {"transaction_id": "txn_804205", "amount": 7},
                     ]
             if name == "amend_cashback_investigation":
-                args["items"][1]["amount"] = 5.65
+                args["items"][1]["amount"] = 7.35
         if name == "amend_reward_resolution" and route == "old_consent":
             before = session.env.tools.get_db_hash()
             assert invoke(
@@ -916,13 +936,13 @@ def test_reissue_search_exposes_scope_and_current_revision():
     revisions = [r for r in found if r["document_id"] == "reward_card_reissue"]
     assert {r["revision_id"] for r in revisions} == {
         "manual-compensation-v1",
-        "2026-08-28-investigation-v27-reward_card_reissue",
+        "2026-08-28-counterfactual-v29-reward_card_reissue",
     }
     old = knowledge.read_document("reward_card_reissue", "manual-compensation-v1")[
         "content"
     ]
     current = knowledge.read_document(
-        "reward_card_reissue", "2026-08-28-investigation-v27-reward_card_reissue"
+        "reward_card_reissue", "2026-08-28-counterfactual-v29-reward_card_reissue"
     )["content"]
     assert "2025 года" in old and "rules_revision=manual-compensation-v1" in old
     assert (
@@ -1208,7 +1228,7 @@ def test_v23_successful_x_blocks_overlapping_composite():
         payouts=[{"transaction_id": "txn_804219", "amount": 18}],
         total_amount=18,
         resulting_claims=[
-            {"transaction_id": "txn_804219", "amount": 1},
+            {"transaction_id": "txn_804219", "amount": 2.7},
             {"transaction_id": "txn_804227", "amount": 20.9},
             {"transaction_id": "txn_804205", "amount": 7},
         ],
@@ -1253,12 +1273,12 @@ def test_v23_equal_total_wrong_allocation_is_db_failure(mode):
             ]
             if "resulting_claims" in packet:
                 packet["resulting_claims"] = [
-                    {"transaction_id": "txn_804219", "amount": 0.65},
+                    {"transaction_id": "txn_804219", "amount": 2.35},
                     {"transaction_id": "txn_804205", "amount": 7},
                 ]
         if a.name == "amend_cashback_investigation":
             a.arguments["items"] = [
-                {"transaction_id": "txn_804219", "amount": 0.65},
+                {"transaction_id": "txn_804219", "amount": 2.35},
                 {"transaction_id": "txn_804227", "amount": 0},
             ]
         data(invoke(s, a.name, a.arguments))
@@ -1361,7 +1381,7 @@ def test_manual_route_is_available_but_forecloses_overlapping_agreement():
             {
                 "case_id": "case_610903",
                 "expected_revision": 5,
-                "items": [{"transaction_id": "txn_804219", "amount": 7}],
+                "items": [{"transaction_id": "txn_804219", "amount": 8.7}],
                 "reserved_adjustments": reserve,
             },
         )
@@ -1375,7 +1395,7 @@ def test_manual_route_is_available_but_forecloses_overlapping_agreement():
                 "case_id": "case_610903",
                 "expected_revision": 5,
                 "items": [
-                    {"transaction_id": "txn_804219", "amount": 7},
+                    {"transaction_id": "txn_804219", "amount": 8.7},
                     {"transaction_id": "txn_804227", "amount": 20.9},
                 ],
                 "reserved_adjustments": [

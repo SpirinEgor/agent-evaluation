@@ -79,6 +79,7 @@ GROUPS["regressions"] = tuple(
         "test_reward_workflow_protocols.py",
         "test_reward_payment_register.py",
         "test_reward_duplicate_review.py",
+        "test_reward_reprocessing_methods.py",
         "test_structured_operation_requests.py",
         "test_structured_escalation.py",
         "test_optional_operation_questions.py",

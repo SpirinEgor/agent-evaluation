@@ -139,6 +139,24 @@ class RewardResolutionConfirmationRequest(BaseModel):
     eligibility_evidence: dict[str, EligibilityEvidence] = Field(default_factory=dict)
 
 
+class RewardReprocessingReversal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    allocation_id: str
+    amount: float = Field(gt=0, multiple_of=0.01, allow_inf_nan=False)
+
+
+class RewardReprocessingConfirmationRequest(BaseModel):
+    """Exact credits and reversal effects shown to the customer before recovery."""
+
+    model_config = ConfigDict(extra="forbid")
+    type: Literal["reward_reprocessing_confirmation"]
+    reprocessing_id: str
+    method_id: str
+    payouts: list[CashbackInvestigationItem] = Field(min_length=1)
+    reversals: list[RewardReprocessingReversal] = Field(default_factory=list)
+    state_revision: int
+
+
 class RewardResolutionMinimumChangeRequest(BaseModel):
     """Ask to change a purchase minimum independently of settlement consent."""
 
@@ -201,6 +219,7 @@ ClientRequest = Annotated[
     | TransactionSelectionRequest
     | CaseClarificationRequest
     | RewardResolutionConfirmationRequest
+    | RewardReprocessingConfirmationRequest
     | RewardResolutionMinimumChangeRequest
     | FeeRefundConfirmationRequest
     | DocumentChannelConfirmationRequest,
@@ -319,6 +338,16 @@ class StructuredIdentityBankingTools(FileBankingTools):
                     customer_id, request.tool_name, request.arguments
                 )
             )
+        if isinstance(request, RewardReprocessingConfirmationRequest):
+            self._require_verified(customer_id)
+            if question or any(
+                v is not None
+                for v in (transaction_id, loan_id, account_id, payout_account_id)
+            ):
+                raise ValueError("ERR_INVALID_ARGUMENT: Нужен только пакет request")
+            from tau2.domains.banking_ru.reward_reprocessing import confirm
+
+            return FileResponse(confirm(self, customer_id, request))
         if isinstance(request, RewardResolutionConfirmationRequest):
             self._require_verified(customer_id)
             if question or any(

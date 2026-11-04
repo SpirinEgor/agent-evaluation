@@ -164,6 +164,24 @@ class RewardProcessingEvent(BaseModel):
     posted_reward: float = Field(ge=0, allow_inf_nan=False)
 
 
+class RewardReprocessingPool(BaseModel):
+    """A contractual recovery limit and its existing allocation register."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    limit: float = Field(ge=0, multiple_of=0.01, allow_inf_nan=False)
+    allocation_ids: list[str] = Field(default_factory=list)
+    reversal_order: list[str] = Field(default_factory=list)
+
+
+class RewardReprocessingMethod(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    title: str
+    pool_id: str
+    recovery_rates: dict[str, Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]]
+
+
 class RewardReprocessingCase(BaseModel):
     """Processing binding incident; correction rates are bank-authorized terms."""
 
@@ -179,6 +197,9 @@ class RewardReprocessingCase(BaseModel):
     status: Literal["open", "binding_mismatch", "repaired", "reprocessed"] = "open"
     processing_events: list[RewardProcessingEvent] = Field(default_factory=list)
     ledger_ids: list[str] = Field(default_factory=list)
+    methods: list[RewardReprocessingMethod] = Field(default_factory=list)
+    funding_pools: list[RewardReprocessingPool] = Field(default_factory=list)
+    selected_method_id: str | None = None
 
 
 class RewardResolutionCorrection(BaseModel):
