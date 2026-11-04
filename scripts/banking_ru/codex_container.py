@@ -431,6 +431,7 @@ async def invoke_app_server(
     stderr_chunks = []
     messages_emitted = 0
     timed_out, exit_code = False, 0
+    cancellation = None
 
     def emit(event):
         lines.append(json.dumps(event, ensure_ascii=False) + "\n")
@@ -733,6 +734,11 @@ async def invoke_app_server(
                     except TimeoutError:
                         process.kill()
                         await asyncio.wait_for(process.wait(), 5)
+    except asyncio.CancelledError as error:
+        # A2A cancels the runtime after receiving done. Keep the evidence already
+        # collected, but propagate cancellation rather than inventing completion.
+        cancellation = error
+        exit_code = 1
     except Exception as error:
         exit_code = 1
         emit(dict(type="error", message=str(error)))
@@ -746,7 +752,7 @@ async def invoke_app_server(
     if relay and relay.errors:
         exit_code = 1
         emit(dict(type="error", message="Host inference validation failed"))
-    return dict(
+    run = dict(
         stdout="".join(lines),
         stderr=stderr,
         output_observations=observations,
@@ -771,3 +777,8 @@ async def invoke_app_server(
         app_server_command=actual,
         thread_start=thread_start,
     )
+    if cancellation is not None:
+        run["cancelled"] = True
+        cancellation.partial_run = run
+        raise cancellation
+    return run

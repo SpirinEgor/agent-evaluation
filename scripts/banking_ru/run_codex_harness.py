@@ -306,6 +306,25 @@ async def invoke_isolated_codex(
     spec.loader.exec_module(container)
     name = "banking-codex-" + uuid.uuid4().hex
     run = None
+    inspected = None
+
+    def attach_container(*, partial=False):
+        if run is None or inspected is None:
+            return
+        run["container"] = {
+            "name": name,
+            "id": inspected["Id"],
+            "image_id": inspected["Image"],
+            "create_command": container.create_command(image, name),
+            "inspection": inspected,
+            "inner_command": run.get("app_server_command")
+            if partial
+            else run["app_server_command"],
+            "requested_command": command,
+            "thread_start": run.get("thread_start") if partial else run["thread_start"],
+            "auth_delivery": "host-only subscription broker; no guest credentials",
+        }
+
     try:
         inspected = await asyncio.to_thread(container.prepare_container, image, name)
         if expected_image_id is not None:
@@ -322,21 +341,13 @@ async def invoke_isolated_codex(
                 {"tool_transport": tool_transport} if tool_transport is not None else {}
             ),
         )
-        run["container"] = {
-            "name": name,
-            "id": inspected["Id"],
-            "image_id": inspected["Image"],
-            "create_command": container.create_command(image, name),
-            "inspection": inspected,
-            "inner_command": run["app_server_command"],
-            "requested_command": command,
-            "thread_start": run["thread_start"],
-            "auth_delivery": "host-only subscription broker; no guest credentials",
-        }
+        attach_container()
         return run
     except BaseException as error:
+        run = getattr(error, "partial_run", run)
         if run is not None:
             error.partial_run = run
+            attach_container(partial=True)
         raise
     finally:
         primary_error = sys.exc_info()[1]

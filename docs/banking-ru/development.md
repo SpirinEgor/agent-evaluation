@@ -838,3 +838,21 @@ connect timeout — 20 секунд. Общий timeout_seconds прогона �
 Прежний общий предел 120 секунд на запрос вместе с повторами мог прервать законное
 ожидание; timeout теперь обрабатывается внутри попытки. Таймаут сам по себе
 не доказывает отказ модели или ошибку банковской задачи.
+
+
+### Журнал при завершении A2A — 4 ноября 2026
+
+После ответа на done координатор может завершить попытку раньше естественного
+завершения runtime. При такой отмене накопленные stdout/stderr, app-server
+события, broker_evidence, request_contract и workbench_events сохраняются как
+partial_run исходного CancelledError. Контейнерный harness добавляет inspection
+и результат cleanup. A2A сохраняет этот объект в runtime своего JSON-артефакта
+вместе с a2a_events и status=canceled; бизнес-завершение определяется журналом
+платформы, а не exit_code отменённого runtime.
+
+Снимок не объявляется полным естественным завершением модели: cancelled=true,
+exit_code=1; неизвестный usage не восстанавливается. Не заменять им проверку
+done/DB/ACTION и не считать обычное прерывание до done успешной попыткой.
+Гарантия относится к обработанной отмене процесса, не к SIGKILL или потере диска.
+Адресная физическая проверка без модели:
+`BANKING_CODEX_TEST_IMAGE=<sha256> BANKING_CODEX_TEST_MODEL=gpt-6.1-sol uv run pytest tests/test_platform/test_codex_container.py -q -k 'a2a_cancel or a2a_v1'`.

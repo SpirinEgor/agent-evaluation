@@ -1027,9 +1027,10 @@ def test_abort_rejection_does_not_fetch_reward_or_mask_primary_error():
     assert "secondary cleanup failure" in "\n".join(caught.value.__notes__)
 
 
-@pytest.mark.parametrize("failure_stage", ["runtime", "metadata"])
+@pytest.mark.parametrize("failure_stage", ["runtime", "metadata", "cancel"])
+@pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_container_cleanup_preserves_primary_error_and_partial_transcript(
-    monkeypatch, failure_stage
+    monkeypatch, failure_stage, cleanup_fails
 ):
     import asyncio
     from importlib.machinery import ModuleSpec
@@ -1042,14 +1043,19 @@ def test_container_cleanup_preserves_primary_error_and_partial_transcript(
     }
 
     async def runtime(*args, **kwargs):
-        if failure_stage == "runtime":
-            error = RuntimeError("original runtime failure")
+        if failure_stage in {"runtime", "cancel"}:
+            error = (
+                asyncio.CancelledError()
+                if failure_stage == "cancel"
+                else RuntimeError("original runtime failure")
+            )
             error.partial_run = evidence
             raise error
         return evidence  # Missing app_server_command triggers a metadata failure.
 
     def cleanup(name):
-        raise RuntimeError("secondary container cleanup failure")
+        if cleanup_fails:
+            raise RuntimeError("secondary container cleanup failure")
 
     class Loader:
         def create_module(self, spec):
@@ -1067,11 +1073,21 @@ def test_container_cleanup_preserves_primary_error_and_partial_transcript(
         lambda *a: ModuleSpec("container_fixture", Loader()),
     )
     with pytest.raises(
-        RuntimeError if failure_stage == "runtime" else KeyError
+        asyncio.CancelledError
+        if failure_stage == "cancel"
+        else RuntimeError
+        if failure_stage == "runtime"
+        else KeyError
     ) as caught:
         asyncio.run(h.invoke_isolated_codex([], "TICKET", 1, policy="STARTUP"))
     assert caught.value.partial_run is evidence
-    assert "secondary container cleanup failure" in "\n".join(caught.value.__notes__)
+    if cleanup_fails:
+        assert "secondary container cleanup failure" in "\n".join(
+            caught.value.__notes__
+        )
+        assert not evidence["container"].get("cleanup_verified")
+    else:
+        assert evidence["container"]["cleanup_verified"]
 
 
 def test_broker_provenance_is_separate_from_legacy_cli_capture_status():

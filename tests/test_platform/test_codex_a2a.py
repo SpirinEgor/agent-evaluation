@@ -97,7 +97,10 @@ def reply(event, data):
 
 
 @pytest.mark.parametrize("name", ["baseline", "v1"])
-def test_setup_results_final_receipt_and_no_direct_mcp(name, tmp_path):
+@pytest.mark.parametrize("cancel_after_done", [False, True])
+def test_setup_results_final_receipt_and_no_direct_mcp(
+    name, tmp_path, cancel_after_done
+):
     async def go():
         observed = []
 
@@ -124,6 +127,18 @@ def test_setup_results_final_receipt_and_no_direct_mcp(name, tmp_path):
                 .content[0]
                 .text
             )
+            if cancel_after_done:
+                try:
+                    await asyncio.Event().wait()
+                except asyncio.CancelledError as error:
+                    error.partial_run = {
+                        "exit_code": 1,
+                        "cancelled": True,
+                        "stdout": "DONE RECEIPT",
+                        "broker_evidence": {"events": ["saved"]},
+                        "workbench_events": [{"output": "73"}],
+                    }
+                    raise
             return {"exit_code": 0, "observed": observed}
 
         app = build_app(
@@ -183,6 +198,15 @@ def test_setup_results_final_receipt_and_no_direct_mcp(name, tmp_path):
             assert final["status"]["state"] == "completed"
             assert observed == ["DIRECTORY RESULT", "DONE RECEIPT"]
             assert len(list(tmp_path.glob("*.json"))) == 1
+            saved = json.loads(next(tmp_path.glob("*.json")).read_text())
+            if cancel_after_done:
+                assert saved["status"] == "canceled"
+                assert saved["runtime"]["cancelled"]
+                assert saved["runtime"]["broker_evidence"]["events"] == ["saved"]
+                assert saved["runtime"]["workbench_events"] == [{"output": "73"}]
+                assert saved["a2a_events"][-1]["content"] == "DONE RECEIPT"
+            else:
+                assert saved["runtime"]["exit_code"] == 0
             assert not list(tmp_path.rglob("AGENTS.md"))
 
     asyncio.run(go())

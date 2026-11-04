@@ -208,24 +208,31 @@ def build_app(
             # Model completion alone does not complete the benchmark.
             if not e.ended:
                 await e.outgoing.put(("failed", []))
-        except asyncio.CancelledError:
+        except asyncio.CancelledError as error:
             if artifacts:
                 artifacts.mkdir(parents=True, exist_ok=True)
                 (artifacts / (e.id + ".json")).write_text(
                     json.dumps(
                         {
                             "status": "canceled",
+                            "runtime": getattr(error, "partial_run", None),
                             "pending_call_ids": list(e.pending),
                             "a2a_events": e.events,
                         }
                     )
                 )
             raise
-        except Exception:
+        except Exception as error:
             if artifacts:
                 artifacts.mkdir(parents=True, exist_ok=True)
                 (artifacts / (e.id + ".json")).write_text(
-                    json.dumps({"status": "failed", "a2a_events": e.events})
+                    json.dumps(
+                        {
+                            "status": "failed",
+                            "runtime": getattr(error, "partial_run", None),
+                            "a2a_events": e.events,
+                        }
+                    )
                 )
             await e.outgoing.put(("failed", []))
         finally:

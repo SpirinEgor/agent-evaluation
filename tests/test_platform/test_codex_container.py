@@ -233,6 +233,7 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
         "success",
         "v1",
         "a2a_v1",
+        "a2a_cancel",
         "upstream_failure",
         "tool_error",
         "large_result",
@@ -287,11 +288,25 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         ),
     ]
 
+    if case == "a2a_cancel":
+        schemas[1]["inputSchema"] = {
+            "type": "object",
+            "properties": {
+                "system_id": {"type": "string"},
+                "tool_name": {"type": "string"},
+                "arguments": {"type": "object", "properties": {}},
+            },
+            "required": ["system_id", "tool_name", "arguments"],
+        }
+    final_wait = None
+
     class Stub(BaseHTTPRequestHandler):
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if self.path == "/mcp":
-                assert case != "a2a_v1", "A2A must not connect to direct MCP"
+                assert case not in {"a2a_v1", "a2a_cancel"}, (
+                    "A2A must not connect to direct MCP"
+                )
                 method = request.get("method")
                 if "id" not in request:
                     self.send_response(202)
@@ -343,7 +358,9 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                         type="function_call",
                         id="fc_second",
                         call_id="call_second",
-                        name="workbench" if case in {"v1", "a2a_v1"} else "bank_call",
+                        name="workbench"
+                        if case in {"v1", "a2a_v1", "a2a_cancel"}
+                        else "bank_call",
                         namespace="functions",
                         arguments=json.dumps(
                             {
@@ -352,8 +369,18 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                                 "data": [19, 23, 31],
                             }
                         )
-                        if case in {"v1", "a2a_v1"}
+                        if case in {"v1", "a2a_v1", "a2a_cancel"}
                         else "{}",
+                    )
+                elif case == "a2a_cancel" and len(payloads) == 3:
+                    item = dict(
+                        type="function_call",
+                        id="fc_done",
+                        call_id="call_done",
+                        name="bank_call",
+                        arguments=json.dumps(
+                            dict(system_id="support", tool_name="done", arguments={})
+                        ),
                     )
                 else:
                     item = dict(
@@ -571,6 +598,12 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
             )
             return
 
+        if case == "a2a_cancel" and len(payloads) == 3:
+            final_wait.set()
+            await (
+                asyncio.Event().wait()
+            )  # Coordinator ends while final inference waits.
+
         if case == "delayed_response" and len(payloads) == 2:
             await asyncio.sleep(16)  # Valid model latency exceeds upload timeout.
 
@@ -595,7 +628,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         async def invoke():
             transport = None
             coordinator = None
-            if case == "a2a_v1":
+            if case in {"a2a_v1", "a2a_cancel"}:
                 from tau2.platform.a2a import Exchange
 
                 transport = Exchange(
@@ -615,31 +648,72 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 )
 
                 async def answer():
-                    # The A2A coordinator, not an MCP server, executes the call.
-                    state, parts = await transport.outgoing.get()
-                    assert state == "input-required"
-                    call = parts[0]["data"]["calls"][0]
-                    calls.append({"name": call["name"], "arguments": call["arguments"]})
-                    transport.receive(
-                        [{"call_id": call["id"], "content": fixture_result}]
-                    )
+                    for index in range(2 if case == "a2a_cancel" else 1):
+                        state, parts = await transport.outgoing.get()
+                        assert state == "input-required"
+                        call = parts[0]["data"]["calls"][0]
+                        calls.append(
+                            {"name": call["name"], "arguments": call["arguments"]}
+                        )
+                        transport.receive(
+                            [
+                                {
+                                    "call_id": call["id"],
+                                    "content": "###STOP###"
+                                    if index == 1
+                                    else fixture_result,
+                                }
+                            ]
+                        )
 
                 coordinator = asyncio.create_task(answer())
-            result = await module.invoke_app_server(
-                name,
-                command,
-                "BANK TICKET",
-                "BANK STARTUP",
-                30,
-                inference_forward=forward,
-                **({"agent_profile": "v1"} if case in {"v1", "a2a_v1"} else {}),
-                **({"tool_transport": transport} if transport else {}),
+            nonlocal final_wait
+            final_wait = asyncio.Event()
+            task = asyncio.create_task(
+                module.invoke_app_server(
+                    name,
+                    command,
+                    "BANK TICKET",
+                    "BANK STARTUP",
+                    30,
+                    inference_forward=forward,
+                    **(
+                        {"agent_profile": "v1"}
+                        if case in {"v1", "a2a_v1", "a2a_cancel"}
+                        else {}
+                    ),
+                    **({"tool_transport": transport} if transport else {}),
+                )
             )
+            if case == "a2a_cancel":
+                await asyncio.wait_for(final_wait.wait(), 20)
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError) as caught:
+                    await task
+                result = caught.value.partial_run
+            else:
+                result = await task
             if coordinator:
                 await asyncio.wait_for(coordinator, 1)
             return result
 
         run = asyncio.run(invoke())
+        if case == "a2a_cancel":
+            assert run["cancelled"] and run["exit_code"] == 1
+            assert run["workbench_events"][0]["output"] == "73"
+            assert "###STOP###" in run["stdout"]
+            assert run["broker_evidence"]["events"] and run["app_server_events"]
+            assert run["request_contract"]["agent_profile"] == "v1"
+            assert calls[-1]["arguments"]["tool_name"] == "done"
+            if os.getenv("ISOLATION_DIAGNOSTICS"):
+                Path(
+                    os.environ["ISOLATION_DIAGNOSTICS"] + "." + case + ".json"
+                ).write_text(
+                    json.dumps(
+                        {"requests": payloads, "run": run}, ensure_ascii=False, indent=2
+                    )
+                )
+            return
         assert run["exit_code"] == (1 if upstream_failure or late_failure else 0), (
             run["stderr"],
             run["stdout"],
@@ -649,7 +723,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         module.validate_model_request(payloads[0], run["request_contract"])
         expected_calls = [("bank_directory", {"operation": "list_systems"})]
         if not upstream_failure:
-            if case not in {"v1", "a2a_v1"}:
+            if case not in {"v1", "a2a_v1", "a2a_cancel"}:
                 expected_calls.append(("bank_call", {}))
             else:
                 assert run["agent_profile"]["version"] == "V1"
