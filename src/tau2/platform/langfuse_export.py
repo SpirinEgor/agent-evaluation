@@ -11,6 +11,152 @@ import re
 from contextlib import nullcontext
 
 
+def sdk_attempt_record(folder):
+    """Project saved SDK evidence, never current task data or inferred grades."""
+    from pathlib import Path
+
+    from tau2.platform.attempt_metrics import model_metrics
+
+    folder = Path(folder).resolve()
+    hashes = {}
+
+    def read(name):
+        raw = (folder / name).read_bytes()
+        hashes[name] = hashlib.sha256(raw).hexdigest()
+        return json.loads(raw)
+
+    payload = read("evaluation-input.json")
+    evaluation = read("evaluation.json")
+    snapshot = read("sdk/task-input.json")
+    native = read("native-run.json")
+    started = read("started.json")
+    if payload["task_id"] != snapshot["id"]:
+        raise ValueError("SDK task identity mismatch")
+    contract = native["request_contract"]
+    if (
+        not snapshot["input"]["ticket"]
+        or snapshot["input"]["ticket"] not in contract["prompt"]
+    ):
+        raise ValueError("SDK ticket missing from native request")
+    if contract["model"] != started["model"]:
+        raise ValueError("SDK model identity mismatch")
+    values = evaluation["values"]
+    report = payload["report"]
+    for key in ("bank_calls", "discovery_calls"):
+        if values[key] != report[key]:
+            raise ValueError("SDK counters differ from evaluated report")
+    if bool(values["protocol_completion"]) != (report["status"] == "done"):
+        raise ValueError("SDK completion differs from evaluated report")
+    for key in ("reward", "DB", "ACTION"):
+        if type(values[key]) not in (int, float) or values[key] not in (0, 1):
+            raise ValueError("Invalid SDK business score")
+    if values["reward"] != values["DB"] * values["ACTION"]:
+        raise ValueError("SDK reward differs from DB x ACTION")
+
+    events = []
+    previous = -1
+    for row in payload["journal"]:
+        if row["seq"] <= previous:
+            raise ValueError("SDK journal sequence is not strictly ordered")
+        previous = row["seq"]
+        action = row["action"]
+        if action["kind"] != "tool_call" or action["name"] not in {
+            "bank_call",
+            "bank_directory",
+        }:
+            raise ValueError("Unsupported SDK action")
+        args = action["arguments"]
+        bank = action["name"] == "bank_call"
+        events.append(
+            {
+                "sequence": row["seq"],
+                "system": args["system_id"] if bank else "directory",
+                "canonical_name": args["tool_name"] if bank else "bank_directory",
+                "original_name": action["name"],
+                "canonical_arguments": args["arguments"] if bank else args,
+                "response": row["content"],
+                "error": not row["applied"]
+                or row["content"].startswith(("Error:", "ERR_", "INVALID_")),
+                "execution_rejected": not row["applied"],
+                "request_order": row["seq"],
+                "response_order": row["seq"],
+            }
+        )
+    for i, event in enumerate(native.get("workbench_events", [])):
+        events.append(
+            {
+                "sequence": f"workbench:{i}",
+                "system": "v1",
+                "canonical_name": "workbench",
+                "canonical_arguments": event["arguments"],
+                "response": event["output"],
+                "error": event["error"],
+            }
+        )
+    seconds = native.get("elapsed_seconds")
+    timing_source = "native elapsed_seconds"
+    calls_path = folder / "calls.jsonl"
+    if calls_path.exists():
+        raw = calls_path.read_bytes()
+        hashes["calls.jsonl"] = hashlib.sha256(raw).hexdigest()
+        calls = [json.loads(line) for line in raw.splitlines() if line.strip()]
+        starts = [
+            c["t_ns"]
+            for c in calls
+            if c.get("name") == "agent.turn" and c.get("b") == "start"
+        ]
+        ends = [c["t_ns"] for c in calls if c.get("b") == "end"]
+        if starts and ends:
+            seconds = (max(ends) - min(starts)) / 1e9
+            if seconds < 0:
+                raise ValueError("Invalid SDK call timestamps")
+            timing_source = "calls.jsonl: first agent.turn to final recorded end"
+    fingerprint = hashlib.sha256(
+        json.dumps(hashes, sort_keys=True).encode()
+    ).hexdigest()
+    metadata = {
+        "source_sha256": hashes,
+        "source_fingerprint": fingerprint,
+        "git_commit": started["git_commit"],
+        "agent_profile": native["agent_profile"],
+        "reasoning_effort": contract["effort"],
+        "source_path": str(folder),
+        "resolution_timing_source": timing_source,
+        "bank_calls": values["bank_calls"],
+        "discovery_calls": values["discovery_calls"],
+        "banking_order": "Original A2A journal sequence; span timestamps are import time",
+        "workbench_order": "Local index only; global order remains in native journal",
+    }
+    record = {
+        "token": "sdk:" + fingerprint,
+        "task_id": payload["task_id"],
+        "ticket": snapshot["input"]["ticket"],
+        "startup": contract["startup"],
+        "agent_input": contract["prompt"],
+        "classification": "success" if values["reward"] == 1 else "failure",
+        "final_reward": values["reward"],
+        "protocol_status": report["status"],
+        "technical_failure": bool(native.get("timed_out") or native.get("exit_code")),
+        "run": native,
+        "metrics": {
+            "resolution_seconds": seconds,
+            "calls": {
+                "total": len(payload["journal"]),
+                "discovery": values["discovery_calls"],
+            },
+            "compute": model_metrics(native),
+        },
+        "result": {
+            "reward_breakdown": {
+                k: values[k]
+                for k in ("DB", "ACTION", "protocol_completion", "bank_calls")
+            },
+            "mcp_events": events,
+        },
+    }
+    return record, metadata, started["model"]
+
+
 def recorded_events(record, folder):
     """Read the immutable server journal bound to a saved attempt, or inline events."""
     from pathlib import Path
@@ -128,7 +274,21 @@ def export_attempt(record, *, model, ticket, metadata=None, client=None, events=
                 name="banking.attempt",
                 as_type="agent",
                 trace_context={"trace_id": trace_id},
-                input=clean({"ticket": ticket}),
+                input=clean(
+                    {
+                        "ticket": ticket,
+                        **(
+                            {"startup": record["startup"]}
+                            if record.get("startup")
+                            else {}
+                        ),
+                        **(
+                            {"agent_input": record["agent_input"]}
+                            if record.get("agent_input")
+                            else {}
+                        ),
+                    }
+                ),
                 output=clean(summary),
                 metadata=clean(
                     {
@@ -239,10 +399,43 @@ if __name__ == "__main__":
     from pathlib import Path
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--record", type=Path, required=True)
-    parser.add_argument("--model", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--record", type=Path)
+    source.add_argument("--sdk-attempt", type=Path)
+    parser.add_argument("--model")
     parser.add_argument("--metadata-json", default="{}")
     args = parser.parse_args()
+    if args.sdk_attempt:
+        record, metadata, model = sdk_attempt_record(args.sdk_attempt)
+        receipt = args.sdk_attempt / "langfuse-export.json"
+        destination = {
+            "base_url": os.getenv("LANGFUSE_BASE_URL"),
+            "project_id": os.getenv("LANGFUSE_PROJECT_ID"),
+        }
+        if receipt.exists():
+            prior = json.loads(receipt.read_text())
+            if (
+                prior.get("status") == "submitted"
+                and prior.get("source_fingerprint") == metadata["source_fingerprint"]
+                and prior.get("destination") == destination
+            ):
+                print(json.dumps({**prior, "already_submitted": True}))
+                raise SystemExit(0)
+        result = export_attempt(
+            record, model=model, ticket=record["ticket"], metadata=metadata
+        )
+        result.update(
+            source_fingerprint=metadata["source_fingerprint"], destination=destination
+        )
+        if result.get("trace_id") and destination["project_id"]:
+            result["trace_url"] = (
+                f"{destination['base_url']}/project/{destination['project_id']}/traces/{result['trace_id']}"
+            )
+        receipt.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+        print(json.dumps(result))
+        raise SystemExit(0 if result["status"] in {"submitted", "disabled"} else 1)
+    if not args.model:
+        parser.error("--record requires --model")
     record = json.loads(args.record.read_text())
     print(
         json.dumps(
