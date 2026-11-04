@@ -298,6 +298,40 @@ def _access_argument_values(arguments: dict, path: str) -> list:
     ]
 
 
+def resolve_initial_access_policy(
+    policy: ToolAccessPolicy, database: dict
+) -> ToolAccessPolicy:
+    """Resolve banking owners from the effective initial DB, never agent results.
+
+    The caller supplies a fresh environment after scenario initialization, before
+    replaying the evaluated trajectory. Replace stored catalogs for DB-backed
+    collections so scenario owner changes cannot leave stale authorizations.
+    Resources created during the run still need received result evidence below.
+    """
+    policy = policy.model_copy(deep=True)
+    for collection in policy.resources_by_customer:
+        if collection == "customers":
+            records = [{"id": key, "customer_id": key} for key in database[collection]]
+        elif collection == "penalties":
+            records = [
+                {"id": penalty["id"], "customer_id": loan["customer_id"]}
+                for loan in database["loans"].values()
+                for penalty in loan["penalties"]
+            ]
+        elif collection in database:
+            records = database[collection].values()
+        else:
+            # Keep explicitly declared catalogs for resources outside this DB.
+            continue
+        groups = {}
+        for record in records:
+            resource, owner = record.get("id"), record.get("customer_id")
+            if isinstance(resource, str) and isinstance(owner, str):
+                groups.setdefault(owner, []).append(resource)
+        policy.resources_by_customer[collection] = groups
+    return policy
+
+
 def _tool_access_failures(
     observed: list[_ObservedCall],
     actions: list[Action],

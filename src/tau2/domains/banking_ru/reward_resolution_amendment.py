@@ -12,6 +12,47 @@ from tau2.domains.banking_ru.reward_workflows import (
 from tau2.environment.tool import ToolExecutionRejected
 
 
+def public_bank_credit(tools, offer):
+    """Expose the same conditional credit used by the first execution stage."""
+    from tau2.domains.banking_ru.reward_resolution_models import AdditionalBankCredit
+
+    profile = tools.db.reward_resolution_correction_profiles.get(offer.id)
+    if (
+        profile is None
+        or tools.db.reward_resolution_partial_profiles.get(offer.id) is None
+        or tools.db.reward_resolution_execution_profiles.get(offer.id) is not None
+    ):
+        return None
+    tx = tools._get_transaction(profile.transaction_id)
+    if tx.customer_id != offer.customer_id or tx.id not in offer.transaction_ids:
+        raise ToolExecutionRejected(
+            "ERR_CORRECTION_SCOPE: Неверная область корректировки"
+        )
+    posting = tools.db.transactions.get(profile.ledger_id)
+    if posting is not None and (
+        posting.customer_id != offer.customer_id
+        or posting.original_transaction_id != tx.id
+        or cents(posting.amount) != cents(profile.amount)
+        or posting.kind != "cashback"
+        or posting.status != "posted"
+    ):
+        raise ToolExecutionRejected(
+            "ERR_CORRECTION_CONFLICT: Проводка не соответствует условиям корректировки"
+        )
+    result = {
+        "transaction_id": tx.id,
+        "amount": profile.amount,
+        "currency": tools._get_account(tx.account_id).currency,
+        "status": "posted" if posting is not None else "approved",
+        "posting_condition": "first_accepted_execution",
+        "guaranteed_if_executed": True,
+        "included_in_agreement_amount": False,
+    }
+    if posting is not None:
+        result["posting_id"] = posting.id
+    return AdditionalBankCredit(**result)
+
+
 def correction_credit(tools, offer, immediate_amounts):
     """Validate a scenario event before any part of the agreement is posted."""
     from tau2.domains.banking_ru.data_model import Transaction

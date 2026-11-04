@@ -210,3 +210,17 @@ class RewardResolutionCorrection(BaseModel):
     ledger_id: str
     amount: float = Field(gt=0, multiple_of=0.01, allow_inf_nan=False)
     allow_reallocation: bool = True
+
+
+class AdditionalBankCredit(BaseModel):
+    """Public terms preserve numeric/boolean types through the tool transport."""
+
+    model_config = ConfigDict(extra="forbid")
+    transaction_id: str
+    amount: float
+    currency: str
+    status: Literal["approved", "posted"]
+    posting_condition: Literal["first_accepted_execution"] = "first_accepted_execution"
+    guaranteed_if_executed: Literal[True] = True
+    included_in_agreement_amount: Literal[False] = False
+    posting_id: str | None = None

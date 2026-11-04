@@ -282,6 +282,7 @@ def selected_amounts(offer, component_ids):
 
 def list_offers(tools, customer_id, case_id):
     from tau2.domains.banking_ru.processing_notes import with_processing_notes
+    from tau2.domains.banking_ru.reward_resolution_amendment import public_bank_credit
 
     tools._get_customer(customer_id)
     tools._require_verified(customer_id)
@@ -311,6 +312,9 @@ def list_offers(tools, customer_id, case_id):
         row["amendment_allowed"] = bool(
             correction_profile and correction_profile.allow_reallocation
         )
+        bank_credit = public_bank_credit(tools, offer)
+        if bank_credit is not None:
+            row["additional_bank_credit"] = bank_credit
         reserve = reserve_snapshot(tools.db, offer)
         if reserve is not None:
             row["funding_reserve"] = reserve

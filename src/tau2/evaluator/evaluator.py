@@ -4,7 +4,11 @@ from typing import Optional
 from tau2.data_model.simulation import RewardInfo, SimulationRun, TerminationReason
 from tau2.data_model.tasks import RewardType, Task
 from tau2.environment.toolkit import ToolType, get_tool_types
-from tau2.evaluator.evaluator_action import ActionEvaluator, FullDuplexActionEvaluator
+from tau2.evaluator.evaluator_action import (
+    ActionEvaluator,
+    FullDuplexActionEvaluator,
+    resolve_initial_access_policy,
+)
 from tau2.evaluator.evaluator_communicate import (
     CommunicateEvaluator,
     FullDuplexCommunicateEvaluator,
@@ -227,9 +231,16 @@ def evaluate_simulation(
         pass
 
     confidentiality_db = None
-    if task.evaluation_criteria.banking_confidentiality_contract is not None:
+    resolve_access = (
+        domain == "banking_ru"
+        and task.evaluation_criteria.tool_access_policy is not None
+    )
+    if (
+        task.evaluation_criteria.banking_confidentiality_contract is not None
+        or resolve_access
+    ):
         if domain != "banking_ru" or env is None or env.tools is None:
-            raise ValueError("Shared confidentiality requires banking database context")
+            raise ValueError("Banking contracts require initial database context")
         initial = task.initial_state
         if initial is not None:
             env.set_state(
@@ -239,6 +250,11 @@ def evaluate_simulation(
                 strict=strict_replay,
             )
         confidentiality_db = env.tools.db.model_dump(mode="json")
+        if resolve_access:
+            task = task.model_copy(deep=True)
+            task.evaluation_criteria.tool_access_policy = resolve_initial_access_policy(
+                task.evaluation_criteria.tool_access_policy, confidentiality_db
+            )
 
     source_corpus = None
     if task.evaluation_criteria.banking_source_read_contract is not None:

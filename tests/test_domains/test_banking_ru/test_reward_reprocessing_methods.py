@@ -20,6 +20,86 @@ from tests.utils.banking_full_grade import grade_full_session
 A, B = "txn_804219", "txn_804227"
 
 
+@pytest.mark.parametrize("amount", [4, 3.25])
+def test_future_bank_credit_is_visible_before_recovery_and_matches_posting(amount):
+    session = PlatformSession(task2(), get_environment, max_errors=0)
+    db = session.env.tools.db
+    profile = db.reward_resolution_correction_profiles["offer_610735"]
+    profile.amount = amount
+    actions = iter(session.task.evaluation_criteria.actions)
+    for action in actions:
+        data(session.call(action.name, deepcopy(action.arguments)))
+        if action.name == "verify_identity":
+            break
+
+    def terms():
+        snapshot = db.model_dump()
+        rows = data(
+            session.call(
+                "get_reward_resolution_offers",
+                {"customer_id": C, "case_id": "case_610903"},
+            )
+        )
+        assert db.model_dump() == snapshot
+        assert all(
+            "additional_bank_credit" not in row
+            for row in rows
+            if row["id"] != "offer_610735"
+        )
+        return next(row for row in rows if row["id"] == "offer_610735")[
+            "additional_bank_credit"
+        ]
+
+    advertised = terms()
+    assert advertised == {
+        "transaction_id": B,
+        "amount": amount,
+        "currency": "RUB",
+        "status": "approved",
+        "posting_condition": "first_accepted_execution",
+        "guaranteed_if_executed": True,
+        "included_in_agreement_amount": False,
+        "posting_id": None,
+    }
+    assert db.reward_reprocessing_cases[RID].selected_method_id is None
+    assert not db.reward_resolution_executions
+    assert profile.ledger_id not in db.transactions
+    assert terms() == advertised
+    for action in actions:
+        if action.name == "execute_reward_resolution":
+            assert terms() == advertised
+        data(session.call(action.name, deepcopy(action.arguments)))
+        if action.name == "execute_reward_resolution":
+            break
+    posted = db.transactions[profile.ledger_id]
+    assert posted.amount == amount
+    assert posted.original_transaction_id == advertised["transaction_id"]
+    assert posted.status == "posted"
+    assert terms() == {**advertised, "status": "posted", "posting_id": posted.id}
+    assert terms() == {**advertised, "status": "posted", "posting_id": posted.id}
+
+
+@pytest.mark.parametrize("disabled", ["missing_credit", "no_partial", "delayed"])
+def test_bank_credit_is_not_promised_when_its_posting_event_is_inactive(disabled):
+    session = before_consent()
+    db = session.env.tools.db
+    if disabled == "missing_credit":
+        del db.reward_resolution_correction_profiles["offer_610735"]
+    elif disabled == "no_partial":
+        del db.reward_resolution_partial_profiles["offer_610735"]
+    else:
+        db.reward_resolution_execution_profiles["offer_610735"] = "failed_final"
+    snapshot = db.model_dump()
+    rows = data(
+        session.call(
+            "get_reward_resolution_offers",
+            {"customer_id": C, "case_id": "case_610903"},
+        )
+    )
+    assert all("additional_bank_credit" not in row for row in rows)
+    assert db.model_dump() == snapshot
+
+
 def before_consent():
     session = PlatformSession(task2(), get_environment, max_errors=0)
     for action in session.task.evaluation_criteria.actions:
