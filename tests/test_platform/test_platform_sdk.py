@@ -149,12 +149,12 @@ def test_projection_schemas_and_deterministic_pagination(task):
     assert set(a.tools) == {"bank_directory", "bank_call"}
     assert a.on_start().opening == task.input["ticket"]
     assert "evaluation_criteria" not in a.on_start().instructions
-    assert "Банковский лимит: 50 вызовов" in a.on_start().instructions
+    assert f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов" in a.on_start().instructions
     assert (
         "Discovery: отдельный бюджет, числовой лимит не установлен"
         in a.on_start().instructions
     )
-    assert "После 50-го банковского вызова" in a.on_start().instructions
+    assert f"После {task.input['scenario']['max_bank_calls']}-го банковского вызова" in a.on_start().instructions
     action = sdk.ToolCall("bank_directory", {"operation": "list_systems"})
     x, y = a.on_action(action), b.on_action(action)
     assert x == y and a.report_state() == b.report_state()
@@ -172,7 +172,7 @@ def test_reference_and_tampered_report_journal(task):
     journal = execute(bench, path(task))
     values, inputs, sink = grade(task, bench, journal)
     assert values["reward"] == values["DB"] == values["ACTION"] == 1
-    assert values["bank_calls"] <= 50 and values["protocol_completion"]
+    assert values["bank_calls"] <= task.input["scenario"]["max_bank_calls"] and values["protocol_completion"]
     assert set(sink.artifacts) == {"banking-reward.json", "banking-trajectory.json"}
     bad_report = deepcopy(inputs.report)
     bad_report["db"]["customers"].clear()
@@ -434,7 +434,7 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
 
     async def engine(exchange):
         assert exchange.setup["instructions"] == bench.on_start().instructions
-        assert "Банковский лимит: 50 вызовов" in exchange.setup["instructions"]
+        assert f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов" in exchange.setup["instructions"]
         assert (
             "Discovery: отдельный бюджет, числовой лимит не установлен"
             in exchange.setup["instructions"]
@@ -461,8 +461,8 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
                             action.name == "bank_call"
                             and action.arguments["tool_name"] == "done"
                         ):
-                            # Reach exactly 50 before done, with no mutations.
-                            while len(bench.session.log) < 50:
+                            # Reach the configured banking limit before done, with no mutations.
+                            while len(bench.session.log) < bench.session.max_calls:
                                 yield sdk.ToolCall(
                                     "bank_call",
                                     {
@@ -480,7 +480,7 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
                                 },
                             )
                             assert "BANKING_BUDGET_EXHAUSTED" in denied
-                            # Done discovery is permitted even after all 50 calls.
+                            # Done discovery is permitted after the banking limit.
                             yield sdk.ToolCall(
                                 "bank_directory",
                                 {

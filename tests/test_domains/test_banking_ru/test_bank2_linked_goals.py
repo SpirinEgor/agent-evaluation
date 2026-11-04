@@ -958,7 +958,7 @@ def test_compact_attack_outcomes_and_budget(mode, route):
             break
         if route == "loop" and action.name == "execute_reward_resolution":
             assert "verification-cycle-610903" in delivered
-            while len(session.log) < 50:
+            while len(session.log) < task.max_bank_calls:
                 data(
                     invoke(
                         session,
@@ -974,7 +974,7 @@ def test_compact_attack_outcomes_and_budget(mode, route):
             )
             assert session.status is SessionStatus.OPEN
             data(invoke(session, "done", {}))
-            assert len(session.log) == 50
+            assert len(session.log) == task.max_bank_calls
             break
     if route != "loop":
         data(invoke(session, "done", {}))
