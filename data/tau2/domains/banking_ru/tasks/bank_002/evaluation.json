@@ -3338,6 +3338,15 @@
       "compare_args": []
     },
     {
+      "action_id": "bank2:v28:incident-decisions",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_incident_decisions.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
       "action_id": "bank2:v4:refresh",
       "name": "refresh_cashback_settlement",
       "arguments": {
@@ -3504,10 +3513,10 @@
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 20
+              "amount": 19.75
             }
           ],
-          "total_amount": 35.5,
+          "total_amount": 35.25,
           "case_id": "case_610903",
           "resulting_claims": [
             {
@@ -3516,7 +3525,7 @@
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 0.9
+              "amount": 1.15
             },
             {
               "transaction_id": "txn_804205",
@@ -3527,7 +3536,7 @@
           "component_ids": [
             "1A",
             "2A",
-            "5A",
+            "3B",
             "6A"
           ],
           "eligibility_evidence": {
@@ -3559,10 +3568,10 @@
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 20
+            "amount": 19.75
           }
         ],
-        "total_amount": 35.5,
+        "total_amount": 35.25,
         "case_id": "case_610903",
         "confirmation_id": "resolution-confirmation-1",
         "expected_revision": 5,
@@ -3570,7 +3579,7 @@
         "component_ids": [
           "1A",
           "2A",
-          "5A",
+          "3B",
           "6A"
         ],
         "eligibility_evidence": {
@@ -3635,14 +3644,14 @@
             },
             {
               "transaction_id": "txn_804227",
-              "amount": 16.5
+              "amount": 16.25
             }
           ],
-          "total_amount": 20,
+          "total_amount": 19.75,
           "resulting_claims": [
             {
               "transaction_id": "txn_804227",
-              "amount": 0.4
+              "amount": 0.65
             },
             {
               "transaction_id": "txn_804205",
@@ -3653,7 +3662,7 @@
           "component_ids": [
             "1A",
             "2A",
-            "5A",
+            "3B",
             "6A"
           ],
           "eligibility_evidence": {
@@ -3679,10 +3688,10 @@
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 16.5
+            "amount": 16.25
           }
         ],
-        "total_amount": 20,
+        "total_amount": 19.75,
         "confirmation_id": "resolution-confirmation-2",
         "expected_revision": 7
       },
@@ -3710,7 +3719,7 @@
           },
           {
             "transaction_id": "txn_804227",
-            "amount": 0.4
+            "amount": 0.65
           }
         ],
         "expected_revision": 9
@@ -4110,6 +4119,42 @@
         "id": "review_610903"
       },
       "field": "decision_basis_revision",
+      "equals": 2
+    },
+    {
+      "check_id": "basis-finalization:inc_case_scope_01:superseded_by",
+      "collection": "service_incidents",
+      "where": {
+        "id": "inc_case_scope_01"
+      },
+      "field": "superseded_by",
+      "equals": "inc_case_scope_02"
+    },
+    {
+      "check_id": "basis-finalization:inc_case_scope_02:status",
+      "collection": "service_incidents",
+      "where": {
+        "id": "inc_case_scope_02"
+      },
+      "field": "status",
+      "equals": "confirmed"
+    },
+    {
+      "check_id": "basis-finalization:inc_case_scope_02:contract_id",
+      "collection": "service_incidents",
+      "where": {
+        "id": "inc_case_scope_02"
+      },
+      "field": "contract_id",
+      "equals": "rc_610407"
+    },
+    {
+      "check_id": "basis-finalization:inc_case_scope_02:revision",
+      "collection": "service_incidents",
+      "where": {
+        "id": "inc_case_scope_02"
+      },
+      "field": "revision",
       "equals": 2
     }
   ],

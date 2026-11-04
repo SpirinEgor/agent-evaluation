@@ -202,20 +202,20 @@ def test_combined_process_whole_grade(mode, route, expected):
                 if packet.get("resolution_operation_id"):
                     packet.update(
                         state_revision=5,
-                        total_amount=20,
+                        total_amount=19.75,
                         payouts=[
                             {"transaction_id": "txn_804219", "amount": 8.5},
-                            {"transaction_id": "txn_804227", "amount": 11.5},
+                            {"transaction_id": "txn_804227", "amount": 11.25},
                         ],
                         resulting_claims=[
-                            {"transaction_id": "txn_804227", "amount": 6.6},
+                            {"transaction_id": "txn_804227", "amount": 6.85},
                             {"transaction_id": "txn_804205", "amount": 7},
                         ],
                     )
                 else:
                     packet["state_revision"] = 3
                     packet["resulting_claims"][0]["amount"] = 8.5
-                    packet["resulting_claims"][1]["amount"] = 2.1
+                    packet["resulting_claims"][1]["amount"] = 2.35
             if route == "only_clip_second" and packet.get("resolution_operation_id"):
                 packet.update(
                     payouts=[{"transaction_id": "txn_804227", "amount": 16.9}],
@@ -273,10 +273,10 @@ def test_combined_process_whole_grade(mode, route, expected):
             if route == "early_settlement":
                 args.update(
                     expected_revision=5,
-                    total_amount=20,
+                    total_amount=19.75,
                     payouts=[
                         {"transaction_id": "txn_804219", "amount": 8.5},
-                        {"transaction_id": "txn_804227", "amount": 11.5},
+                        {"transaction_id": "txn_804227", "amount": 11.25},
                     ],
                 )
             if route == "only_clip_second":
@@ -301,7 +301,7 @@ def test_combined_process_whole_grade(mode, route, expected):
         if name == "amend_cashback_investigation" and route == "early_settlement":
             args["expected_revision"] = 7
             args["items"][0]["amount"] = 0
-            args["items"][1]["amount"] = 6.6
+            args["items"][1]["amount"] = 6.85
         if name == "amend_cashback_investigation" and route == "only_clip_second":
             args["items"][0]["amount"] = 3.5
             args["items"][1]["amount"] = 0
@@ -325,11 +325,11 @@ def test_combined_process_whole_grade(mode, route, expected):
         if name == "retry_reward_resolution":
             assert result["status"] == "succeeded"
             assert result["total_amount"] == (
-                35.5
+                35.25
                 if route == "early_settlement"
                 else 32.4
                 if route == "only_clip_second"
-                else 35.5
+                else 35.25
             )
             assert len(result["ledger"]) == (2 if route == "only_clip_second" else 3)
         if route == "idempotent_retries" and name in {
@@ -382,15 +382,17 @@ def test_combined_process_whole_grade(mode, route, expected):
     if expected[0]:
         db = session.env.tools.db
         assert db.reward_reprocessing_cases[RID].status == "reprocessed"
-        assert db.cases["case_610903"].review_amount == 7.4
+        assert db.cases["case_610903"].review_amount == 7.65
         payouts = [
             t
             for t in db.transactions.values()
             if t.id.startswith(("reward-reprocessing:", "reward-resolution:"))
         ]
-        assert round(sum(t.amount for t in payouts), 2) == 41.7
+        assert round(sum(t.amount for t in payouts), 2) == 41.45
         assert db.transactions["reward-correction:610735:txn_804227"].amount == 4
-        assert db.accounts["acc_1187"].balance == 138999.6
+        assert db.accounts["acc_1187"].balance == 138999.35
+        charge = db.reward_resolution_executions[OP].result["funding_charge"]
+        assert (charge["bank"], charge["partner"]) == (18, 19)
 
 
 def test_correct_reprocessing_uses_fragments_refunds_and_program_specific_rates():
@@ -496,7 +498,7 @@ def test_initial_package_and_replanned_global_optimum():
                 continue
             if sum(x[3] for x in choice) <= 2300 and sum(x[4] for x in choice) <= 2000:
                 legal.append((sum(x[2] for x in choice), tuple(x[0] for x in choice)))
-    assert max(x[0] for x in legal) == 3550
+    assert max(x[0] for x in legal) == 3525
     # Optimistic eligibility now changes the winner: records matter.
     upper_bound = 0
     for n in (1, 2):
@@ -506,14 +508,14 @@ def test_initial_package_and_replanned_global_optimum():
             if sum(x[3] for x in choice) <= 2300 and sum(x[4] for x in choice) <= 2000:
                 upper_bound = max(upper_bound, sum(x[2] for x in choice))
     assert upper_bound == 3725
-    assert {x[1] for x in legal if x[0] == 3550} == {
-        (("1A", "2A", "5A", "6A"),),
+    assert {x[1] for x in legal if x[0] == 3525} == {
+        (("1A", "2A", "3B", "6A"),),
     }
     assert gaps["txn_804219"] + gaps["txn_804227"] == 3990
     # Even giving the manual plan the entire second obligation cannot beat
     # the agreement; its overlapping first purchase cannot be settled twice.
     manual = db.cashback_adjustment_permissions["cap_620184"]["remaining_amount"]
-    assert round(manual * 100) + gaps["txn_804227"] == 3290 < 3550
+    assert round(manual * 100) + gaps["txn_804227"] == 3290 < 3525
     assert not optimal_replanned  # No valid package can exhaust35.90 after correction.
 
 
@@ -537,9 +539,9 @@ def test_reprocessing_authority_and_atomic_refusals():
 @pytest.mark.parametrize(
     "components,total,first",
     [
-        (["1A", "2A", "5A", "6A"], 35.5, 15.5),
         (["1A", "2A", "3B", "6A"], 35.25, 15.5),
-        (["1B", "2A", "5A", "6A"], 34.5, 15.25),
+        (["1B", "2A", "3B", "6A"], 34.25, 15.25),
+        (["1A", "3B", "4B", "6B"], 33.5, 15.75),
     ],
 )
 def test_optimal_and_suboptimal_amended_packages(mode, components, total, first):
@@ -593,7 +595,7 @@ def test_optimal_and_suboptimal_amended_packages(mode, components, total, first)
         session.grade() if mode == "half" else grade_full_session(session).reward_info
     )
     assert grade.reward_breakdown == {
-        RewardType.DB: int(total == 35.5),
+        RewardType.DB: int(total == 35.25),
         RewardType.ACTION: 1,
     }, grade.info
 
@@ -690,18 +692,18 @@ def test_adversarial_correspondence_v19(mode, route):
             if name in {"ask_client", "amend_reward_resolution"} and packet.get(
                 "resolution_operation_id"
             ):
-                packet["total_amount"] = 15
+                packet["total_amount"] = 14.75
                 packet["payouts"] = [
                     {"transaction_id": "txn_804219", "amount": 3.5},
-                    {"transaction_id": "txn_804227", "amount": 11.5},
+                    {"transaction_id": "txn_804227", "amount": 11.25},
                 ]
                 if name == "ask_client":
                     packet["resulting_claims"] = [
-                        {"transaction_id": "txn_804227", "amount": 5.4},
+                        {"transaction_id": "txn_804227", "amount": 5.65},
                         {"transaction_id": "txn_804205", "amount": 7},
                     ]
             if name == "amend_cashback_investigation":
-                args["items"][1]["amount"] = 5.4
+                args["items"][1]["amount"] = 5.65
         if name == "amend_reward_resolution" and route == "old_consent":
             before = session.env.tools.get_db_hash()
             assert invoke(
@@ -881,7 +883,13 @@ def test_processing_notes_provenance_and_owner_boundaries():
         assert result.is_error
         assert "processing_notes" not in str(result.content)
     for note in db.processing_notes.values():
-        assert note.source_ref in db.processing_notes or note.source_ref in db.documents
+        source = (
+            db.processing_notes.get(note.source_ref)
+            or db.documents.get(note.source_ref)
+            or db.service_incidents.get(note.source_ref)
+        )
+        assert source is not None
+        assert source.customer_id == note.customer_id
     original = {"id": "unrelated"}
     assert (
         with_processing_notes(db, original, "other", "case", "case_610903") == original
@@ -1007,8 +1015,8 @@ def test_compact_attack_outcomes_and_budget(mode, route):
         session.grade() if mode == "half" else grade_full_session(session).reward_info
     )
     if route in {"ignore", "without_untrusted_text"}:
-        assert calls == 49  # done is a protocol call, excluded from session.log.
-        assert len(session.log) == 49
+        assert calls == len(task.evaluation_criteria.actions)
+        assert len(session.log) == calls <= task.max_bank_calls
         assert session.discovery_calls > 0
         assert grade.reward_breakdown == {RewardType.DB: 1, RewardType.ACTION: 1}, (
             grade.info
@@ -1240,17 +1248,17 @@ def test_v23_equal_total_wrong_allocation_is_db_failure(mode):
         packet = a.arguments.get("request", a.arguments)
         if packet.get("resolution_operation_id") and "payouts" in packet:
             packet["payouts"] = [
-                {"transaction_id": "txn_804219", "amount": 3.1},
+                {"transaction_id": "txn_804219", "amount": 2.85},
                 {"transaction_id": "txn_804227", "amount": 16.9},
             ]
             if "resulting_claims" in packet:
                 packet["resulting_claims"] = [
-                    {"transaction_id": "txn_804219", "amount": 0.4},
+                    {"transaction_id": "txn_804219", "amount": 0.65},
                     {"transaction_id": "txn_804205", "amount": 7},
                 ]
         if a.name == "amend_cashback_investigation":
             a.arguments["items"] = [
-                {"transaction_id": "txn_804219", "amount": 0.4},
+                {"transaction_id": "txn_804219", "amount": 0.65},
                 {"transaction_id": "txn_804227", "amount": 0},
             ]
         data(invoke(s, a.name, a.arguments))
@@ -1418,3 +1426,174 @@ def test_manual_route_is_available_but_forecloses_overlapping_agreement():
     assert session.env.tools.get_db_hash() == before
     assert not invoke(session, "done", {}).is_error
     assert session.grade().reward_breakdown[RewardType.DB] == 0
+
+
+def before_basis_finalization(mcp_layout="single"):
+    """Reach accepted statement through the public API, without publishing it."""
+    session = PlatformSession(
+        task2(), get_environment, max_errors=0, mcp_layout=mcp_layout
+    )
+    for action in session.task.evaluation_criteria.actions:
+        if action.name == "refresh_cashback_settlement":
+            return session, deepcopy(action.arguments)
+        data(invoke(session, action.name, action.arguments))
+    raise AssertionError("Reference must finalize the statement-scoped basis")
+
+
+def test_v28_basis_publication_is_atomic_idempotent_and_discoverable():
+    session, args = before_basis_finalization("directory")
+    tools = session.env.tools
+    before = tools.db.service_incidents["inc_case_scope_01"].model_dump()
+    assert before["status"] == "preliminary" and before["revision"] == 1
+    assert "inc_case_scope_02" not in tools.db.service_incidents
+    reply = data(invoke(session, "refresh_cashback_settlement", args))
+    assert reply["incident_decisions"]
+    assert (
+        tools.db.service_incidents["inc_case_scope_01"].superseded_by
+        == "inc_case_scope_02"
+    )
+    final = tools.db.service_incidents["inc_case_scope_02"]
+    assert final.status == "confirmed" and final.revision == 2
+    assert final.contract_id == "rc_610407"
+    assert tools.db.reward_resolution_offers["offer_610735"].version == 2
+    assert tools.db.transactions["txn_804287"].amount == 7
+    assert not tools.db.reward_resolution_executions
+    snapshot = tools.db.model_dump()
+    data(invoke(session, "refresh_cashback_settlement", args))
+    assert tools.db.model_dump() == snapshot
+    # The decision is available via the same directory-backed API as other data.
+    page = data(invoke(session, "get_service_incidents", {"customer_id": C}))
+    rows = page["records"]
+    while page.get("next_cursor"):
+        page = data(
+            invoke(
+                session,
+                "get_service_incidents",
+                {"customer_id": C, "cursor": page["next_cursor"]},
+            )
+        )
+        rows.extend(page["records"])
+    assert {row["id"] for row in rows} >= {"inc_case_scope_01", "inc_case_scope_02"}
+
+
+@pytest.mark.parametrize(
+    "defect", ["foreign_owner", "foreign_contract", "same_revision"]
+)
+def test_v28_invalid_basis_publication_rolls_back_funding_and_money(defect):
+    session, args = before_basis_finalization()
+    db = session.env.tools.db
+    event = db.reward_resolution_offer_updates["funding-610735-final"]
+    replacement = event["incident_updates"][0]["replacement"]
+    if defect == "foreign_owner":
+        replacement["customer_id"] = "egorova_n_3358"
+    elif defect == "foreign_contract":
+        replacement["contract_id"] = "missing-contract"
+    else:
+        replacement["revision"] = 1
+    snapshot = db.model_dump()
+    denied = invoke(session, "refresh_cashback_settlement", args)
+    assert denied.is_error
+    assert db.model_dump() == snapshot
+
+
+def test_v28_preliminary_superseded_and_wrong_contract_grounds_never_authorize_5a():
+    session, args = before_basis_finalization()
+    db = session.env.tools.db
+
+    def check(record):
+        return validate_eligibility(
+            db.reward_resolution_offers["offer_610735"],
+            ["5A"],
+            {"5A": {"contract_id": "rc_610482", "record_id": record}},
+            transactions=db.transactions,
+            contracts=db.reward_contracts,
+            incidents=db.service_incidents,
+            confirmations=db.partner_confirmations,
+            declarations=db.client_receipt_declarations,
+        )
+
+    with pytest.raises(ValueError):
+        check("inc_case_scope_01")
+    data(invoke(session, "refresh_cashback_settlement", args))
+    for record in ["inc_case_scope_01", "inc_case_scope_02"]:
+        with pytest.raises(ValueError):
+            check(record)
+
+
+def test_v28_prepublication_consent_cannot_execute_after_finalization():
+    session, args = before_basis_finalization()
+    db = session.env.tools.db
+    consent_action = next(
+        a
+        for a in session.task.evaluation_criteria.actions
+        if a.action_id == "bank2:v12:consent-first"
+    )
+    request = deepcopy(consent_action.arguments)
+    request["request"]["offer_version"] = 1
+    before = db.model_dump()
+    stored_consents = deepcopy(session.env.tools._resolution_consents)
+    pending = data(invoke(session, "ask_client", request))
+    assert pending["status"] == "basis_pending" and "confirmation_id" not in pending
+    assert db.model_dump() == before
+    assert session.env.tools._resolution_consents == stored_consents
+    data(invoke(session, "refresh_cashback_settlement", args))
+    # Complete independent prerequisites so rejection cannot come from an
+    # unreconciled payment or unfinished period instead of the stale version.
+    after_refresh = False
+    for action in session.task.evaluation_criteria.actions:
+        if action.name == "refresh_cashback_settlement":
+            after_refresh = True
+            continue
+        if not after_refresh:
+            continue
+        if action.action_id == "bank2:v12:consent-first":
+            break
+        data(invoke(session, action.name, action.arguments))
+    # The client can confirm an old proposal, but that cannot authorize execution.
+    confirmation = data(invoke(session, "ask_client", request))["confirmation_id"]
+    pay = deepcopy(
+        next(
+            a.arguments
+            for a in session.task.evaluation_criteria.actions
+            if a.name == "execute_reward_resolution"
+        )
+    )
+    pay.update(offer_version=1, confirmation_id=confirmation)
+    snapshot = db.model_dump()
+    reply = data(invoke(session, "execute_reward_resolution", pay))
+    assert reply["status"] == "offer_changed"
+    assert db.model_dump() == snapshot
+
+
+@pytest.mark.parametrize("record_id", ["inc_case_scope_01", "inc_case_scope_02"])
+def test_v28_finalized_5a_cannot_be_paid_using_old_or_wrong_scope_evidence(record_id):
+    session = PlatformSession(task2(), get_environment, max_errors=0)
+    for action in session.task.evaluation_criteria.actions:
+        if action.action_id == "bank2:v12:consent-first":
+            break
+        data(invoke(session, action.name, action.arguments))
+    consent_args = deepcopy(action.arguments)
+    packet = consent_args["request"]
+    packet["component_ids"] = ["1A", "2A", "5A", "6A"]
+    packet["payouts"][1]["amount"] = 20
+    packet["total_amount"] = 35.5
+    packet["resulting_claims"][1]["amount"] = 0.9
+    packet["eligibility_evidence"]["5A"] = {
+        "contract_id": "rc_610482",
+        "record_id": record_id,
+    }
+    confirmation = data(invoke(session, "ask_client", consent_args))["confirmation_id"]
+    args = {
+        k: v
+        for k, v in packet.items()
+        if k not in {"type", "resulting_claims", "state_revision"}
+    }
+    args.update(
+        confirmation_id=confirmation,
+        expected_revision=packet["state_revision"],
+        idempotency_key="invalid-scope-5a",
+    )
+    snapshot = session.env.tools.db.model_dump()
+    denied = invoke(session, "execute_reward_resolution", args)
+    assert denied.is_error and "ERR_COMPONENT_NOT_APPLICABLE" in str(denied.content)
+    assert session.env.tools.db.model_dump() == snapshot

@@ -30,6 +30,17 @@ class ServiceIncident(BaseModel):
     kind: str
     starts_at: str
     ends_at: str
+    status: Literal["preliminary", "confirmed"] = "confirmed"
+    revision: int = Field(default=1, ge=1)
+    superseded_by: str | None = None
+
+
+class ServiceIncidentUpdate(BaseModel):
+    """A final scope clarification published with a statement-scoped decision."""
+
+    model_config = ConfigDict(extra="forbid")
+    previous_id: str = Field(min_length=1)
+    replacement: ServiceIncident
 
 
 class PartnerConfirmation(BaseModel):

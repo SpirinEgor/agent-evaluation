@@ -91,17 +91,23 @@ def state_guard(db, customer_id, period, expected_revision):
     return None
 
 
-def pending_funding(db, offer):
-    """Only metadata is public until the accepted statement is reconciled."""
+def pending_funding_updates(db, offer):
+    """Pending decisions apply to the whole shared reserve, if any."""
     member_ids = {row.id for row in reserve_members(db, offer)} or {offer.id}
-    return any(
-        update["offer_id"] in member_ids
+    return [
+        update
+        for update in db.reward_resolution_offer_updates.values()
+        if update["offer_id"] in member_ids
         and update["customer_id"] == offer.customer_id
         and update["period"] == offer.period
         and update["status"] == "pending"
         and "previous_version" in update
-        for update in db.reward_resolution_offer_updates.values()
-    )
+    ]
+
+
+def pending_funding(db, offer):
+    """Only metadata is public until the accepted statement is reconciled."""
+    return bool(pending_funding_updates(db, offer))
 
 
 def funding_replacement(tools, offer, update):
@@ -179,6 +185,74 @@ def funding_replacement(tools, offer, update):
         raise ValueError(
             "ERR_INVALID_OFFER_DECISION: Неверные условия финансирования"
         ) from exc
+
+
+def incident_replacements(db, updates, customer_id):
+    """Prepare final registry records without changing the current snapshot.
+
+    A scope clarification keeps the incident and time interval, but can correct
+    its contract. It is published only alongside a validated funding decision.
+    """
+    from tau2.domains.banking_ru.component_eligibility import timestamp
+    from tau2.domains.banking_ru.reward_resolution_models import ServiceIncidentUpdate
+
+    replacements = {}
+    decisions = []
+    for update in updates:
+        entries = update.get("incident_updates", [])
+        if not isinstance(entries, list) or (
+            entries and "previous_version" not in update
+        ):
+            raise ValueError(
+                "ERR_INVALID_INCIDENT_DECISION: Неверное событие уточнения"
+            )
+        for entry in entries:
+            try:
+                change = ServiceIncidentUpdate.model_validate(entry)
+                old = db.service_incidents[change.previous_id]
+                new = change.replacement
+                old_contract = db.reward_contracts[old.contract_id]
+                new_contract = db.reward_contracts[new.contract_id]
+                if (
+                    old.id != change.previous_id
+                    or old.customer_id != customer_id
+                    or new.customer_id != customer_id
+                    or old_contract.customer_id != customer_id
+                    or new_contract.customer_id != customer_id
+                    or old_contract.id != old.contract_id
+                    or new_contract.id != new.contract_id
+                    or old.status != "preliminary"
+                    or old.superseded_by is not None
+                    or new.status != "confirmed"
+                    or new.superseded_by is not None
+                    or new.revision != old.revision + 1
+                    or not new.id.strip()
+                    or new.id in db.service_incidents
+                    or old.id in replacements
+                    or new.id in replacements
+                    or (new.kind, new.starts_at, new.ends_at)
+                    != (old.kind, old.starts_at, old.ends_at)
+                    or timestamp(new.starts_at) >= timestamp(new.ends_at)
+                ):
+                    raise ValueError("Неверная область или редакция основания")
+                replacements[old.id] = old.model_copy(
+                    deep=True, update={"superseded_by": new.id}
+                )
+                replacements[new.id] = new
+                decisions.append(
+                    {
+                        "event_id": update["id"],
+                        "previous_id": old.id,
+                        "record_id": new.id,
+                        "previous_revision": old.revision,
+                        "new_revision": new.revision,
+                    }
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError(
+                    "ERR_INVALID_INCIDENT_DECISION: Неверная область или редакция основания"
+                ) from exc
+    return replacements, decisions
 
 
 def refresh(tools, customer_id, period):
@@ -264,6 +338,9 @@ def refresh(tools, customer_id, period):
                 )
         elif offer.status != "under_review":
             raise ValueError("ERR_INVALID_OFFER_DECISION")
+    incidents, incident_decisions = incident_replacements(
+        tools.db, updates, customer_id
+    )
     capture_revision(tools.db, customer_id, period)
     for t in credits:
         tools.db.transactions[t.id] = t
@@ -272,6 +349,7 @@ def refresh(tools, customer_id, period):
     for s in batches:
         s.update(status="settled", ledger_ids=[row["id"] for row in s["credits"]])
     tools.db.reward_resolution_offers.update(replacements)
+    tools.db.service_incidents.update(incidents)
     for update in updates:
         if update["offer_id"] in replacements:
             tools.db.reward_resolution_offers[update["offer_id"]] = replacements[
@@ -308,6 +386,7 @@ def refresh(tools, customer_id, period):
             else {}
         ),
         "changed_transaction_ids": [t.id for t in credits],
+        **({"incident_decisions": incident_decisions} if incident_decisions else {}),
         # Return the actual posted facts, not just IDs requiring another read.
         # These are this customer's validated credits, never calculated gaps.
         "changed_records": [t.model_dump() for t in credits],

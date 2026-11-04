@@ -149,6 +149,11 @@ def validate_eligibility(
             ):
                 raise ValueError("Основание другого владельца или договора")
             if condition["kind"] == "service_incident":
+                if (
+                    record.get("status", "confirmed") != "confirmed"
+                    or record.get("superseded_by") is not None
+                ):
+                    raise ValueError("Нет окончательного действующего основания")
                 if record["kind"] != condition["incident_kind"] or not timestamp(
                     record["starts_at"]
                 ) <= when < timestamp(record["ends_at"]):

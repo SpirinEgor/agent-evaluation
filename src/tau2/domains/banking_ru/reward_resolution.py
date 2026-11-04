@@ -6,6 +6,7 @@ from decimal import ROUND_HALF_EVEN, Decimal
 from tau2.domains.banking_ru.cashback_state import (
     advance,
     pending_funding,
+    pending_funding_updates,
     revision,
     state_guard,
 )
@@ -427,6 +428,17 @@ def confirm(tools, customer_id, request):
         )
 
         return confirm_amendment(tools, customer_id, request)
+    if any(
+        update.get("incident_updates")
+        for update in pending_funding_updates(tools.db, offer)
+    ):
+        return {
+            "status": "basis_pending",
+            "customer_id": customer_id,
+            "offer_id": offer.id,
+            "current_offer_version": offer.version,
+            "current_revision": revision(tools.db, customer_id, offer.period),
+        }
     packet.pop("resolution_operation_id")
     if packet["fallback_operation_id"] is None:
         packet.pop("fallback_operation_id")

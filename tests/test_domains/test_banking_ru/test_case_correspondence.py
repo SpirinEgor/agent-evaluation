@@ -130,7 +130,7 @@ def test_v24_api_paths(mode, route):
     }, grade.info
     assert len(session.log) <= session.task.max_bank_calls
     if route == "ignore":
-        assert len(session.log) == 49
+        assert len(session.log) == len(session.task.evaluation_criteria.actions)
 
 
 def test_v24_receipt_and_stale_basis_refuse_without_effect_then_recover():
@@ -174,7 +174,7 @@ def test_v24_receipt_and_stale_basis_refuse_without_effect_then_recover():
             latest_confirmation = result["confirmation_id"]
     data(session.call("done", {}))
     assert session.grade().reward == 1
-    assert len(session.log) == 52
+    assert len(session.log) == len(session.task.evaluation_criteria.actions) + 3
 
 
 def test_v24_metadata_filter_and_workspace_boundaries():
