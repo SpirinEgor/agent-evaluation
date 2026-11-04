@@ -779,6 +779,7 @@ class ClientAnswer(BaseModel):
             "request_scope",
         ]
     ] = None
+    receipt_scope: Optional[dict] = None
     transaction_selection: Optional[dict] = None
     fee_refund_confirmation: Optional[dict] = None
     document_channel_confirmation: Optional[dict] = None
@@ -1121,6 +1122,10 @@ class BankingDB(DB):
     )
     tariffs: dict[str, Tariff] = Field(default_factory=dict)
     processing_notes: dict[str, ProcessingNote] = Field(default_factory=dict)
+    client_receipt_declarations: dict[str, dict] = Field(default_factory=dict)
+    case_working_notes: dict[str, dict] = Field(default_factory=dict)
+    case_external_recipients: dict[str, list[str]] = Field(default_factory=dict)
+    case_outbound_messages: list[dict] = Field(default_factory=list)
     reward_duplicate_reviews: dict[str, RewardDuplicateReview] = Field(
         default_factory=dict
     )

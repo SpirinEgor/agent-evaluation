@@ -3395,6 +3395,19 @@
       "required_for_reward": false
     },
     {
+      "action_id": "bank2:v24:receipt",
+      "name": "ask_client",
+      "arguments": {
+        "customer_id": "gromov_a_1187",
+        "request": {
+          "type": "case_clarification",
+          "topic": "receipt_scope"
+        }
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
       "action_id": "bank2:v12:consent-first",
       "name": "ask_client",
       "arguments": {
@@ -3436,7 +3449,12 @@
             "5A",
             "6A"
           ],
-          "eligibility_evidence": {}
+          "eligibility_evidence": {
+            "1A": {
+              "contract_id": "rc_610482",
+              "record_id": "receipt-answer-610903"
+            }
+          }
         }
       },
       "required_for_reward": false,
@@ -3474,7 +3492,12 @@
           "5A",
           "6A"
         ],
-        "eligibility_evidence": {}
+        "eligibility_evidence": {
+          "1A": {
+            "contract_id": "rc_610482",
+            "record_id": "receipt-answer-610903"
+          }
+        }
       },
       "required_for_reward": true,
       "compare_args": [
@@ -3494,13 +3517,22 @@
       "compare_args": []
     },
     {
+      "action_id": "bank2:v24:current-basis",
+      "name": "get_payment_basis",
+      "arguments": {
+        "payment_id": "payment_mixed_01"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
       "action_id": "bank2:v21:resolve",
       "name": "resolve_reward_duplicate_review",
       "arguments": {
         "review_id": "review_610903",
         "basis_id": "decision_mixed_01",
         "expected_revision": 2,
-        "basis_revision": 1
+        "basis_revision": 2
       },
       "required_for_reward": false
     },
@@ -3543,7 +3575,12 @@
             "5A",
             "6A"
           ],
-          "eligibility_evidence": {}
+          "eligibility_evidence": {
+            "1A": {
+              "contract_id": "rc_610482",
+              "record_id": "receipt-answer-610903"
+            }
+          }
         }
       },
       "required_for_reward": false,
@@ -3992,7 +4029,7 @@
         "id": "review_610903"
       },
       "field": "decision_basis_revision",
-      "equals": 1
+      "equals": 2
     }
   ],
   "reward_business_contract": {

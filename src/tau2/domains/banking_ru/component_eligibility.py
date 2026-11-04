@@ -5,6 +5,8 @@ from zoneinfo import ZoneInfo
 
 # Shared private reads are declared once, rather than copied into every task.
 COMMON_TOOL_ACCESS = {
+    "case_workspace": {"case_id": "cases"},
+    "send_case_message": {"case_id": "cases"},
     "get_reward_duplicate_reviews": {"customer_id": "customers", "case_id": "cases"},
     "resolve_reward_duplicate_review": {
         "review_id": "reward_duplicate_reviews",
@@ -89,7 +91,15 @@ def timestamp(value):
 
 
 def validate_eligibility(
-    offer, component_ids, evidence, *, transactions, contracts, incidents, confirmations
+    offer,
+    component_ids,
+    evidence,
+    *,
+    transactions,
+    contracts,
+    incidents,
+    confirmations,
+    declarations=None,
 ):
     """Check exact presented grounds for selected conditional components only."""
     conditions = {
@@ -125,7 +135,11 @@ def validate_eligibility(
             ):
                 raise ValueError("Договор не относится к покупке")
             collection = (
-                incidents if condition["kind"] == "service_incident" else confirmations
+                incidents
+                if condition["kind"] == "service_incident"
+                else (declarations or {})
+                if condition["kind"] == "client_receipt"
+                else confirmations
             )
             record = row(collection[proof["record_id"]])
             if (
@@ -139,6 +153,17 @@ def validate_eligibility(
                     record["starts_at"]
                 ) <= when < timestamp(record["ends_at"]):
                     raise ValueError("Инцидент не охватывает покупку")
+            elif condition["kind"] == "client_receipt":
+                if (
+                    record.get("source") != "client_answer"
+                    or record.get("status") != "accepted"
+                    or record.get("case_id") != offer.case_id
+                    or record.get("transaction_id") != tx["id"]
+                    or record.get("receipt_id") != tx.get("receipt_id")
+                ):
+                    raise ValueError(
+                        "Клиент не подтвердил чек этой покупки в этом обращении"
+                    )
             elif condition["kind"] == "partner_confirmation":
                 if (
                     record["status"] != "accepted"
@@ -177,12 +202,17 @@ def prepare_access_policy(policy):
     return type(policy).model_validate(policy.model_dump())
 
 
-def registry_page(collection, customer_id, cursor=None):
+def registry_page(collection, customer_id, cursor=None, *, receipt_id=None):
     """Deterministic pages; the cursor is a public offset, never authorization."""
     from tau2.environment.tool import ToolExecutionRejected
 
     records = sorted(
-        (r.model_dump() for r in collection.values() if r.customer_id == customer_id),
+        (
+            r.model_dump()
+            for r in collection.values()
+            if r.customer_id == customer_id
+            and (receipt_id is None or getattr(r, "receipt_id", None) == receipt_id)
+        ),
         key=lambda r: r["id"],
     )
     try:
@@ -196,6 +226,7 @@ def registry_page(collection, customer_id, cursor=None):
     end = offset + 5
     return {
         "customer_id": customer_id,
+        "scope": {"customer_id": customer_id, "receipt_id": receipt_id},
         "records": records[offset:end],
         "complete": end >= len(records),
         "next_cursor": str(end) if end < len(records) else None,

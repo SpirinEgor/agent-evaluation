@@ -22,6 +22,7 @@ class ProcessingNote(BaseModel):
     source_ref: str
     created_at: str
     text: str
+    authority: Literal["correspondence"] = "correspondence"
     revision: int = 1
     supersedes: str | None = None
     recommended_evidence_id: str | None = None

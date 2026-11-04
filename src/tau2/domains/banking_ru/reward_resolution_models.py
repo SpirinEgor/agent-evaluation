@@ -11,7 +11,7 @@ class EligibilityRegistry(RootModel[dict]):
 
 class ComponentEligibility(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kind: Literal["service_incident", "partner_confirmation"]
+    kind: Literal["service_incident", "partner_confirmation", "client_receipt"]
     transaction_id: str = Field(min_length=1)
     incident_kind: str = "activation_sync_failure"
 

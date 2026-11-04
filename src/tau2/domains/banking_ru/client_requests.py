@@ -108,6 +108,7 @@ class CaseClarificationRequest(BaseModel):
         "promotion_activation",
         "request_scope",
         "resolution_preferences",
+        "receipt_scope",
     ]
 
 
@@ -354,6 +355,31 @@ class StructuredIdentityBankingTools(FileBankingTools):
                 raise ValueError(
                     "ERR_INVALID_ARGUMENT: case_clarification принимает только topic"
                 )
+            if request.topic == "receipt_scope":
+                answers = [
+                    a
+                    for a in self.db.client_answers.get(customer_id, [])
+                    if a.receipt_scope
+                ]
+                if len(answers) != 1:
+                    return FileResponse({"status": "unknown", "data": None})
+                declaration = dict(answers[0].receipt_scope)
+                case = self.db.cases.get(declaration.get("case_id"))
+                if case is None or case.customer_id != customer_id:
+                    raise ToolExecutionRejected(
+                        "ERR_RECEIPT_SCOPE: Несогласованное обращение"
+                    )
+                declaration.update(
+                    customer_id=customer_id, status="accepted", source="client_answer"
+                )
+                self.db.client_receipt_declarations[declaration["id"]] = declaration
+                return FileResponse(
+                    {
+                        "status": "answered",
+                        "data": declaration,
+                        "text": answers[0].answer,
+                    }
+                )
             if request.topic == "resolution_preferences":
                 preferences = self.db.reward_resolution_preferences.get(customer_id)
                 return FileResponse(
@@ -381,12 +407,24 @@ class StructuredIdentityBankingTools(FileBankingTools):
                 raise ValueError(
                     "ERR_INVALID_ARGUMENT: неоднозначный фиксированный ответ"
                 )
+            declared = {}
+            if sources[0].receipt_scope:
+                declared = dict(sources[0].receipt_scope)
+                case = self.db.cases.get(declared.get("case_id"))
+                if case is None or case.customer_id != customer_id:
+                    raise ToolExecutionRejected(
+                        "ERR_RECEIPT_SCOPE: Несогласованное обращение"
+                    )
+                declared.update(
+                    customer_id=customer_id, status="accepted", source="client_answer"
+                )
+                self.db.client_receipt_declarations[declared["id"]] = declared
             return FileResponse(
                 {
                     "customer_id": customer_id,
                     "request_type": request.type,
                     "status": "answered",
-                    "data": {"topic": request.topic},
+                    "data": {"topic": request.topic, **declared},
                     "text": sources[0].answer,
                 }
             )

@@ -103,6 +103,7 @@ GROUPS["regressions"] = tuple(
         "test_contract_infrastructure.py",
         "test_banking_db_action_migration.py",
         "test_bank2_linked_goals.py",
+        "test_case_correspondence.py",
         "test_banking_db_action_state_guards.py",
     )
 )

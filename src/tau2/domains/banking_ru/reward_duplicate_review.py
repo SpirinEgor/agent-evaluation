@@ -26,6 +26,7 @@ class RewardDuplicateReview(BaseModel):
     import_document_id: str
     revision: int = Field(default=1, ge=1)
     status: Literal["queued", "pending", "cleared", "duplicate_confirmed"] = "queued"
+    renew_basis_id: str | None = None
     decision_basis_id: str | None = None
     decision_basis_revision: int | None = None
 
@@ -35,6 +36,16 @@ def validate_trigger(db, offer):
     for review in db.reward_duplicate_reviews.values():
         if review.trigger_offer_id != offer.id:
             continue
+        if review.renew_basis_id is not None:
+            basis = db.payment_bases.get(review.renew_basis_id)
+            if (
+                basis is None
+                or basis.customer_id != offer.customer_id
+                or basis.period != offer.period
+            ):
+                raise ToolExecutionRejected(
+                    "ERR_REVIEW_SCOPE: Основание обновления не принадлежит проверке"
+                )
         if (
             review.customer_id != offer.customer_id
             or review.case_id != offer.case_id
@@ -62,6 +73,9 @@ def activate(db, offer):
             and review.case_id == offer.case_id
             and review.period == offer.period
         ):
+            if review.renew_basis_id is not None:
+                basis = db.payment_bases[review.renew_basis_id]
+                basis.revision += 1
             review.status = "pending"
             review.revision += 1
 

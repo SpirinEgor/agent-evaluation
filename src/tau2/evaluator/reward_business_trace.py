@@ -101,6 +101,7 @@ def _component_amounts(offer, args, sources, grounds):
         contracts=snapshot({"get_reward_contracts"}),
         incidents=snapshot({"get_service_incidents"}),
         confirmations=snapshot({"get_partner_confirmations"}),
+        declarations=snapshot({"ask_client"}),
     )
     total, expected = selected_amounts(typed, args.get("component_ids") or [])
     chosen = set(args.get("component_ids") or [])

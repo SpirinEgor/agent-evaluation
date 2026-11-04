@@ -75,11 +75,11 @@ def test_pending_scope_and_no_effect_rejection():
 def test_invalid_evidence_cannot_release_or_change_state(defect):
     session = pending()
     tools = session.env.tools
-    args = dict(review_id=REVIEW, basis_id=BASIS, expected_revision=2, basis_revision=1)
+    args = dict(review_id=REVIEW, basis_id=BASIS, expected_revision=2, basis_revision=2)
     if defect == "old_review":
         args["expected_revision"] = 1
     elif defect == "old_basis":
-        tools.db.payment_bases[BASIS].revision = 2
+        tools.db.payment_bases[BASIS].revision = 3
     elif defect == "other_reference":
         tools.db.payment_bases[BASIS].external_reference = "different"
     elif defect == "other_period":
@@ -95,19 +95,19 @@ def test_invalid_evidence_cannot_release_or_change_state(defect):
 def test_repeat_is_idempotent_and_changed_basis_reopens_authority():
     session = pending()
     tools = session.env.tools
-    answer = resolve(tools, REVIEW, BASIS, 2, 1)
+    answer = resolve(tools, REVIEW, BASIS, 2, 2)
     before = tools.db.model_dump()
-    assert resolve(tools, REVIEW, BASIS, 2, 1) == answer
+    assert resolve(tools, REVIEW, BASIS, 2, 2) == answer
     assert tools.db.model_dump() == before
-    tools.db.payment_bases[BASIS].revision = 2
+    tools.db.payment_bases[BASIS].revision = 3
     assert public_reviews(tools.db, C, "case_610903")[0]["status"] == "pending"
     with pytest.raises(ToolExecutionRejected):
         require_unrestricted(tools.db, C, ["txn_804227"])
     with pytest.raises(ToolExecutionRejected):
-        resolve(tools, REVIEW, BASIS, 2, 1)
-    result = resolve(tools, REVIEW, BASIS, 3, 2)
+        resolve(tools, REVIEW, BASIS, 2, 2)
+    result = resolve(tools, REVIEW, BASIS, 3, 3)
     assert result["status"] == "cleared"
-    assert result["decision_basis_revision"] == 2
+    assert result["decision_basis_revision"] == 3
 
 
 def test_real_duplicate_does_not_get_automatic_clearance():
@@ -116,7 +116,7 @@ def test_real_duplicate_does_not_get_automatic_clearance():
     line = tools.db.payment_bases[BASIS].lines[0]
     line.purchase_id = "txn_804227"
     line.reward_program = "partner_cashback"
-    assert resolve(tools, REVIEW, BASIS, 2, 1)["status"] == "duplicate_confirmed"
+    assert resolve(tools, REVIEW, BASIS, 2, 2)["status"] == "duplicate_confirmed"
     with pytest.raises(ToolExecutionRejected):
         require_unrestricted(tools.db, C, ["txn_804227"])
 
@@ -210,7 +210,7 @@ def test_decision_after_amendment_requires_fresh_consent():
         session.call(
             "resolve_reward_duplicate_review",
             dict(
-                review_id=REVIEW, basis_id=BASIS, expected_revision=2, basis_revision=1
+                review_id=REVIEW, basis_id=BASIS, expected_revision=2, basis_revision=2
             ),
         )
     )
@@ -240,11 +240,11 @@ def test_cross_customer_and_unpublished_decisions_are_atomic():
     review.status = "queued"
     before = tools.db.model_dump()
     with pytest.raises(ToolExecutionRejected):
-        resolve(tools, REVIEW, BASIS, 2, 1)
+        resolve(tools, REVIEW, BASIS, 2, 2)
     assert tools.db.model_dump() == before
     review.status = "pending"
     tools.db.payment_bases[BASIS].customer_id = "egorova_n_3358"
     before = tools.db.model_dump()
     with pytest.raises(ValueError):
-        resolve(tools, REVIEW, BASIS, 2, 1)
+        resolve(tools, REVIEW, BASIS, 2, 2)
     assert tools.db.model_dump() == before

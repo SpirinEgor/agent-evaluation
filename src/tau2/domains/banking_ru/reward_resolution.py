@@ -642,6 +642,7 @@ def execute(
             contracts=tools.db.reward_contracts,
             incidents=tools.db.service_incidents,
             confirmations=tools.db.partner_confirmations,
+            declarations=tools.db.client_receipt_declarations,
         )
     except ValueError as exc:
         raise ToolExecutionRejected(str(exc)) from exc

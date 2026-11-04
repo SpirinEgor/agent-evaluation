@@ -69,6 +69,9 @@ PUBLIC_ID_ARGUMENTS = {
 # Component IDs are offer-local keys, never selectors of another customer's data.
 # The enclosing offer_id is protected; execution verifies membership in that offer.
 LOCAL_ID_ARGUMENTS = {
+    "get_partner_confirmations": {"receipt_id"},  # filter inside verified customer
+    "case_workspace": {"source_ids"},  # checked against visible case sources
+    "send_case_message": {"recipient_id"},  # checked against case participants
     "execute_reward_resolution": {"component_ids"},
     "ask_client": {"component_ids"},
 }

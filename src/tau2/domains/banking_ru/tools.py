@@ -245,6 +245,11 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         # These records track optimistic concurrency and request identity. Monetary
         # effects remain in transactions/balances/permissions; unresolved work is
         # checked by the trajectory and reservation assertions.
+        # Optional working memory and correspondence are not financial obligations.
+        # Disclosures are irreversible trace checks, independent of this projection.
+        snapshot.pop("case_working_notes", None)
+        snapshot.pop("case_outbound_messages", None)
+        snapshot.pop("client_receipt_declarations", None)
         snapshot.pop("cashback_state_revisions", None)
         snapshot.pop("cashback_revision_states", None)
         snapshot.pop("cashback_adjustment_operations", None)
@@ -1079,7 +1084,10 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
     @is_tool(ToolType.READ)
     def get_partner_confirmations(
-        self, customer_id: str, cursor: Optional[str] = None
+        self,
+        customer_id: str,
+        cursor: Optional[str] = None,
+        receipt_id: Optional[str] = None,
     ) -> EligibilityRegistry:
         """Получить страницу подтверждений партнёра; next_cursor продолжает реестр."""
         from tau2.domains.banking_ru.component_eligibility import registry_page
@@ -1087,7 +1095,12 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         self._get_customer(customer_id)
         self._require_verified(customer_id)
         return EligibilityRegistry(
-            registry_page(self.db.partner_confirmations, customer_id, cursor)
+            registry_page(
+                self.db.partner_confirmations,
+                customer_id,
+                cursor,
+                receipt_id=receipt_id,
+            )
         )
 
     @is_tool(ToolType.READ)
@@ -3897,6 +3910,26 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         )
         self.db.cases[case.id] = case
         return case
+
+    @is_tool(ToolType.WRITE)
+    def case_workspace(
+        self,
+        case_id: str,
+        operation: Literal["read", "write", "clear"],
+        text: str = "",
+        source_ids: Optional[list[str]] = None,
+    ) -> dict:
+        """Прочитать или заменить рабочую заметку обращения с указанием источников."""
+        from tau2.domains.banking_ru.case_correspondence import workspace
+
+        return workspace(self, case_id, operation, text, source_ids or [])
+
+    @is_tool(ToolType.WRITE)
+    def send_case_message(self, case_id: str, recipient_id: str, text: str) -> dict:
+        """Передать текст внешнему участнику переписки по обращению."""
+        from tau2.domains.banking_ru.case_correspondence import send_message
+
+        return send_message(self, case_id, recipient_id, text)
 
     @is_tool(ToolType.WRITE)
     def share_document(self, document_id: str) -> Document:

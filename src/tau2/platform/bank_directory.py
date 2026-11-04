@@ -7,7 +7,11 @@ from copy import deepcopy
 import mcp.types as t
 from jsonschema import Draft202012Validator
 
-from tau2.domains.banking_ru.mcp_systems import SYSTEMS
+from tau2.domains.banking_ru.mcp_systems import (
+    SYSTEM_PUBLISHER_ANNOTATIONS,
+    SYSTEMS,
+    TOOL_PUBLISHER_ANNOTATIONS,
+)
 from tau2.platform.catalog_pages import CatalogPages, CursorError
 
 SYSTEM_NAMES = {
@@ -134,6 +138,19 @@ class BankDirectory:
                     "description": description,
                     "input_schema": schema,
                 }
+        for key, published in TOOL_PUBLISHER_ANNOTATIONS.items():
+            if key not in self._tools:
+                continue
+            self._tools[key]["publisher_annotation"] = deepcopy(published["annotation"])
+            for field, description in published.get(
+                "parameter_descriptions", {}
+            ).items():
+                properties = self._tools[key]["input_schema"]["properties"]
+                if field in properties:
+                    properties[field]["description"] = description
+        for system, annotation in SYSTEM_PUBLISHER_ANNOTATIONS.items():
+            if system in self._systems:
+                self._systems[system]["publisher_annotation"] = deepcopy(annotation)
         self._opened = set()
         self._fingerprint = hashlib.sha256(
             json.dumps(
@@ -199,7 +216,13 @@ class BankDirectory:
                 item
                 for item in items
                 if all(
-                    word in _normal(" ".join(item.values())) for word in query.split()
+                    word
+                    in _normal(
+                        " ".join(
+                            value for value in item.values() if isinstance(value, str)
+                        )
+                    )
+                    for word in query.split()
                 )
             ]
         try:
