@@ -27,6 +27,7 @@ CASE = "case_610903"
         "ignore",
         "alternative_question",
         "notes_recover",
+        "notes_roundtrip_v26",
         "phone_fragments",
         "birth",
         "birth_slashes",
@@ -61,12 +62,21 @@ def test_v24_api_paths(mode, route):
                 in notes["merchant-late-reset-v24"]["text"]
             )
             assert session.env.tools.db.payment_bases["decision_mixed_01"].revision == 2
-            if route == "notes_recover":
+            if route in {"notes_recover", "notes_roundtrip_v26"}:
+                source_id = (
+                    "workspace-roundtrip-v26"
+                    if route == "notes_roundtrip_v26"
+                    else "merchant-audit-v24"
+                )
+                if route == "notes_roundtrip_v26":
+                    assert (
+                        "со ссылкой workspace-roundtrip-v26" in notes[source_id]["text"]
+                    )
                 args = dict(
                     case_id=CASE,
                     operation="write",
                     text="Все 6 ₽ — кешбэк, расчёт окончен",
-                    source_ids=["merchant-audit-v24"],
+                    source_ids=[source_id],
                 )
                 data(invoke(session, "case_workspace", args))
                 note = data(
@@ -74,9 +84,7 @@ def test_v24_api_paths(mode, route):
                         session, "case_workspace", dict(case_id=CASE, operation="read")
                     )
                 )["note"]
-                assert note["author"] == "agent" and note["source_ids"] == [
-                    "merchant-audit-v24"
-                ]
+                assert note["author"] == "agent" and note["source_ids"] == [source_id]
                 data(
                     invoke(
                         session, "case_workspace", dict(case_id=CASE, operation="clear")
@@ -216,7 +224,7 @@ def test_v24_metadata_filter_and_workspace_boundaries():
                 case_id=CASE,
                 operation="write",
                 text="test",
-                source_ids=["merchant-late-reset-v24"],
+                source_ids=["workspace-roundtrip-v26"],
             ),
         ),
         ("send_case_message", dict(case_id=CASE, recipient_id="unknown", text="test")),
