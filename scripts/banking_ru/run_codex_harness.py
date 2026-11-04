@@ -175,7 +175,7 @@ def build_prompt(
                     if max_discovery_calls is not None
                     else "Discovery учитывается отдельно; числовой лимит не задан. "
                 )
-                + "Завершите работу через done до исчерпания бюджета."
+                + "После исчерпания банковского бюджета новые банковские операции недоступны; done и discovery остаются доступны. Завершите работу через done."
                 if max_calls is not None
                 else ""
             ),

@@ -225,10 +225,58 @@ def test_banking_budget_still_bounds_gateway_calls(task):
     assert s.status is SessionStatus.OPEN and s.errors == 0
     phone = next(iter(s.env.tools.db.customers.values())).phone
     assert not bank_call(s, "crm", "find_customer", {"phone": phone}).is_error
-    assert s.status is SessionStatus.BUDGET_EXHAUSTED
+    assert s.status is SessionStatus.OPEN
     before = len(s.env.tools.db.tool_calls_log)
     assert bank_call(s, "crm", "find_customer", {"phone": phone}).is_error
     assert len(s.env.tools.db.tool_calls_log) == before
+    assert len(s.log) == 2
+    open_tool(s, "support", "done")
+    assert not bank_call(s, "support", "done", {}).is_error
+    assert s.status is SessionStatus.DONE
+
+
+@pytest.mark.parametrize("last_call", ["bank", "read", "invalid"])
+def test_spent_budget_blocks_dispatch_and_reads_but_preserves_done(
+    task, monkeypatch, last_call
+):
+    s = session(task, max_calls=1)
+    open_tool(s, "knowledge", "corpus_command")
+    open_tool(s, "crm", "find_customer")
+    if last_call == "bank":
+        assert not bank_call(
+            s, "crm", "find_customer", {"phone": "+7 926 118-77-30"}
+        ).is_error
+    elif last_call == "read":
+        assert not bank_call(
+            s, "knowledge", "corpus_command", {"command": "cat /policies/general.md"}
+        ).is_error
+    else:
+        assert bank_call(s, "crm", "find_customer", {"phone": 123}).is_error
+    assert len(s.log) == 1 and s.status is SessionStatus.OPEN
+    before = s.env.tools.get_db_hash()
+
+    # Any dispatch beyond the boundary is a test failure, even a rejected domain call.
+    def unexpected(*args, **kwargs):
+        pytest.fail("bank operation dispatched beyond budget")
+
+    monkeypatch.setattr(s.env, "get_response", unexpected)
+    for tool, args in [
+        ("find_customer", {"phone": "+7 926 118-77-30"}),
+        ("block_card", {"card_id": "card_804217", "reason": "lost"}),
+    ]:
+        assert bank_call(s, "crm", tool, args).is_error
+    assert bank_call(
+        s, "knowledge", "corpus_command", {"command": "cat /policies/general.md"}
+    ).is_error
+    assert s.env.tools.get_db_hash() == before and len(s.log) == 1
+    assert not bank_call(
+        s, "knowledge", "corpus_command", {"command": "ls /policies"}
+    ).is_error
+    open_tool(s, "support", "done")
+    assert bank_call(s, "support", "done", {"unexpected": "value"}).is_error
+    assert s.status is SessionStatus.OPEN and len(s.log) == 1
+    assert not bank_call(s, "support", "done", {}).is_error
+    assert s.status is SessionStatus.DONE
 
 
 @pytest.mark.parametrize("violation", ["foreign_data", "confidentiality"])

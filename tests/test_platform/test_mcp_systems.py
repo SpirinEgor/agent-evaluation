@@ -121,7 +121,7 @@ def test_identity_and_budgets_are_shared_across_systems():
     )
     assert not result.is_error
     assert s.env.tools.db.cards["card_4418"].status == "blocked"
-    assert s.status is SessionStatus.BUDGET_EXHAUSTED
+    assert s.status is SessionStatus.OPEN
     assert s.call("find_customer", {"phone": "+7 901 000-48-21"}, system="crm").is_error
     e = PlatformSession(task, get_environment, max_errors=2)
     assert e.call("done", {}, system="cards").is_error
@@ -161,7 +161,7 @@ def test_catalog_rejects_unmapped_tools_and_duplicate_names():
         partition_tools([unknown])
 
 
-def test_budget_termination_persists_after_final_http_result(tmp_path):
+def test_done_after_budget_persists_after_final_http_result(tmp_path):
     app = build_app(PlatformSettings(results_dir=tmp_path, max_calls=1))
 
     async def go(http):
@@ -171,13 +171,15 @@ def test_budget_termination_persists_after_final_http_result(tmp_path):
             assert not (
                 await mcp.call_tool("find_customer", {"phone": "+7 916 340-11-25"})
             ).is_error
+        async with client.connect(opened, "support") as mcp:
+            assert not (await mcp.call_tool("done", {})).is_error
         result = await client.result(opened.token)
         await client.close(opened.token)
         return result
 
     result = run_with_app(app, go)
     saved = json.loads((tmp_path / f"{result['token']}.json").read_text())
-    assert saved["termination_reason"] == "max_steps"
+    assert saved["termination_reason"] == "agent_stop"
     assert [m["role"] for m in saved["messages"]] == ["assistant", "tool"]
     assert saved["info"]["mcp_events"][-1]["transmitted_at"]
 

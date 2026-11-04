@@ -266,6 +266,31 @@ class PlatformSession:
             )
         return call, event
 
+    def _bank_budget_spent(self) -> bool:
+        return self.env.domain_name == "banking_ru" and len(self.log) >= self.max_calls
+
+    def _reject_bank_budget(self, attempt, direct):
+        call, event = attempt
+        message = ToolMessage(
+            id=call.id,
+            role="tool",
+            requestor="assistant",
+            error=True,
+            execution_rejected=True,
+            content="BANKING_BUDGET_EXHAUSTED: банковские операции недоступны; вызовите done. Discovery доступен в своём бюджете.",
+        )
+        self._results[call.id] = message
+        event.update(
+            response=message.content,
+            error=True,
+            execution_rejected=True,
+            diagnostic_code="BANKING_BUDGET_EXHAUSTED",
+            returned_at=self._now().isoformat(),
+        )
+        if direct:
+            self.result_sent(attempt)
+        return to_call_result(message)
+
     def _directory_call(self, name, arguments, *, system, attempt):
         if self.status is not SessionStatus.OPEN:
             return text_result(
@@ -274,6 +299,15 @@ class PlatformSession:
         direct = attempt is None
         attempt = attempt or self.begin_call(name, arguments, system)
         call, event = attempt
+        if (
+            self._bank_budget_spent()
+            and event.get("budget") != "discovery"
+            and not (
+                name == "bank_call"
+                and call.arguments.get("tool_name") == DONE_TOOL_NAME
+            )
+        ):
+            return self._reject_bank_budget(attempt, direct)
         try:
             if system is not None:
                 raise DirectoryError(
@@ -333,7 +367,10 @@ class PlatformSession:
                         canonical.execution_order = len(self.log)
                         event["execution_order"] = canonical.execution_order
                         self.log.append((canonical, message))
-                        if len(self.log) >= self.max_calls:
+                        if (
+                            len(self.log) >= self.max_calls
+                            and self.env.domain_name != "banking_ru"
+                        ):
                             self.finish(SessionStatus.BUDGET_EXHAUSTED)
                     result = to_call_result(message)
                 else:
@@ -376,12 +413,15 @@ class PlatformSession:
                 diagnostic_code=error.code,
                 returned_at=self._now().isoformat(),
             )
-            if event.get("budget") != "discovery":
+            if event.get("budget") != "discovery" and not self._bank_budget_spent():
                 canonical = self._canonical_trace_calls[call.id]
                 canonical.execution_order = len(self.log)
                 event["execution_order"] = canonical.execution_order
                 self.log.append((canonical, message))
-                if len(self.log) >= self.max_calls:
+                if (
+                    len(self.log) >= self.max_calls
+                    and self.env.domain_name != "banking_ru"
+                ):
                     self.finish(SessionStatus.BUDGET_EXHAUSTED)
             result = to_call_result(message)
         if direct:
@@ -505,6 +545,8 @@ class PlatformSession:
                 self.result_sent(attempt)
             self.finish(SessionStatus.DONE)
             return text_result(STOP_TOKEN)
+        if self._bank_budget_spent():
+            return self._reject_bank_budget(attempt, direct)
         call.execution_order = len(self.log)
         if call.id in self._canonical_trace_calls:
             self._canonical_trace_calls[call.id].execution_order = call.execution_order
@@ -555,7 +597,7 @@ class PlatformSession:
             self.errors += 1
         if self.max_errors > 0 and self.errors >= self.max_errors:
             self.finish(SessionStatus.TOO_MANY_ERRORS)
-        elif len(self.log) >= self.max_calls:
+        elif len(self.log) >= self.max_calls and self.env.domain_name != "banking_ru":
             self.finish(SessionStatus.BUDGET_EXHAUSTED)
         result = to_call_result(message)
         result.content.append(

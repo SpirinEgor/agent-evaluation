@@ -60,11 +60,11 @@ def test_done_finishes_session_and_blocks_further_calls():
     assert s.log == [], "после done вызовы не исполняются и не журналируются"
 
 
-def test_budgets_terminate_the_session():
+def test_bank_budget_keeps_session_open_but_error_limit_terminates():
     s = make(max_calls=2)
     s.call("find_customer", {"phone": "+7 903 555-11-22"})
     s.call("find_customer", {"phone": "+7 903 555-11-22"})
-    assert s.status is SessionStatus.BUDGET_EXHAUSTED
+    assert s.status is SessionStatus.OPEN
     e = make(max_errors=2)
     e.call("get_customer_profile", {"customer_id": "x"})
     e.call("get_customer_profile", {"customer_id": "y"})
@@ -77,7 +77,7 @@ def test_unknown_tool_is_an_error_not_a_crash():
     assert res.is_error is True and s.errors == 1
 
 
-def test_banking_default_allows_six_errors_and_stops_at_100_calls():
+def test_banking_default_allows_six_errors_and_done_at_100_calls():
     s = make()
     for _ in range(6):
         s.call("unknown_tool", {})
@@ -86,8 +86,12 @@ def test_banking_default_allows_six_errors_and_stops_at_100_calls():
         s.call("find_customer", {"phone": "+7 903 555-11-22"})
     assert s.status is SessionStatus.OPEN
     s.call("find_customer", {"phone": "+7 903 555-11-22"})
-    assert s.status is SessionStatus.BUDGET_EXHAUSTED
+    assert s.status is SessionStatus.OPEN
     assert len(s.log) == 100
+    assert s.call("find_customer", {"phone": "+7 903 555-11-22"}).is_error
+    assert len(s.log) == 100
+    assert not s.call("done", {}).is_error
+    assert s.status is SessionStatus.DONE
 
 
 def test_other_domain_keeps_default_error_stop_and_explicit_override():
@@ -149,7 +153,7 @@ def test_scenario_call_ceiling_is_effective_and_cannot_be_raised(configured, exp
             },
         )
     assert len(session.log) == expected
-    assert session.status is SessionStatus.BUDGET_EXHAUSTED
+    assert session.status is SessionStatus.OPEN
     assert session.call(
         "bank_call",
         {

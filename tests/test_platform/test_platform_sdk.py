@@ -154,7 +154,7 @@ def test_projection_schemas_and_deterministic_pagination(task):
         "Discovery: отдельный бюджет, числовой лимит не установлен"
         in a.on_start().instructions
     )
-    assert "число обычных банковских вызовов — не более 49" in a.on_start().instructions
+    assert "После 50-го банковского вызова" in a.on_start().instructions
     action = sdk.ToolCall("bank_directory", {"operation": "list_systems"})
     x, y = a.on_action(action), b.on_action(action)
     assert x == y and a.report_state() == b.report_state()
@@ -244,9 +244,7 @@ def test_announced_limits_match_execution_and_discovery_accounting(task, limit):
     assert (
         "Discovery: отдельный бюджет, лимит 2 вызовов" in bench.on_start().instructions
     )
-    assert (
-        "число обычных банковских вызовов — не более 1" in bench.on_start().instructions
-    )
+    assert "После 2-го банковского вызова" in bench.on_start().instructions
     execute(bench, path_for_find(task))
     assert bench.report_state()["bank_calls"] == 1
     assert bench.report_state()["status"] == "open"
@@ -265,8 +263,12 @@ def test_announced_limits_match_execution_and_discovery_accounting(task, limit):
             "arguments": {"phone": "+7 926 118-77-30"},
         },
     )
-    assert bench.on_action(action).done
-    assert bench.report_state()["status"] == "budget_exhausted"
+    assert not bench.on_action(action).done
+    assert bench.report_state()["status"] == "open"
+    before = bench.report_state()
+    denied = bench.on_action(action)
+    assert not denied.done and "BANKING_BUDGET_EXHAUSTED" in denied.content
+    assert bench.report_state() == before
 
 
 @pytest.mark.parametrize("violation", ["foreign_data", "confidentiality"])
@@ -406,7 +408,9 @@ def wire(service):
         server.server_close()
 
 
-@pytest.mark.parametrize("plan_name", ["reference", "noop", "limit"])
+@pytest.mark.parametrize(
+    "plan_name", ["reference", "reference_at_budget", "noop", "limit"]
+)
 def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
     source = os.environ.get("EVAL_PLATFORM_REPO")
     if not source:
@@ -444,8 +448,50 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
             "bank_directory",
             "bank_call",
         }
-        if plan_name == "reference":
+        if plan_name in {"reference", "reference_at_budget"}:
             plan = path(task)
+            if plan_name == "reference_at_budget":
+                reference_plan = plan
+
+                def at_budget():
+                    text = None
+                    while True:
+                        action = reference_plan.send(text)
+                        if (
+                            action.name == "bank_call"
+                            and action.arguments["tool_name"] == "done"
+                        ):
+                            # Reach exactly 50 before done, with no mutations.
+                            while len(bench.session.log) < 50:
+                                yield sdk.ToolCall(
+                                    "bank_call",
+                                    {
+                                        "system_id": "crm",
+                                        "tool_name": "find_customer",
+                                        "arguments": {"phone": "+7 926 118-77-30"},
+                                    },
+                                )
+                            denied = yield sdk.ToolCall(
+                                "bank_call",
+                                {
+                                    "system_id": "crm",
+                                    "tool_name": "find_customer",
+                                    "arguments": {"phone": "+7 926 118-77-30"},
+                                },
+                            )
+                            assert "BANKING_BUDGET_EXHAUSTED" in denied
+                            # Done discovery is permitted even after all 50 calls.
+                            yield sdk.ToolCall(
+                                "bank_directory",
+                                {
+                                    "operation": "open_tool",
+                                    "system_id": "support",
+                                    "tool_name": "done",
+                                },
+                            )
+                        text = yield action
+
+                plan = at_budget()
         elif plan_name == "noop":
 
             def done():
@@ -537,7 +583,7 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
                 response = await client.post(url + "/evaluate")
                 response.raise_for_status()
                 answer = response.json()
-        expected = 1 if plan_name == "reference" else 0
+        expected = 1 if plan_name in {"reference", "reference_at_budget"} else 0
         assert answer["values"]["reward"] == answer["values"]["DB"] == expected
         assert answer["values"]["protocol_completion"] == (plan_name != "limit")
         (tmp_path / "result.json").write_text(
