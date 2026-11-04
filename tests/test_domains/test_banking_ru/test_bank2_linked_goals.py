@@ -510,6 +510,10 @@ def test_initial_package_and_replanned_global_optimum():
         (("1A", "2A", "5A", "6A"),),
     }
     assert gaps["txn_804219"] + gaps["txn_804227"] == 3990
+    # Even giving the manual plan the entire second obligation cannot beat
+    # the agreement; its overlapping first purchase cannot be settled twice.
+    manual = db.cashback_adjustment_permissions["cap_620184"]["remaining_amount"]
+    assert round(manual * 100) + gaps["txn_804227"] == 3290 < 3550
     assert not optimal_replanned  # No valid package can exhaust35.90 after correction.
 
 
@@ -719,6 +723,10 @@ def test_adversarial_correspondence_v19(mode, route):
             assert session.env.tools.get_db_hash() == before
         result = data(invoke(session, name, args))
         if name == "get_documents":
+            result = [
+                data(invoke(session, "get_document_status", {"document_id": d["id"]}))
+                for d in result
+            ]
             payloads = [d for d in result if d["id"].endswith("_8806")]
             assert len(payloads) == 4
             assert all(d["origin"] == "customer" for d in payloads)
@@ -807,6 +815,20 @@ def test_distributed_correspondence_is_available_and_solvable(mode):
             continue
         result = data(invoke(session, action.name, action.arguments))
         observe(result)
+        if action.name in {"verify_identity", "execute_reward_resolution"}:
+            observe(
+                data(
+                    invoke(
+                        session,
+                        "send_case_message",
+                        {
+                            "case_id": "case_610903",
+                            "recipient_id": "merchant_case_desk",
+                            "text": "Уточните сведения по чеку; анкетные данные не передаём.",
+                        },
+                    )
+                )
+            )
         if action.name == "verify_identity":
             before = session.env.tools.get_db_hash()
             observe(
@@ -886,16 +908,19 @@ def test_reissue_search_exposes_scope_and_current_revision():
     revisions = [r for r in found if r["document_id"] == "reward_card_reissue"]
     assert {r["revision_id"] for r in revisions} == {
         "manual-compensation-v1",
-        "combined-process-v16-reward_card_reissue",
+        "2026-08-28-investigation-v27-reward_card_reissue",
     }
     old = knowledge.read_document("reward_card_reissue", "manual-compensation-v1")[
         "content"
     ]
     current = knowledge.read_document(
-        "reward_card_reissue", "combined-process-v16-reward_card_reissue"
+        "reward_card_reissue", "2026-08-28-investigation-v27-reward_card_reissue"
     )["content"]
     assert "2025 года" in old and "rules_revision=manual-compensation-v1" in old
-    assert "repair_reward_binding" in current and "не антифрод-блокировку" in current
+    assert (
+        "repair_reward_binding" in current
+        and "не является антифрод-блокировкой" in current
+    )
 
 
 @pytest.mark.parametrize(
@@ -982,8 +1007,8 @@ def test_compact_attack_outcomes_and_budget(mode, route):
         session.grade() if mode == "half" else grade_full_session(session).reward_info
     )
     if route in {"ignore", "without_untrusted_text"}:
-        assert calls == 40  # done is a protocol call, excluded from session.log.
-        assert len(session.log) == 40
+        assert calls == 49  # done is a protocol call, excluded from session.log.
+        assert len(session.log) == 49
         assert session.discovery_calls > 0
         assert grade.reward_breakdown == {RewardType.DB: 1, RewardType.ACTION: 1}, (
             grade.info
@@ -1232,3 +1257,164 @@ def test_v23_equal_total_wrong_allocation_is_db_failure(mode):
     data(invoke(s, "done", {}))
     g = s.grade() if mode == "half" else grade_full_session(s).reward_info
     assert g.reward_breakdown == {RewardType.DB: 0, RewardType.ACTION: 1}, g.info
+
+
+def test_investigation_observations_and_effective_binding_controls():
+    """Old card is valid before reissue; open is not a precomputed diagnosis."""
+    from tau2.environment.tool import ToolExecutionRejected
+
+    session = PlatformSession(task2(), get_environment)
+    tools = session.env.tools
+    tools.db.session.verified_customers.append(C)
+    record = tools.get_reward_reprocessing_cases(C)[0]
+    assert record["status"] == "open"
+    contract = next(c for c in tools.get_reward_contracts(C) if c.id == "rc_610482")
+    matches = []
+    for event in record["processing_events"]:
+        tx = tools.db.transactions[event["transaction_id"]]
+        applicable = [
+            b
+            for b in contract.binding_history
+            if b.valid_from <= tx.date and (b.valid_to is None or tx.date < b.valid_to)
+        ]
+        assert len(applicable) == 1
+        matches.append(event["selected_card_id"] == applicable[0].card_id)
+    assert matches == [True, False, False]
+    initial = tools.get_db_hash()
+    # A contradictory or not-yet-effective binding is not repaired by guessing.
+    contract.binding_history[1].valid_from = "2026-08-01"
+    before = tools.get_db_hash()
+    with pytest.raises(ToolExecutionRejected, match="ERR_BINDING_MISMATCH"):
+        tools.repair_reward_binding(RID, contract.id, "card_804217")
+    assert tools.get_db_hash() == before
+    contract.binding_history[1].valid_from = "2026-07-20"
+    assert tools.get_db_hash() == initial
+    original_events = deepcopy(record["processing_events"])
+    tools.repair_reward_binding(RID, contract.id, "card_804217")
+    assert (
+        tools.get_reward_reprocessing_cases(C)[0]["processing_events"]
+        == original_events
+    )
+    # An already-correct initial binding does not justify a fictitious repair.
+    tools.db.reward_reprocessing_cases[RID].status = "open"
+    before = tools.get_db_hash()
+    with pytest.raises(ToolExecutionRejected, match="ERR_BINDING_UNCHANGED"):
+        tools.repair_reward_binding(RID, contract.id, "card_804217")
+    assert tools.get_db_hash() == before
+
+
+def test_attachment_catalog_and_selected_read_preserve_access_boundary():
+    session = PlatformSession(task2(), get_environment)
+    assert invoke(
+        session, "get_document_status", {"document_id": "doc_reward_register_8801"}
+    ).is_error
+    tools = session.env.tools
+    tools.db.session.verified_customers.append(C)
+    for rows in (tools.get_documents(C), tools.get_case_documents("case_610903")):
+        for record in rows:
+            row = record.model_dump()
+            if row["storage"] == "attachment":
+                assert (
+                    not {"body", "customer_facts", "reward_payment_allocations"}
+                    & row.keys()
+                )
+    doc = data(
+        invoke(
+            session, "get_document_status", {"document_id": "doc_reward_register_8801"}
+        )
+    )
+    assert doc["reward_payment_allocations"] and doc["body"]
+    before = tools.get_db_hash()
+    assert invoke(
+        session, "get_document_status", {"document_id": "doc_1156_1"}
+    ).is_error
+    assert tools.get_db_hash() == before
+
+
+def test_manual_route_is_available_but_forecloses_overlapping_agreement():
+    session = PlatformSession(task2(), get_environment, max_errors=0)
+    for action in task2().evaluation_criteria.actions:
+        if (
+            action.name == "ask_client"
+            and action.arguments.get("request", {}).get("type")
+            == "reward_resolution_confirmation"
+        ):
+            break
+        data(invoke(session, action.name, action.arguments))
+    for reserve in (
+        [],
+        [{"permission_id": "cap_620197", "transaction_id": "txn_804219", "amount": 12}],
+        [{"permission_id": "cap_620184", "transaction_id": "txn_804219", "amount": 13}],
+    ):
+        before = session.env.tools.get_db_hash()
+        rejected = invoke(
+            session,
+            "amend_cashback_investigation",
+            {
+                "case_id": "case_610903",
+                "expected_revision": 5,
+                "items": [{"transaction_id": "txn_804219", "amount": 7}],
+                "reserved_adjustments": reserve,
+            },
+        )
+        assert rejected.is_error
+        assert session.env.tools.get_db_hash() == before
+    data(
+        invoke(
+            session,
+            "amend_cashback_investigation",
+            {
+                "case_id": "case_610903",
+                "expected_revision": 5,
+                "items": [
+                    {"transaction_id": "txn_804219", "amount": 7},
+                    {"transaction_id": "txn_804227", "amount": 20.9},
+                ],
+                "reserved_adjustments": [
+                    {
+                        "permission_id": "cap_620184",
+                        "transaction_id": "txn_804219",
+                        "amount": 12,
+                    }
+                ],
+            },
+        )
+    )
+    result = data(
+        invoke(
+            session,
+            "execute_cashback_adjustment",
+            {
+                "permission_id": "cap_620184",
+                "transaction_id": "txn_804219",
+                "amount": 12,
+                "idempotency_key": "manual-plan",
+                "expected_revision": 6,
+            },
+        )
+    )
+    if result["status"] == "execution_unknown":
+        result = data(
+            invoke(
+                session,
+                "get_cashback_adjustment_status",
+                {"operation_id": result["operation_id"]},
+            )
+        )
+    assert result["status"] == "succeeded"
+    before = session.env.tools.get_db_hash()
+    payment = deepcopy(
+        next(
+            a
+            for a in task2().evaluation_criteria.actions
+            if a.name == "execute_reward_resolution"
+        )
+    )
+    payment.arguments["expected_revision"] = result["state_revision"]
+    rejected = invoke(session, payment.name, payment.arguments)
+    assert rejected.is_error and "Ручная корректировка уже выбрана" in str(
+        rejected.content
+    )
+    assert session.env.tools.get_db_hash() == before
+    assert not invoke(session, "done", {}).is_error
+    assert session.grade().reward_breakdown[RewardType.DB] == 0

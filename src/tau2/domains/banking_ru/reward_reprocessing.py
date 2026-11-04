@@ -70,7 +70,24 @@ def repair(tools, reprocessing_id, contract_id, replacement_card_id):
             raise ToolExecutionRejected(
                 "ERR_BINDING_MISMATCH: Договор не применим к покупке"
             )
-    if record.status == "binding_mismatch":
+    if contract.binding_history:
+        for tid in record.transaction_ids:
+            tx = tools._get_transaction(tid)
+            applicable = [
+                item
+                for item in contract.binding_history
+                if item.valid_from <= tx.date
+                and (item.valid_to is None or tx.date < item.valid_to)
+            ]
+            if len(applicable) != 1 or applicable[0].card_id != replacement_card_id:
+                raise ToolExecutionRejected(
+                    "ERR_BINDING_MISMATCH: Нет однозначной привязки на дату покупки"
+                )
+    if record.status in {"open", "binding_mismatch"}:
+        if record.bound_card_id == replacement_card_id:
+            raise ToolExecutionRejected(
+                "ERR_BINDING_UNCHANGED: Привязка уже соответствует выбранной карте"
+            )
         record.bound_card_id = replacement_card_id
         record.status = "repaired"
         advance(tools.db, record.customer_id, record.period)

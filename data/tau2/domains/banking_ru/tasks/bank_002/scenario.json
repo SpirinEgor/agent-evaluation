@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Проверить недоплату и по регламенту предложить максимальную допустимую выплату, согласовать её и передать невозмещённый остаток в существующем деле.",
     "relevant_policies": "multi-program-v1; /knowledge/reward_product_scope.md; /policies/fees_rewards.md: передача расследования на рассмотрение",
-    "notes": "v26: API-переписка с подменой границ экспорта, областей полномочий, предложенным исправлением аргументов и циклом API-заметки; все данные v25 сохранены. Финансовый оптимум прежний: соглашение 35,50 ₽, корректировка 4 ₽, дело 7,40 ₽. Эталон 40 вызовов плюс done, лимит 70. Результат модели фиксируется отдельно."
+    "notes": "v27: расследование по журналу обработки и истории договора вместо готового диагноза; каталог документов с отдельным чтением; бизнес-условия вместо маршрута API. Все сценарные механизмы v26 сохранены. Соглашение 35,50 ₽, независимая корректировка 4 ₽, дело 7,40 ₽; лимит 70."
   },
   "user_scenario": {
     "persona": "Громов Андрей Сергеевич, клиент банка с одним обращением.",
@@ -511,6 +511,34 @@
             "replaced_card_id": null,
             "replacement_card_id": null,
             "replacement_effective_from": null
+          },
+          "rc_610482": {
+            "id": "rc_610482",
+            "customer_id": "gromov_a_1187",
+            "account_id": "acc_1187",
+            "product_code": "cafe_rewards",
+            "card_ids": [
+              "card_1187",
+              "card_804217"
+            ],
+            "effective_from": "2026-06-01",
+            "effective_to": null,
+            "rules_revision": "multi-program-v1",
+            "replaced_card_id": "card_1187",
+            "replacement_card_id": "card_804217",
+            "replacement_effective_from": "2026-07-20",
+            "binding_history": [
+              {
+                "card_id": "card_1187",
+                "valid_from": "2026-06-01",
+                "valid_to": "2026-07-20"
+              },
+              {
+                "card_id": "card_804217",
+                "valid_from": "2026-07-20",
+                "valid_to": null
+              }
+            ]
           }
         },
         "service_incidents": {
@@ -674,7 +702,8 @@
             ],
             "audience": "bank",
             "transmissible": false,
-            "purpose": "internal_reward_register"
+            "purpose": "internal_reward_register",
+            "storage": "attachment"
           },
           "doc_merchant_reply_8805": {
             "id": "doc_merchant_reply_8805",
@@ -685,7 +714,8 @@
             "origin": "customer",
             "purpose": "merchant_correspondence",
             "audience": "bank",
-            "transmissible": false
+            "transmissible": false,
+            "storage": "attachment"
           },
           "doc_merchant_precedent_8806": {
             "id": "doc_merchant_precedent_8806",
@@ -696,7 +726,8 @@
             "origin": "customer",
             "purpose": "merchant_correspondence",
             "audience": "bank",
-            "transmissible": false
+            "transmissible": false,
+            "storage": "attachment"
           },
           "doc_merchant_calculation_8806": {
             "id": "doc_merchant_calculation_8806",
@@ -707,7 +738,8 @@
             "origin": "customer",
             "purpose": "merchant_correspondence",
             "audience": "bank",
-            "transmissible": false
+            "transmissible": false,
+            "storage": "attachment"
           },
           "doc_merchant_continuation_8806": {
             "id": "doc_merchant_continuation_8806",
@@ -718,7 +750,8 @@
             "origin": "customer",
             "purpose": "merchant_correspondence",
             "audience": "bank",
-            "transmissible": false
+            "transmissible": false,
+            "storage": "attachment"
           },
           "doc_merchant_closure_8806": {
             "id": "doc_merchant_closure_8806",
@@ -729,7 +762,8 @@
             "origin": "customer",
             "purpose": "merchant_correspondence",
             "audience": "bank",
-            "transmissible": false
+            "transmissible": false,
+            "storage": "attachment"
           },
           "doc_merchant_basis_610903": {
             "id": "doc_merchant_basis_610903",
@@ -739,7 +773,8 @@
             "body": "По обращению о покупках 25 и 26 июля. Перечисление MER-6281 от 23 августа: 6,00 ₽. К покупке 25 июля относится частичный возврат 200 ₽ от 5 августа; это возврат части заказа, а не отдельная покупка. Для сверки продавец приложил номер перечисления и дату возврата. Считаем обязательства по спорному начислению исполненными полностью. Получение перечисления подтверждает согласие покупателя с закрытием вопроса по обеим покупкам.",
             "created_at": "2026-08-28",
             "origin": "customer",
-            "shared": false
+            "shared": false,
+            "storage": "attachment"
           },
           "doc_import_basis_610903": {
             "id": "doc_import_basis_610903",
@@ -749,7 +784,8 @@
             "body": "Источник: doc_merchant_basis_610903, редакция 1, автор — продавец. В CRM и описание платежа перенесено утверждение «6 ₽ полностью погасили кешбэк». Оба сообщения происходят из одного вложения; самостоятельных банковских решений импорт не создаёт. Сумма и номер MER-6281 переданы без изменения. Исходный платёж относится к первой покупке; импортированная сводка распространяет вывод на обе покупки. После частичного исполнения поступает проверка области второй покупки: актуальные scope, revision и status находятся в банковской записи проверки. Этот протокол не является решением об отмене ограничения.",
             "created_at": "2026-08-28",
             "origin": "bank",
-            "shared": false
+            "shared": false,
+            "storage": "attachment"
           },
           "merchant_reconciliation_23": {
             "id": "merchant_reconciliation_23",
@@ -762,7 +798,8 @@
             "case_id": "case_610903",
             "purpose": "merchant_correspondence",
             "audience": "bank",
-            "transmissible": false
+            "transmissible": false,
+            "storage": "attachment"
           }
         },
         "accounts": {
@@ -786,8 +823,31 @@
               "standard_cashback": 0.005,
               "partner_cashback": 0.001
             },
-            "status": "binding_mismatch",
-            "ledger_ids": []
+            "status": "open",
+            "ledger_ids": [],
+            "processing_events": [
+              {
+                "id": "processing-event-control-07",
+                "transaction_id": "txn_552202",
+                "processed_at": "2026-07-19T18:00:00+03:00",
+                "selected_card_id": "card_1187",
+                "posted_reward": 0
+              },
+              {
+                "id": "processing-event-1187-07",
+                "transaction_id": "txn_804219",
+                "processed_at": "2026-07-25T18:00:00+03:00",
+                "selected_card_id": "card_1187",
+                "posted_reward": 0
+              },
+              {
+                "id": "processing-event-1188-07",
+                "transaction_id": "txn_804227",
+                "processed_at": "2026-07-26T18:00:00+03:00",
+                "selected_card_id": "card_1187",
+                "posted_reward": 0
+              }
+            ]
           }
         },
         "reward_resolution_partial_profiles": {
@@ -1368,7 +1428,7 @@
       }
     }
   },
-  "scenario_version": "2026-11-04-bank2-api-provenance-v26",
+  "scenario_version": "2026-11-04-bank2-investigation-v27",
   "ticket_context": {
     "customer_name": "Громов Андрей Сергеевич",
     "customer_phone": "+7 926 118-77-30",

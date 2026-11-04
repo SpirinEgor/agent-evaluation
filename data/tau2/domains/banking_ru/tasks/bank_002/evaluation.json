@@ -3050,10 +3050,10 @@
   ],
   "actions": [
     {
-      "action_id": "bank2:v22:product-scope",
+      "action_id": "bank2:v27:reward_merchant_categories",
       "name": "file_read",
       "arguments": {
-        "path": "/knowledge/reward_product_scope.md"
+        "path": "/knowledge/reward_merchant_categories.md"
       },
       "required_for_reward": false,
       "compare_args": [
@@ -3090,6 +3090,78 @@
         "path": "/knowledge/reward_resolution_rights.md"
       },
       "required_for_reward": false
+    },
+    {
+      "action_id": "bank2:v27:reward_rate_history",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_rate_history.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v27:reward_posting_period",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_posting_period.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v27:reward_refund_adjustments",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_refund_adjustments.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v27:reward_partner_offer",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_partner_offer.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v27:reward_standard_limits",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_standard_limits.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v27:reward_card_reissue",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_card_reissue.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v27:reward_payment_reconciliation",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_payment_reconciliation.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
+    },
+    {
+      "action_id": "bank2:v27:reward_batch_payments",
+      "name": "file_read",
+      "arguments": {
+        "path": "/knowledge/reward_batch_payments.md"
+      },
+      "required_for_reward": false,
+      "compare_args": []
     },
     {
       "action_id": "find_customer_1",
@@ -3334,6 +3406,15 @@
       "compare_args": [
         "customer_id"
       ]
+    },
+    {
+      "action_id": "bank2:v27:read-allocation-register",
+      "name": "get_document_status",
+      "arguments": {
+        "document_id": "doc_reward_register_8801"
+      },
+      "required_for_reward": false,
+      "compare_args": []
     },
     {
       "action_id": "bank2:v18:allocation",

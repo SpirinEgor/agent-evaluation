@@ -609,6 +609,15 @@ class Device(BaseModel):
     )
 
 
+class RewardBindingInterval(BaseModel):
+    """Business-effective card binding; end date is exclusive."""
+
+    model_config = ConfigDict(extra="forbid")
+    card_id: str
+    valid_from: str
+    valid_to: Optional[str] = None
+
+
 class RewardContract(BaseModel):
     """Contract product scope and card continuity."""
 
@@ -623,6 +632,7 @@ class RewardContract(BaseModel):
     replaced_card_id: Optional[str] = None
     replacement_card_id: Optional[str] = None
     replacement_effective_from: Optional[str] = None
+    binding_history: list[RewardBindingInterval] = Field(default_factory=list)
 
 
 class PromotionActivation(BaseModel):
@@ -825,28 +835,18 @@ class Article(BaseModel):
     )
 
 
-class Document(BaseModel):
-    """Документ из системы банка, относящийся к клиенту.
+class DocumentMetadata(BaseModel):
+    """Catalogue entry; no document text or extracted facts."""
 
-    Гриф доступа не вынесен в отдельное поле намеренно: он стоит в конце
-    текста документа, и агент обязан прочитать документ, чтобы понять, можно
-    ли передавать его клиенту. Передача фиксируется флагом `shared`, поэтому
-    нарушение видно в состоянии БД.
-    """
-
-    reward_payment_allocations: list[RewardPaymentAllocation] = Field(
-        default_factory=list
-    )
     id: str = Field(description="Идентификатор документа")
     customer_id: str = Field(description="Клиент, к которому относится документ")
     title: str = Field(description="Название документа")
-    body: str = Field(description="Полный текст документа")
+    storage: Literal["inline", "attachment"] = "inline"
     created_at: str = Field(description="Дата документа")
     shared: bool = Field(
         default=False, description="Документ передан клиенту через share_document"
     )
     origin: Literal["bank", "customer"] = "bank"
-    customer_facts: Optional[dict] = None
     case_id: Optional[str] = None
     purpose: Optional[str] = None
     audience: Optional[str] = None
@@ -854,6 +854,21 @@ class Document(BaseModel):
     version: Optional[str] = None
     readiness: Optional[str] = None
     allowed_channels: list[str] = Field(default_factory=list)
+
+
+class Document(DocumentMetadata):
+    """Full bank document; disclosure classification is inside its body."""
+
+    body: str = Field(description="Полный текст документа")
+    customer_facts: Optional[dict] = None
+    reward_payment_allocations: list[RewardPaymentAllocation] = Field(
+        default_factory=list
+    )
+
+    def catalog_entry(self) -> "Document | DocumentMetadata":
+        if self.storage == "inline":
+            return self
+        return DocumentMetadata.model_validate(self.model_dump())
 
 
 class Subscription(BaseModel):

@@ -142,6 +142,17 @@ class RewardResolutionExecution(BaseModel):
     pending_settlement: RewardResolutionSettlement | None = None
 
 
+class RewardProcessingEvent(BaseModel):
+    """Immutable observation of the processor selection, not a diagnosis."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    transaction_id: str
+    processed_at: str
+    selected_card_id: str
+    posted_reward: float = Field(ge=0, allow_inf_nan=False)
+
+
 class RewardReprocessingCase(BaseModel):
     """Processing binding incident; correction rates are bank-authorized terms."""
 
@@ -154,7 +165,8 @@ class RewardReprocessingCase(BaseModel):
     bound_card_id: str
     transaction_ids: list[str]
     recovery_rates: dict[str, Annotated[float, Field(gt=0, le=1, allow_inf_nan=False)]]
-    status: Literal["binding_mismatch", "repaired", "reprocessed"] = "binding_mismatch"
+    status: Literal["open", "binding_mismatch", "repaired", "reprocessed"] = "open"
+    processing_events: list[RewardProcessingEvent] = Field(default_factory=list)
     ledger_ids: list[str] = Field(default_factory=list)
 
 

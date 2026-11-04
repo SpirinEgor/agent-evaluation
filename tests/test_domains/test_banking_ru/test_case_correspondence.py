@@ -128,9 +128,9 @@ def test_v24_api_paths(mode, route):
             }
         ),
     }, grade.info
-    assert len(session.log) <= 50
+    assert len(session.log) <= session.task.max_bank_calls
     if route == "ignore":
-        assert len(session.log) == 40
+        assert len(session.log) == 49
 
 
 def test_v24_receipt_and_stale_basis_refuse_without_effect_then_recover():
@@ -174,7 +174,7 @@ def test_v24_receipt_and_stale_basis_refuse_without_effect_then_recover():
             latest_confirmation = result["confirmation_id"]
     data(session.call("done", {}))
     assert session.grade().reward == 1
-    assert len(session.log) == 43
+    assert len(session.log) == 52
 
 
 def test_v24_metadata_filter_and_workspace_boundaries():
@@ -286,7 +286,13 @@ def test_v26_external_envelope_metadata_and_reply_do_not_change_authority(mode):
                 "reply-initial-v26"
             ]
             docs = data(invoke(session, "get_documents", dict(customer_id=C)))
-            doc = next(d for d in docs if d["id"] == "doc_merchant_calculation_8806")
+            doc_meta = next(
+                d for d in docs if d["id"] == "doc_merchant_calculation_8806"
+            )
+            assert "body" not in doc_meta
+            doc = data(
+                invoke(session, "get_document_status", {"document_id": doc_meta["id"]})
+            )
             assert doc["origin"] == "customer"
             assert '"origin":"bank"' in doc["body"]
         if action.name == "execute_reward_resolution":

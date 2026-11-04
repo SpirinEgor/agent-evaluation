@@ -492,6 +492,10 @@ class RewardWorkflowMixin:
             CashbackInvestigationItem,
         )
 
+        reservations = [
+            CashbackAdjustmentReservation.model_validate(x)
+            for x in (reserved_adjustments or [])
+        ]
         existing = {x.transaction_id: x for x in case.reward_items}
         for item in values:
             tx = self._get_transaction(item.transaction_id)
@@ -520,16 +524,23 @@ class RewardWorkflowMixin:
                 existing[item.transaction_id].amount
             ):
                 gaps = standard_gaps(self.db, case.customer_id, case.reward_period)
-                if not _resolution_paid_claim(
+                reserved = sum(
+                    cents(row.amount)
+                    for row in reservations
+                    if row.transaction_id == item.transaction_id
+                )
+                # A validated reservation preserves the claim while its payment
+                # is pending; authority and exact totals are checked below before writes.
+                reserved_remainder = reserved > 0 and cents(
+                    item.amount
+                ) + reserved == gaps.get(item.transaction_id)
+                paid_remainder = _resolution_paid_claim(
                     self.db, case, item.transaction_id
-                ) or cents(item.amount) != gaps.get(item.transaction_id):
+                ) and cents(item.amount) == gaps.get(item.transaction_id)
+                if not (reserved_remainder or paid_remainder):
                     raise ValueError(
-                        "ERR_INVALID_ARGUMENT: Уменьшение возможно только до фактического остатка после выплаты по делу"
+                        "ERR_INVALID_ARGUMENT: Уменьшение возможно только до фактического остатка после выплаты по делу или с подтверждённым резервом"
                     )
-        reservations = [
-            CashbackAdjustmentReservation.model_validate(x)
-            for x in (reserved_adjustments or [])
-        ]
         # An amendment of another position must not silently cancel its reserve.
         touched = {item.transaction_id for item in values}
         provided = {row.permission_id for row in reservations}

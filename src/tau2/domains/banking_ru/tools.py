@@ -45,6 +45,7 @@ from tau2.domains.banking_ru.data_model import (
     Dispute,
     DisputeWithdrawalRequest,
     Document,
+    DocumentMetadata,
     EscalationRequest,
     FeeRefundRequest,
     FeeRefundState,
@@ -1301,17 +1302,19 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         )
 
     @is_tool(ToolType.READ)
-    def get_case_documents(self, case_id: str) -> list[Document]:
+    def get_case_documents(self, case_id: str) -> list[Document | DocumentMetadata]:
         """Получить документы зарегистрированного обращения с метаданными передачи.
 
         Args:
             case_id: Полученный идентификатор собственного обращения.
         """
-        return self._case_documents(case_id)
+        return [d.catalog_entry() for d in self._case_documents(case_id)]
 
     @is_tool(ToolType.WRITE)
     def get_document_status(self, document_id: str) -> Document:
-        """Получить текущий статус документа; явная проверка завершает подготовку.
+        """Получить полный текст и текущий статус выбранного документа.
+
+        Явная проверка завершает подготовку документа, если она ещё выполняется.
 
         Args:
             document_id: Полученный идентификатор документа.
@@ -1363,22 +1366,21 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         return self._assert_case_document_delivery_attempts(customer_id, program)
 
     @is_tool(ToolType.READ)
-    def get_documents(self, customer_id: str) -> list[Document]:
-        """
-        Получить документы из системы банка, относящиеся к клиенту: название,
-        дату и полный текст.
+    def get_documents(self, customer_id: str) -> list[Document | DocumentMetadata]:
+        """Получить каталог документов клиента.
+
+        Встроенные записи содержат текст; вложения storage=attachment содержат
+        метаданные. Полный выбранный документ доступен через get_document_status.
 
         Args:
             customer_id: Идентификатор клиента.
-
-        Returns:
-            Список документов клиента с полным текстом каждого.
-
-        Raises:
-            ValueError: Если клиент не найден.
         """
         self._get_customer(customer_id)
-        return [d for d in self.db.documents.values() if d.customer_id == customer_id]
+        return [
+            d.catalog_entry()
+            for d in self.db.documents.values()
+            if d.customer_id == customer_id
+        ]
 
     @is_tool(ToolType.READ)
     def get_deposit(

@@ -3,7 +3,7 @@ id: "reward_payment_reconciliation"
 section: "Акции и кешбэк"
 title: "Сверка выплат вознаграждения"
 keywords: ["кешбэк", "вознаграждения", "multi-program-v1", "сверка", "выплат", "вознаграждения"]
-revision_id: "mixed-payment-v18-reward_payment_reconciliation"
+revision_id: "2026-08-28-investigation-v27-reward_payment_reconciliation"
 effective_from: "2026-06-01"
 effective_to: null
 document_type: "knowledge"
@@ -48,3 +48,8 @@ status=provisional означает автоматическую классиф�
 платёж не исправляется повторно на другую покупку. Исправление того же основания
 можно безопасно повторить. Для новой выплаты и передачи дела известные
 предварительные распределения в соответствующей области должны быть устранены.
+
+При reward_posting_role действует [реестр пакетных выплат](reward_batch_payments.md).
+В каталоге банковских документов вложения представлены метаданными; полный текст
+и структурированный реестр выбранного документа доступны по его ID через
+get_document_status. Запись каталога не подтверждает чтение вложения.
