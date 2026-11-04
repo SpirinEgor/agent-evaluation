@@ -15,7 +15,9 @@ class ProcessingNote(BaseModel):
     id: str
     customer_id: str
     case_id: str
-    subject_type: Literal["case", "payment", "reprocessing", "offer", "resolution"]
+    subject_type: Literal[
+        "case", "payment", "reprocessing", "offer", "resolution", "reply"
+    ]
     subject_id: str
     available_after: Literal["opened", "statement_accepted", "partial_execution"]
     author: str

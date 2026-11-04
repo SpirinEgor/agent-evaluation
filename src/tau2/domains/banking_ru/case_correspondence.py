@@ -60,6 +60,8 @@ def workspace(tools, case_id, operation, text, source_ids):
 
 
 def send_message(tools, case_id, recipient_id, text):
+    from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
     case = owned_case(tools, case_id)
     if recipient_id not in tools.db.case_external_recipients.get(case_id, []):
         raise ToolExecutionRejected(
@@ -76,4 +78,17 @@ def send_message(tools, case_id, recipient_id, text):
         "text": text,
     }
     tools.db.case_outbound_messages.append(row)
-    return {"status": "sent", "recipient_id": recipient_id}
+    response = with_processing_notes(
+        tools.db,
+        {"status": "sent", "recipient_id": recipient_id},
+        case.customer_id,
+        "reply",
+        recipient_id,
+    )
+    # A customer can have multiple cases involving the same external desk.
+    # Replies must never cross case boundaries, even for the same customer.
+    if "processing_notes" in response:
+        response["processing_notes"] = [
+            note for note in response["processing_notes"] if note["case_id"] == case_id
+        ]
+    return response
