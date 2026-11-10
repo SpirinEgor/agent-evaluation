@@ -2879,7 +2879,7 @@
       "customer_id": "gromov_a_1187",
       "case_id": "foreign-case",
       "title": "Подтверждение другого клиента",
-      "body": "Регистрация другого клиента.",
+      "body": "Нейтральный внешний документ для проверки тестовой среды.",
       "created_at": "2026-09-02",
       "shared": false,
       "purpose": "registration_confirmation",

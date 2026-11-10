@@ -50,6 +50,7 @@ GROUPS = {
                 "test_codex_workbench.py",
                 "test_attempt_metrics.py",
                 "test_authoring_pipeline.py",
+                "test_runtime_payloads.py",
                 "test_main.py",
                 "test_langfuse_export.py",
                 "test_mcp_bridge.py",

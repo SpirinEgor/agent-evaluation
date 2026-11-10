@@ -15,6 +15,7 @@ from tau2.domains.banking_ru.tools import BankingTools
 from tau2.domains.banking_ru.utils import BANKING_RU_DB_PATH
 from tau2.environment.environment import Environment
 from tau2.environment.toolkit import ToolType, is_tool
+from tau2.platform.runtime_payloads import materialize_bytes
 
 
 class FileResponse(RootModel[dict]):
@@ -99,7 +100,9 @@ def get_file_environment(
         raise ValueError(f"{domain_name} supports solo mode only")
     if snapshot is None:
         corpus = FileCorpus(data_dir)
-        db_bytes = BANKING_RU_DB_PATH.read_bytes()
+        db_bytes = materialize_bytes(
+            BANKING_RU_DB_PATH.read_bytes(), json_document=True
+        )
         if hashlib.sha256(db_bytes).hexdigest() != corpus.manifest["legacy_db_sha256"]:
             raise ValueError(
                 "Pilot initial DB changed; explicitly refresh the pilot snapshot"

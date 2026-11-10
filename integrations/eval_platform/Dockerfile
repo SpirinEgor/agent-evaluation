@@ -10,6 +10,8 @@ COPY vendor/platform-sdk-contract /tmp/platform-sdk-contract
 RUN pip install --no-deps /tmp/platform-sdk-contract \
     && rm -rf /tmp/platform-sdk-contract
 ENV TAU2_DATA_DIR=/app/data
+ENV BANKING_PAYLOAD_STORE=/app/private_payloads
+COPY private_payloads/ private_payloads/
 # The platform overrides PYTHONPATH for its mounted harness. Author packages
 # live beside the fixed entrypoints, as in the platform reference benchmark.
 COPY execute/src/ ./

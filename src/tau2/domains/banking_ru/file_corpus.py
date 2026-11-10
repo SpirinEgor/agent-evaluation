@@ -7,6 +7,7 @@ from copy import deepcopy
 from pathlib import Path, PurePosixPath
 
 from tau2.domains.banking_ru.corpus_manifest import document_body, load_manifest
+from tau2.platform.runtime_payloads import materialize_bytes
 
 
 class FileCorpus:
@@ -30,7 +31,7 @@ class FileCorpus:
                 if p.is_relative_to(corpus_root)
             ):
                 raise ValueError("Corpus symlinks are not allowed")
-            content = source.read_bytes()
+            content = materialize_bytes(source.read_bytes())
             if len(content) > 65536:
                 raise ValueError("Corpus file exceeds 65536 bytes")
             if hashlib.sha256(content).hexdigest() != descriptor["sha256"]:

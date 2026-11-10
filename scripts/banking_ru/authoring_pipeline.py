@@ -21,6 +21,8 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from tau2.platform.runtime_payloads import PayloadStore, private_root
+
 WRITERS = (
     "gemini-3.8-flash-medium",
     "gemini-3.8-flash-low",
@@ -627,30 +629,69 @@ def main():
         help="Crash drill: preserve response before state commit",
     )
     args = parser.parse_args()
+    output = args.output.resolve()
+    private = Path(
+        os.environ.get("BANKING_AUTHORING_PRIVATE_ROOT", str(private_root()))
+    )
+    if private.resolve().is_relative_to(Path(__file__).resolve().parents[2]):
+        parser.error("Private authoring storage must be outside the repository")
+    run_id = fingerprint({"output": str(output)})
+    private_run = private / "jobs" / run_id
+    output.mkdir(parents=True, exist_ok=True)
+    if any(
+        (output / name).exists()
+        for name in ("candidate.json", "review.json", "input.json")
+    ):
+        parser.error(
+            "Legacy raw artifacts need private migration; use a new public output"
+        )
     try:
-        state = pipeline(
+        public = public_job(
             read_json(args.spec),
-            args.output,
-            args.writer,
-            args.live,
-            args.retry_incomplete,
-            args.timeout,
-            args.fail_after_receipt,
+            output,
+            private,
+            writer=args.writer,
+            live=args.live,
+            retry_incomplete=args.retry_incomplete,
+            timeout=args.timeout,
+            fail_after_receipt=args.fail_after_receipt,
         )
     except Exception as exc:
-        # Do not echo model output or credentials to the controlling chat.
-        if args.output.is_dir():
-            # Separate from state: a rejected concurrent process must not overwrite
-            # another process's running state. Original attempt files stay intact.
-            failure = args.output / f"failure-{time.time_ns()}.json"
+        # Detailed failures remain private. Never overwrite an owner's status
+        # after a concurrent lock failure or changed-input rejection.
+        if private_run.is_dir():
+            failure = private_run / f"failure-{time.time_ns()}.json"
             write_json(failure, {"type": type(exc).__name__, "detail": str(exc)})
-        print(
-            f"Pipeline stopped ({type(exc).__name__}). Inspect saved artifacts: {args.output}",
-            file=sys.stderr,
+        write_json(
+            output / f"failure-{time.time_ns()}.json",
+            {
+                "status": "stopped",
+                "error_code": "AUTHORING_STAGE_STOPPED",
+                "run_id": run_id,
+            },
         )
+        print("AUTHORING_STAGE_STOPPED; private worker logs retained", file=sys.stderr)
         return 2
-    print(encode(state))
-    return 0 if state["status"] == "reviewed" else 3
+    print(encode(public))
+    return 0 if public["status"] == "reviewed" else 3
+
+
+def public_job(spec, output, private, **options):
+    """Publish an allowlisted status only, with one lock through publication."""
+    run_id = fingerprint({"output": str(output)})
+    private_run = private / "jobs" / run_id
+    with run_lock(output):
+        state = pipeline(spec, private_run, **options)
+        public = {"run_id": run_id, **state}
+        if state["status"] == "reviewed":
+            candidate = read_json(private_run / "candidate.json")
+            store = PayloadStore(private / "payloads")
+            public["payloads"] = [
+                {"slot": slot["id"], "reference": store.put(slot["text"])}
+                for slot in candidate["slots"]
+            ]
+        write_json(output / "status.json", public)
+        return public
 
 
 if __name__ == "__main__":

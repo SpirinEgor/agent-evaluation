@@ -1,5 +1,10 @@
 # Banking API test fixtures
 
+As of 10 November 2026, copies of the customer's external messages in these
+fixtures use neutral synthetic document bodies. Fixtures have no references to
+the private runtime payload store. Their DB hashes were refreshed; the banking
+task's real external texts remain separate runtime inputs, not fixture dependencies.
+
 These self-contained inputs exercise shared banking APIs without loading task
 contracts, the current benchmark corpus, or archived experiment snapshots.
 Their records represent only test scenarios; they do not establish validity

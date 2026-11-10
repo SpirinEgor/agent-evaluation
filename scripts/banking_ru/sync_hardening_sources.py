@@ -11,6 +11,7 @@ from tau2.domains.banking_ru.corpus_manifest import (
     manifest_outputs,
 )
 from tau2.domains.banking_ru.task_store import read_json, task_outputs
+from tau2.platform.runtime_payloads import materialize_bytes
 
 
 def serialized(value):
@@ -29,7 +30,7 @@ def sync(data_dir, check=False):
             raise ValueError("Unbounded source: " + path)
         content = raw.decode()
         corpus[path] = content
-        descriptor["sha256"] = hashlib.sha256(raw).hexdigest()
+        descriptor["sha256"] = hashlib.sha256(materialize_bytes(raw)).hexdigest()
         body = document_body(raw)
         if content.startswith("---\n"):
             descriptor["metadata"] = document_metadata(raw)
@@ -37,11 +38,13 @@ def sync(data_dir, check=False):
         if id in db.get("articles", {}):
             db["articles"][id]["body"] = body.strip()
     db_raw = serialized(db)
-    manifest["legacy_db_sha256"] = hashlib.sha256(db_raw).hexdigest()
+    manifest["legacy_db_sha256"] = hashlib.sha256(
+        materialize_bytes(db_raw, json_document=True)
+    ).hexdigest()
     answers = data_dir / "intake_answers.json"
     if answers.exists():
         manifest["intake_answers_sha256"] = hashlib.sha256(
-            answers.read_bytes()
+            materialize_bytes(answers.read_bytes(), json_document=True)
         ).hexdigest()
     outputs = manifest_outputs(data_dir, manifest, {data_dir / "db.json": db_raw})
     manifest_raw = outputs[data_dir / "manifest.json"]
@@ -49,7 +52,9 @@ def sync(data_dir, check=False):
         local = data_dir / "corpus" / path.lstrip("/")
         if local in outputs:
             corpus[path] = outputs[local].decode()
-            descriptor["sha256"] = hashlib.sha256(outputs[local]).hexdigest()
+            descriptor["sha256"] = hashlib.sha256(
+                materialize_bytes(outputs[local])
+            ).hexdigest()
     snapshot = hashlib.sha256(manifest_raw).hexdigest()
     for task in tasks:
         receipts = task["evaluation_criteria"].get("result_evidence", [])

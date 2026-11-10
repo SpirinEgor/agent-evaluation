@@ -13,6 +13,7 @@ from tau2.domains.banking_ru.utils import (
     BANKING_RU_TASK_SET_PATH,
 )
 from tau2.environment.environment import Environment
+from tau2.platform.runtime_payloads import materialize_bytes, materialize_value
 
 
 def get_environment(
@@ -25,13 +26,22 @@ def get_environment(
     from tau2.domains.banking_ru.file_pilot import get_file_environment
 
     if snapshot is None:
-        raw = (BANKING_RU_DATA_DIR / "intake_answers.json").read_bytes()
+        raw = materialize_bytes(
+            (BANKING_RU_DATA_DIR / "intake_answers.json").read_bytes(),
+            json_document=True,
+        )
         manifest = json.loads((BANKING_RU_DATA_DIR / "manifest.json").read_text())
         if hashlib.sha256(raw).hexdigest() != manifest["intake_answers_sha256"]:
             raise ValueError(
                 "Structured intake answers differ from the pinned snapshot"
             )
-        db = BankingDB.load(BANKING_RU_DB_PATH) if db is None else deepcopy(db)
+        db = (
+            BankingDB.model_validate_json(
+                materialize_bytes(BANKING_RU_DB_PATH.read_bytes(), json_document=True)
+            )
+            if db is None
+            else deepcopy(db)
+        )
         for customer_id, answers in json.loads(raw).items():
             scoped = [
                 a
@@ -75,7 +85,13 @@ def get_tasks(task_split_name: Optional[str] = None) -> list[Task]:
 
 def prepare_task(value: dict) -> Task:
     """The canonical runtime task, including domain-owned shared access rules."""
-    task = Task.model_validate(value)
+    # Authoring reads retain references. Only an explicitly configured benchmark
+    # runtime expands them, including the hidden reference trajectory/criteria.
+    import os
+
+    task = Task.model_validate(
+        materialize_value(value) if os.environ.get("BANKING_PAYLOAD_STORE") else value
+    )
     if task.evaluation_criteria is not None:
         task.evaluation_criteria.tool_access_policy = prepare_access_policy(
             task.evaluation_criteria.tool_access_policy

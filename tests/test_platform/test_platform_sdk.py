@@ -149,12 +149,18 @@ def test_projection_schemas_and_deterministic_pagination(task):
     assert set(a.tools) == {"bank_directory", "bank_call"}
     assert a.on_start().opening == task.input["ticket"]
     assert "evaluation_criteria" not in a.on_start().instructions
-    assert f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов" in a.on_start().instructions
+    assert (
+        f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов"
+        in a.on_start().instructions
+    )
     assert (
         "Discovery: отдельный бюджет, числовой лимит не установлен"
         in a.on_start().instructions
     )
-    assert f"После {task.input['scenario']['max_bank_calls']}-го банковского вызова" in a.on_start().instructions
+    assert (
+        f"После {task.input['scenario']['max_bank_calls']}-го банковского вызова"
+        in a.on_start().instructions
+    )
     action = sdk.ToolCall("bank_directory", {"operation": "list_systems"})
     x, y = a.on_action(action), b.on_action(action)
     assert x == y and a.report_state() == b.report_state()
@@ -172,7 +178,10 @@ def test_reference_and_tampered_report_journal(task):
     journal = execute(bench, path(task))
     values, inputs, sink = grade(task, bench, journal)
     assert values["reward"] == values["DB"] == values["ACTION"] == 1
-    assert values["bank_calls"] <= task.input["scenario"]["max_bank_calls"] and values["protocol_completion"]
+    assert (
+        values["bank_calls"] <= task.input["scenario"]["max_bank_calls"]
+        and values["protocol_completion"]
+    )
     assert set(sink.artifacts) == {"banking-reward.json", "banking-trajectory.json"}
     bad_report = deepcopy(inputs.report)
     bad_report["db"]["customers"].clear()
@@ -315,7 +324,10 @@ def test_generated_bundle_excludes_gold_and_runs(task, tmp_path):
     root = Path(__file__).resolve().parents[2]
     builder = runpy.run_path(str(root / "scripts/banking_ru/build_platform_bundle.py"))
     bundle = tmp_path / "bundle"
-    builder["build_bundle"](Path(source), bundle)
+    private_store = os.environ.get("BANKING_PAYLOAD_STORE")
+    builder["build_bundle"](
+        Path(source), bundle, Path(private_store) if private_store else None
+    )
     assert not (bundle / "execute/src/tau2/evaluator").exists()
     assert not (bundle / "execute/src/tau2/platform/sdk/tasks.py").exists()
     assert not (bundle / "execute/data/tau2/domains/banking_ru/tasks").exists()
@@ -335,6 +347,7 @@ def test_generated_bundle_excludes_gold_and_runs(task, tmp_path):
             Path(source) / "platform/external_contracts/platform-harness"
         ),
         "TAU2_DATA_DIR": str(bundle / "execute/data"),
+        "BANKING_PAYLOAD_STORE": str(bundle / "private_payloads"),
         "PLATFORM_CONTRACT_VERSION": "2",
         "PLATFORM_TASK_PATH": str(task_path),
         "PLATFORM_SEED": "0",
@@ -434,7 +447,10 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
 
     async def engine(exchange):
         assert exchange.setup["instructions"] == bench.on_start().instructions
-        assert f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов" in exchange.setup["instructions"]
+        assert (
+            f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов"
+            in exchange.setup["instructions"]
+        )
         assert (
             "Discovery: отдельный бюджет, числовой лимит не установлен"
             in exchange.setup["instructions"]

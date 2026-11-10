@@ -11,6 +11,8 @@ from pathlib import Path
 
 import yaml
 
+from tau2.platform.runtime_payloads import materialize_bytes
+
 COMPACT_KEYS = {"corpus_sha256", "db_sha256", "intake_answers_sha256"}
 _DOCUMENT_OPTIONS = ("discoverable_workflows",)
 
@@ -70,14 +72,20 @@ def corpus_files(data_dir: Path, overrides=None) -> dict[str, bytes]:
         if path.is_symlink():
             raise ValueError("Corpus symlinks are not allowed")
         if path.is_file():
-            raw = replacement.get(path.resolve(), path.read_bytes())
+            raw = (
+                replacement[path.resolve()]
+                if path.resolve() in replacement
+                else path.read_bytes()
+            )
             if raw is not None:
-                files["/" + path.relative_to(root).as_posix()] = raw
+                files["/" + path.relative_to(root).as_posix()] = materialize_bytes(raw)
         elif not path.is_dir():
             raise ValueError(f"Unsupported corpus entry: {path}")
     for path, raw in replacement.items():
         if path.is_relative_to(root.resolve()) and raw is not None:
-            files["/" + path.relative_to(root.resolve()).as_posix()] = raw
+            files["/" + path.relative_to(root.resolve()).as_posix()] = (
+                materialize_bytes(raw)
+            )
     for name, raw in files.items():
         if len(raw) > 65536:
             raise ValueError(f"Corpus file exceeds 65536 bytes: {name}")
@@ -124,7 +132,11 @@ def load_manifest(data_dir: Path, verify: bool = False) -> dict:
             ("intake_answers.json", "intake_answers_sha256"),
         ]:
             if (
-                hashlib.sha256((data_dir / filename).read_bytes()).hexdigest()
+                hashlib.sha256(
+                    materialize_bytes(
+                        (data_dir / filename).read_bytes(), json_document=True
+                    )
+                ).hexdigest()
                 != stored[key]
             ):
                 raise ValueError(f"Input hash mismatch: {filename}")
@@ -183,14 +195,24 @@ def manifest_outputs(
                     metadata[key] = expanded[key]
                 else:
                     metadata.pop(key, None)
-        raw = with_metadata(files[virtual], metadata)
-        if raw != files[virtual]:
+        template = (
+            replacement[member.resolve()]
+            if member.resolve() in replacement
+            else member.read_bytes()
+        )
+        raw = with_metadata(template, metadata)
+        if raw != template:
             outputs[member] = raw
-            files[virtual] = raw
+            files[virtual] = materialize_bytes(raw)
 
     def input_bytes(filename):
         member = data_dir / filename
-        return replacement.get(member.resolve(), member.read_bytes())
+        raw = (
+            replacement[member.resolve()]
+            if member.resolve() in replacement
+            else member.read_bytes()
+        )
+        return materialize_bytes(raw, json_document=True)
 
     compact = {
         "corpus_sha256": corpus_hash(files),

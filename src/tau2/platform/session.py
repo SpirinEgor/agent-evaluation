@@ -41,6 +41,10 @@ from tau2.platform.mcp_bridge import (
     to_call_result,
     to_mcp_tool,
 )
+from tau2.platform.runtime_payloads import (
+    PayloadStore,
+    materialize_value,
+)
 
 
 class SessionStatus(str, Enum):
@@ -68,9 +72,15 @@ class PlatformSession:
         token: str | None = None,
         now: Callable[[], datetime] | None = None,
         cursor_secret: bytes | None = None,
+        payload_store: PayloadStore | None = None,
     ) -> None:
+        self._payload_store = payload_store or PayloadStore.from_environment()
         self.token = token if token is not None else uuid.uuid4().hex
         self._now = now or (lambda: datetime.now(timezone.utc))
+        if self._payload_store is not None:
+            task = Task.model_validate(
+                materialize_value(task.model_dump(mode="json"), self._payload_store)
+            )
         self.task = task
         self._environment_constructor = environment_constructor
         env_kwargs = {"solo_mode": True}

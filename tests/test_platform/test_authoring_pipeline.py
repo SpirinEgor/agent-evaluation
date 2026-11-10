@@ -354,6 +354,7 @@ def test_real_cli_subprocesses_recover_at_both_commit_boundaries(tmp_path, monke
     monkeypatch.setenv("PATH", str(tmp_path) + os.pathsep + os.environ["PATH"])
     count = tmp_path / "calls.txt"
     monkeypatch.setenv("AUTHORING_STUB_CALLS", str(count))
+    monkeypatch.setenv("BANKING_AUTHORING_PRIVATE_ROOT", str(tmp_path / "private"))
     output = tmp_path / "run"
     base = [
         sys.executable,
@@ -373,6 +374,15 @@ def test_real_cli_subprocesses_recover_at_both_commit_boundaries(tmp_path, monke
     result = subprocess.run(base, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["status"] == "reviewed"
+    assert CANDIDATE["slots"][0]["text"] not in result.stdout
+    assert not (output / "candidate.json").exists()
+    assert not (output / "review.json").exists()
+    assert {x.name for x in output.iterdir()} == {
+        "status.json",
+        ".lock",
+        *[x.name for x in output.glob("failure-*.json")],
+    }
+    assert CANDIDATE["slots"][0]["text"] not in (output / "status.json").read_text()
     assert count.read_text().splitlines() == ["generate", "review"]
 
 
@@ -406,3 +416,20 @@ def test_sigterm_to_coordinator_saves_interrupted_receipt(tmp_path):
         if process.poll() is None:
             process.kill()
             process.wait()
+
+
+def test_public_job_never_publishes_model_text_and_lock_cannot_overwrite_status(
+    tmp_path,
+):
+    output, private = tmp_path / "public", tmp_path / "private"
+    calls = []
+    state = p.public_job(SPEC, output, private, live=True, executor=stub(calls))
+    assert state["status"] == "reviewed"
+    saved = (output / "status.json").read_bytes()
+    assert CANDIDATE["slots"][0]["text"].encode() not in saved
+    assert REVIEW["explanation"].encode() not in saved
+    with p.run_lock(output):
+        with pytest.raises(ValueError, match="locked"):
+            p.public_job(SPEC, output, private, live=True, executor=stub(calls))
+    assert (output / "status.json").read_bytes() == saved
+    assert calls == ["generate", "review"]
