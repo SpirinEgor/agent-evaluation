@@ -19,6 +19,7 @@
 | Каталог систем, схемы инструментов и общий вызов | [Контракт bank_directory и bank_call](docs/banking-ru/discovery.md) |
 | Каталог документов, редакции и команды корпуса | [Контракт knowledge MCP](docs/banking-ru/knowledge.md) |
 | Изменение задач, инфраструктуры и модельные эксперименты | [Процесс разработки и проверки](docs/banking-ru/development.md) |
+| Генерация и независимое ревью авторских материалов через agy | [Авторский пайплайн](docs/banking-ru/development.md#авторские-сценарии-через-agy); не запускает банковского агента |
 | Установка, набор данных, manifest и клиентские ответы | [README домена](data/tau2/domains/banking_ru/README.md) |
 | Поля задач и критериев | [Формат задачи](docs/banking-ru/task-format.md), [исполняемая схема](src/tau2/data_model/tasks.py) |
 | Реализация DB и ACTION, диагностика и пробелы миграции | [Банковская оценка](docs/banking-ru/evaluation.md) |
