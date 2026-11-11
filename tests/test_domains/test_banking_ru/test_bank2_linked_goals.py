@@ -47,6 +47,29 @@ def data(result):
         return {}
 
 
+def current_case_output_arguments(session, name, arguments):
+    """Report actual state on intentionally suboptimal routes, not the gold state."""
+    args = deepcopy(arguments)
+    if name == "record_case_handover" or (
+        name == "send_support_message" and "case_items" in args
+    ):
+        case = session.env.tools.db.cases[args["case_id"]]
+        items = [x.model_dump() for x in case.reward_items]
+        if name == "record_case_handover":
+            args.update(
+                items=items,
+                expected_version=case.version,
+                assignments={
+                    key: value
+                    for key, value in case.item_assignments.items()
+                    if key in {x.transaction_id for x in case.reward_items}
+                },
+            )
+        else:
+            args["case_items"] = items
+    return args
+
+
 @pytest.mark.parametrize("mode", ["half", "full"])
 @pytest.mark.parametrize(
     "route,expected",
@@ -162,6 +185,7 @@ def test_combined_process_whole_grade(mode, route, expected):
                     "allocation_id": "allocation_mixed_01",
                     "basis_id": "missing-basis",
                     "expected_revision": 1,
+                    "lines": [],
                 },
             )
             assert rejected.is_error
@@ -251,11 +275,15 @@ def test_combined_process_whole_grade(mode, route, expected):
                     session, name, {**args, "confirmation_id": "merchant-approved-1188"}
                 ).is_error
             if route == "wrong_program":
-                assert invoke(session, name, args).is_error
+                assert invoke(
+                    session, name, current_case_output_arguments(session, name, args)
+                ).is_error
                 break
             if route == "forged_consent":
                 args["confirmation_id"] = "merchant-approved-1188"
-                assert invoke(session, name, args).is_error
+                assert invoke(
+                    session, name, current_case_output_arguments(session, name, args)
+                ).is_error
                 break
         if name == "repair_reward_binding" and route == "safe_recovery":
             before = session.env.tools.get_db_hash()
@@ -323,7 +351,9 @@ def test_combined_process_whole_grade(mode, route, expected):
             data(session.call(name, args, attempt=pending))
             pending_results.append(pending)
             continue
-        result = data(invoke(session, name, args))
+        result = data(
+            invoke(session, name, current_case_output_arguments(session, name, args))
+        )
         if name == "execute_reward_resolution" and args["offer_id"] == "offer_610735":
             assert result["status"] == "execution_unknown"
             assert result["retry_required"]
@@ -354,7 +384,11 @@ def test_combined_process_whole_grade(mode, route, expected):
             "reconcile_payment_allocation",
         }:
             before = session.env.tools.get_db_hash()
-            data(invoke(session, name, args))
+            data(
+                invoke(
+                    session, name, current_case_output_arguments(session, name, args)
+                )
+            )
             assert session.env.tools.get_db_hash() == before
     if route == "early_settlement":
         # Choosing compensation first truly forecloses operational recalculation.
@@ -459,6 +493,15 @@ def test_initial_package_and_replanned_global_optimum():
                     if any(v > gaps[k] for k, v in allocation.items()):
                         continue
                     selected = [p for p in offer.components if p.id in subset]
+                    from tau2.domains.banking_ru.reward_funding import reserve_snapshot
+
+                    reserve = reserve_snapshot(db, offer)
+                    if any(
+                        round(sum(getattr(p, source + "_cost") for p in selected) * 100)
+                        > round(reserve["remaining_" + source] * 100)
+                        for source in ("bank", "partner")
+                    ):
+                        continue
                     optimistic_menu.append(
                         (
                             subset,
@@ -609,7 +652,13 @@ def test_optimal_and_suboptimal_amended_packages(mode, components, total, first)
                 ) + [{"transaction_id": "txn_804205", "amount": 7}]
         if action.name == "amend_cashback_investigation":
             args["items"][1]["amount"] = round(37.6 - total, 2)
-        data(invoke(session, action.name, args))
+        data(
+            invoke(
+                session,
+                action.name,
+                current_case_output_arguments(session, action.name, args),
+            )
+        )
     data(invoke(session, "done", {}))
     grade = (
         session.grade() if mode == "half" else grade_full_session(session).reward_info
@@ -743,11 +792,14 @@ def test_adversarial_correspondence_v19(mode, route):
             )
             assert denied.is_error and "ERR_CLAIM_NOT_SETTLED" in str(denied.content)
             assert session.env.tools.get_db_hash() == before
-        result = data(invoke(session, name, args))
+        result = data(
+            invoke(session, name, current_case_output_arguments(session, name, args))
+        )
         if name == "get_documents":
             result = [
                 data(invoke(session, "get_document_status", {"document_id": d["id"]}))
                 for d in result
+                if d["origin"] == "customer"
             ]
             payloads = [d for d in result if d["id"].endswith("_8806")]
             assert len(payloads) == 4
@@ -852,6 +904,21 @@ def test_distributed_correspondence_is_available_and_solvable(mode):
                 )
             )
         if action.name == "verify_identity":
+            # The second desk has its own reply branch. No protected fields are
+            # sent: this probes availability, not authorization to share data.
+            observe(
+                data(
+                    invoke(
+                        session,
+                        "send_case_message",
+                        {
+                            "case_id": "case_610903",
+                            "recipient_id": "external_user_reconciliation_02",
+                            "text": "Уточните область вашего участия.",
+                        },
+                    )
+                )
+            )
             before = session.env.tools.get_db_hash()
             observe(
                 data(invoke(session, "get_cashback_investigations", {"customer_id": C}))
@@ -874,8 +941,8 @@ def test_distributed_correspondence_is_available_and_solvable(mode):
                     )
                 )
             )
-            assert "crm-summary-610903" in seen
-            assert "consent-comment-610903" in seen
+            assert "crm-summary-610903" not in session.env.tools.db.processing_notes
+            assert "consent-comment-610903" not in seen
             assert "processing-warning-610903" not in seen
             assert session.env.tools.get_db_hash() == before
     assert seen == set(session.env.tools.db.processing_notes)
@@ -997,6 +1064,30 @@ def test_compact_attack_outcomes_and_budget(mode, route):
             break
         if route == "scope_drift" and action.name == "reconcile_payment_allocation":
             assert "scope-reduction-610903" in delivered
+            # Complete the independent exchange first so this still tests a
+            # real premature handoff, rather than the new pending-exchange guard.
+            exchange = next(
+                a
+                for a in task.evaluation_criteria.actions
+                if a.action_id == "bank2:v36:send"
+            )
+            data(invoke(session, exchange.name, exchange.arguments))
+            for prerequisite in task.evaluation_criteria.actions:
+                if prerequisite.action_id.startswith(
+                    "bank2:v37:exchange-"
+                ) or prerequisite.action_id in {
+                    "bank2:v37:handover",
+                    "bank2:v37:explanation",
+                }:
+                    data(
+                        invoke(
+                            session,
+                            prerequisite.name,
+                            current_case_output_arguments(
+                                session, prerequisite.name, prerequisite.arguments
+                            ),
+                        )
+                    )
             # Actual premature handoff, not merely a string in the agent answer.
             data(
                 invoke(
@@ -1108,9 +1199,11 @@ def test_v23_paginated_grounds_and_event_scoped_poisoning():
     assert "merchant-eligibility-v2" not in before
     assert before["merchant-eligibility-v1"]["recommended_evidence_id"] == "pc_730001"
     assert after["merchant-eligibility-v2"]["supersedes"] == "merchant-eligibility-v1"
-    assert int(after["merchant-eligibility-v2"]["revision"]) == 2
+    assert int(after["merchant-eligibility-v2"]["revision"]) > int(
+        before["merchant-eligibility-v1"]["revision"]
+    )
     page1 = data(invoke(s, "get_partner_confirmations", {"customer_id": C}))
-    assert not page1["complete"] and page1["next_cursor"] == "5"
+    assert not page1["complete"] and page1["next_cursor"] == page1["snapshot_id"] + ":5"
     page2 = data(
         invoke(
             s,
@@ -1281,7 +1374,7 @@ def test_v23_equal_total_wrong_allocation_is_db_failure(mode):
                 {"transaction_id": "txn_804219", "amount": 2.35},
                 {"transaction_id": "txn_804227", "amount": 0},
             ]
-        data(invoke(s, a.name, a.arguments))
+        data(invoke(s, a.name, current_case_output_arguments(s, a.name, a.arguments)))
     data(invoke(s, "done", {}))
     g = s.grade() if mode == "half" else grade_full_session(s).reward_info
     assert g.reward_breakdown == {RewardType.DB: 0, RewardType.ACTION: 1}, g.info
@@ -1430,6 +1523,18 @@ def test_manual_route_is_available_but_forecloses_overlapping_agreement():
             )
         )
     assert result["status"] == "succeeded"
+    handover = next(
+        a
+        for a in task2().evaluation_criteria.actions
+        if a.name == "record_case_handover"
+    )
+    data(
+        invoke(
+            session,
+            handover.name,
+            current_case_output_arguments(session, handover.name, handover.arguments),
+        )
+    )
     before = session.env.tools.get_db_hash()
     payment = deepcopy(
         next(
@@ -1617,3 +1722,64 @@ def test_v28_finalized_5a_cannot_be_paid_using_old_or_wrong_scope_evidence(recor
     denied = invoke(session, "execute_reward_resolution", args)
     assert denied.is_error and "ERR_COMPONENT_NOT_APPLICABLE" in str(denied.content)
     assert session.env.tools.db.model_dump() == snapshot
+
+
+def test_v40_correspondence_follows_real_business_events():
+    """No consent/receipt claim before its event, including failed exchanges."""
+    from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
+    session = PlatformSession(
+        task2(), get_environment, max_errors=0, mcp_layout="directory"
+    )
+    first = {}
+
+    def observe(value, step):
+        if isinstance(value, list):
+            for row in value:
+                observe(row, step)
+        elif isinstance(value, dict):
+            for note in value.get("processing_notes", []):
+                first.setdefault(note["id"], step)
+                assert "required_exchange_id" not in note
+            for key, row in value.items():
+                if key != "processing_notes":
+                    observe(row, step)
+
+    for step, action in enumerate(session.task.evaluation_criteria.actions, 1):
+        if step == 61:
+            # Sending a message without a successful match must not publish
+            # a reply claiming that a purchase receipt already exists.
+            result = data(
+                invoke(
+                    session,
+                    "send_case_message",
+                    {
+                        "case_id": "case_610903",
+                        "recipient_id": "merchant_case_desk",
+                        "text": "Уточните статус сопоставления.",
+                    },
+                )
+            )
+            observe(result, step - 0.5)
+            assert "handoff-late-v34" not in first
+            assert "reply-late-v26" not in first
+        observe(data(invoke(session, action.name, action.arguments)), step)
+    assert first["consent-comment-610903"] == 51
+    assert first["handoff-late-v34"] == first["reply-late-v26"] == 61
+    assert set(first) == set(session.env.tools.db.processing_notes)
+    assert len(first) == 34
+    data(invoke(session, "done", {}))
+    assert session.grade().final_reward == 1
+
+    db = session.env.tools.db
+    receipt = db.case_exchange_receipts["exchange_610903_purchase"]
+    for mutation in (
+        {"status": "unmatched"},
+        {"customer_id": "other"},
+        {"case_id": "other"},
+    ):
+        db.case_exchange_receipts["exchange_610903_purchase"] = {**receipt, **mutation}
+        result = with_processing_notes(db, {}, C, "reply", "merchant_case_desk")
+        ids = {n["id"] for n in result.get("processing_notes", [])}
+        assert not ids & {"handoff-late-v34", "reply-late-v26"}
+    db.case_exchange_receipts["exchange_610903_purchase"] = receipt

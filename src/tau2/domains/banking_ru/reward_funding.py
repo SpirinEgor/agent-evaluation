@@ -35,6 +35,7 @@ def reserve_snapshot(db, offer):
         "held_bank": money(held["bank"]),
         "held_partner": money(held["partner"]),
         "operations": reserve_operations(db, offer),
+        "other_commitments": [dict(r) for r in other_commitments(db, offer)],
         **{
             f"remaining_{source}": money(
                 cents(getattr(budget, source)) - used[source] - held[source]
@@ -105,5 +106,21 @@ def shared_held(db, offer):
         source: sum(
             cents(row[source]) for row in rows if row["status"] == "execution_unknown"
         )
+        + sum(
+            cents(row[source])
+            for row in other_commitments(db, offer)
+            if not row.get("released_" + source, False)
+        )
         for source in ("bank", "partner")
     }
+
+
+def other_commitments(db, offer):
+    key = reserve_key(offer)
+    if key is None:
+        return []
+    return [
+        row
+        for row in db.reward_funding_commitments.values()
+        if (row["customer_id"], row["case_id"], row["period"], row["reserve_id"]) == key
+    ]

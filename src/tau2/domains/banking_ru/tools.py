@@ -17,6 +17,7 @@ Two kinds of rules live here, and the difference is deliberate:
 import json
 import re
 from calendar import monthrange
+from copy import deepcopy
 from datetime import date, timedelta
 from math import isfinite
 from typing import Literal, Optional
@@ -69,6 +70,7 @@ from tau2.domains.banking_ru.document_service_models import (
     DocumentContact,
     DocumentDelivery,
 )
+from tau2.domains.banking_ru.reward_payment_register import PaymentBasisLine
 from tau2.domains.banking_ru.reward_resolution_models import (
     EligibilityEvidence,
     EligibilityRegistry,
@@ -244,6 +246,28 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
     def get_db_hash(self) -> str:
         """Compare cases by content, not allocation order of generated IDs."""
         snapshot = self.db.model_dump()
+        # Equivalent customer submissions may be combined or split. Evaluate
+        # accepted coverage, not generated registration IDs or batch shape.
+        for collection in (
+            "reward_client_submissions",
+            "reward_statement_registrations",
+        ):
+            coverage = {}
+            rank = {"submitted": 0, "registered": 1, "accepted": 2}
+            for row in snapshot[collection].values():
+                for tid in row["transaction_ids"]:
+                    key = (row["customer_id"], row["case_id"], tid)
+                    previous = coverage.get(key)
+                    if previous is None or rank.get(row["status"], -1) > rank.get(
+                        previous["status"], -1
+                    ):
+                        coverage[key] = dict(
+                            customer_id=key[0],
+                            case_id=key[1],
+                            transaction_id=tid,
+                            status=row["status"],
+                        )
+            snapshot[collection] = [coverage[key] for key in sorted(coverage)]
         # These records track optimistic concurrency and request identity. Monetary
         # effects remain in transactions/balances/permissions; unresolved work is
         # checked by the trajectory and reservation assertions.
@@ -251,6 +275,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         # Disclosures are irreversible trace checks, independent of this projection.
         snapshot.pop("case_working_notes", None)
         snapshot.pop("case_outbound_messages", None)
+        snapshot.pop("support_messages", None)
         snapshot.pop("client_receipt_declarations", None)
         snapshot.pop("cashback_state_revisions", None)
         snapshot.pop("cashback_revision_states", None)
@@ -305,6 +330,27 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
                 "posting-v2",
                 "multi-program-v1",
             }:
+                source_version = (
+                    case.get("review_source_version")
+                    if case.get("review_status") == "registered"
+                    else case.get("version")
+                )
+                if case.get("handover_receipt") is not None:
+                    receipt = case["handover_receipt"]
+                    receipt["current"] = (
+                        receipt.pop("source_version", None) == source_version
+                    )
+                if case.get("explanation_version") is not None:
+                    case["explanation_version"] = (
+                        case["explanation_version"] == source_version
+                    )
+                case.pop("accepted_document_ids", None)
+                case["accepted_evidence"] = {
+                    k: v.get("value")
+                    for k, v in case.get("accepted_evidence", {}).items()
+                }
+                for instruction in case.get("incoming_instructions", {}).values():
+                    instruction.pop("status", None)
                 semantic_cases.add(case["id"])
                 case.pop("version", None)
                 case.pop("review_source_version", None)
@@ -508,8 +554,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         if customer_id not in self.db.session.verified_customers:
             raise _error(
                 ERR_NOT_VERIFIED,
-                f"Личность клиента {customer_id} не подтверждена. "
-                "Сначала выполните verify_identity.",
+                f"Личность клиента {customer_id} не подтверждена.",
             )
 
     def _require_otp(self, customer_id: str) -> None:
@@ -517,7 +562,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
             raise _error(
                 ERR_OTP_REQUIRED,
                 "Операция требует подтверждения одноразовым кодом. "
-                "Выполните send_otp, затем check_otp.",
+                "Подтверждение отсутствует.",
             )
 
     def _next_dispute_id(self) -> str:
@@ -696,7 +741,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         if customer_id not in self.db.session.otp_sent:
             raise _error(
                 ERR_OTP_NOT_SENT,
-                "Код клиенту не отправлялся. Сначала выполните send_otp.",
+                "Код клиенту не отправлялся.",
             )
         if code != customer.otp_code:
             raise _error(ERR_OTP_INVALID, "Код неверный.")
@@ -787,8 +832,8 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
             customer_id: Идентификатор клиента.
             card_id: Отбор по карте.
             account_id: Отбор по счёту.
-            date_from: Начало периода, ГГГГ-ММ-ДД, включительно.
-            date_to: Конец периода, ГГГГ-ММ-ДД, включительно.
+            date_from: Начальная дата операции (date), не проводки (posted_at), включительно.
+            date_to: Конечная дата операции (date), не проводки (posted_at), включительно.
             posted_from: Начальная дата проводки включительно.
             posted_to: Конечная дата проводки включительно.
             original_transaction_id: Своя исходная операция связанных записей.
@@ -1073,7 +1118,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
     @is_tool(ToolType.READ)
     def get_service_incidents(
-        self, customer_id: str, cursor: Optional[str] = None
+        self, customer_id: str, cursor: Optional[str] = None, limit: int = 5
     ) -> EligibilityRegistry:
         """Получить страницу инцидентов клиента; next_cursor продолжает реестр."""
         from tau2.domains.banking_ru.component_eligibility import registry_page
@@ -1081,7 +1126,14 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         self._get_customer(customer_id)
         self._require_verified(customer_id)
         return EligibilityRegistry(
-            registry_page(self.db.service_incidents, customer_id, cursor)
+            registry_page(
+                self.db.service_incidents,
+                customer_id,
+                cursor,
+                snapshots=self.__dict__.setdefault("_registry_snapshots", {}),
+                registry_name="service_incidents",
+                limit=limit,
+            )
         )
 
     @is_tool(ToolType.READ)
@@ -1090,6 +1142,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         customer_id: str,
         cursor: Optional[str] = None,
         receipt_id: Optional[str] = None,
+        limit: int = 5,
     ) -> EligibilityRegistry:
         """Получить страницу подтверждений партнёра; next_cursor продолжает реестр."""
         from tau2.domains.banking_ru.component_eligibility import registry_page
@@ -1102,6 +1155,9 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
                 customer_id,
                 cursor,
                 receipt_id=receipt_id,
+                snapshots=self.__dict__.setdefault("_registry_snapshots", {}),
+                registry_name="partner_confirmations",
+                limit=limit,
             )
         )
 
@@ -1262,27 +1318,6 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
             return DiscoveryResponse(
                 dict(status="version_conflict", current_version=case.version)
             )
-        if any(
-            operation.customer_id == case.customer_id
-            and operation.result.get("status") == "execution_unknown"
-            and set(operation.transaction_ids)
-            & {item.transaction_id for item in case.reward_items}
-            for operation in self.db.reward_resolution_executions.values()
-        ):
-            raise ToolExecutionRejected(
-                "ERR_RESOLUTION_PENDING: Дождитесь окончательного статуса урегулирования"
-            )
-        from tau2.domains.banking_ru.reward_payment_register import (
-            require_reconciled_payments,
-        )
-
-        require_reconciled_payments(
-            self.db,
-            case.customer_id,
-            case.reward_period,
-            set(self._initial_reward_items.get(case.id, {}))
-            | {x.transaction_id for x in case.reward_items},
-        )
         case.review_source_version = case.version
         case.review_items = [x.model_copy(deep=True) for x in case.reward_items]
         case.review_amount = case.amount
@@ -1371,7 +1406,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         """Получить каталог документов клиента.
 
         Встроенные записи содержат текст; вложения storage=attachment содержат
-        метаданные. Полный выбранный документ доступен через get_document_status.
+        метаданные. Запись каталога вложений не содержит полный текст документа.
 
         Args:
             customer_id: Идентификатор клиента.
@@ -3207,12 +3242,19 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
     @is_tool(ToolType.WRITE)
     def resolve_reward_duplicate_review(
-        self, review_id: str, basis_id: str, expected_revision: int, basis_revision: int
+        self,
+        review_id: str,
+        basis_id: str,
+        expected_revision: int,
+        basis_revision: int,
+        decision: Literal["cleared", "duplicate_confirmed"],
     ) -> dict:
         """Завершить банковскую проверку дублирования по указанному основанию и версиям."""
         from tau2.domains.banking_ru.reward_duplicate_review import resolve
 
-        return resolve(self, review_id, basis_id, expected_revision, basis_revision)
+        return resolve(
+            self, review_id, basis_id, expected_revision, basis_revision, decision
+        )
 
     @is_tool(ToolType.READ)
     def get_payment_basis(self, payment_id: str) -> list[dict]:
@@ -3246,12 +3288,18 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
     @is_tool(ToolType.WRITE)
     def reconcile_payment_allocation(
-        self, allocation_id: str, basis_id: str, expected_revision: int
+        self,
+        allocation_id: str,
+        basis_id: str,
+        expected_revision: int,
+        lines: list[PaymentBasisLine],
     ) -> dict:
         """Сверить распределение выплаты с окончательным банковским основанием."""
         from tau2.domains.banking_ru.reward_payment_register import reconcile_payment
 
-        return reconcile_payment(self, allocation_id, basis_id, expected_revision)
+        return reconcile_payment(
+            self, allocation_id, basis_id, expected_revision, lines
+        )
 
     @is_tool(ToolType.READ)
     def get_reward_resolution_offers(
@@ -3622,7 +3670,7 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
             raise _error(
                 ERR_ACCOUNT_NOT_EMPTY,
                 f"На счёте {account_id} остаток {account.balance:.2f} ₽. "
-                "Сначала переведите остаток на другой счёт клиента.",
+                "Счёт имеет ненулевой остаток.",
             )
         account.status = "closed"
         return account
@@ -3933,12 +3981,68 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
 
         return workspace(self, case_id, operation, text, source_ids or [])
 
+    @is_tool(ToolType.READ)
+    def get_case_exchange_requests(self, case_id: str) -> list[dict]:
+        """Получить запросы сопоставления и участников обмена по делу."""
+        from tau2.domains.banking_ru.case_correspondence import exchange_requests
+
+        return exchange_requests(self, case_id)
+
     @is_tool(ToolType.WRITE)
-    def send_case_message(self, case_id: str, recipient_id: str, text: str) -> dict:
-        """Передать текст внешнему участнику переписки по обращению."""
+    def process_case_instruction(self, case_id: str, instruction_id: str) -> dict:
+        """Обработать подписанное входящее поручение участника дела в его области полномочий."""
+        from tau2.domains.banking_ru.case_correspondence import process_instruction
+
+        return process_instruction(self, case_id, instruction_id)
+
+    @is_tool(ToolType.WRITE)
+    def record_case_handover(
+        self,
+        case_id: str,
+        expected_version: int,
+        items: list[CashbackInvestigationItem],
+        source_ids: list[str],
+        assignments: Optional[dict[str, dict[str, str]]] = None,
+    ) -> dict:
+        """Зарегистрировать состав передачи дела следующему подразделению."""
+        from tau2.domains.banking_ru.case_correspondence import record_handover
+
+        return record_handover(
+            self,
+            case_id,
+            expected_version,
+            [CashbackInvestigationItem.model_validate(item) for item in items],
+            source_ids,
+            assignments,
+        )
+
+    @is_tool(ToolType.WRITE)
+    def send_case_message(
+        self,
+        case_id: str,
+        recipient_id: str,
+        text: str,
+        customer_info_fields: Optional[list[Literal["phone", "birth_date"]]] = None,
+        exchange_id: Optional[str] = None,
+        reference_fields: Optional[dict[str, str]] = None,
+    ) -> dict:
+        """Передать сообщение внешнему участнику обращения.
+
+        customer_info_fields прикладывает выбранные поля анкеты владельца дела.
+        exchange_id связывает сообщение с запросом сопоставления;
+        reference_fields передаёт реквизиты purchase_reference, period, case_reference.
+        """
         from tau2.domains.banking_ru.case_correspondence import send_message
 
-        return send_message(self, case_id, recipient_id, text)
+        return send_message(
+            self,
+            case_id,
+            recipient_id,
+            text,
+            customer_info_fields,
+            exchange_id,
+            reference_fields,
+        )
 
     @is_tool(ToolType.WRITE)
     def share_document(self, document_id: str) -> Document:
@@ -3970,6 +4074,66 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
             )
         document.shared = True
         return document
+
+    @is_tool(ToolType.WRITE)
+    def send_support_message(
+        self,
+        customer_id: str,
+        text: str,
+        case_id: Optional[str] = None,
+        case_items: Optional[list[CashbackInvestigationItem]] = None,
+    ) -> dict:
+        """Отправить промежуточное сообщение идентифицированному клиенту.
+
+        Не завершает обращение и не заменяет структурированный запрос согласия.
+        Возвращает квитанцию фактической доставки.
+        """
+        self._get_customer(customer_id)
+        self._require_verified(customer_id)
+        case = None
+        if case_id is not None:
+            case = self.db.cases.get(case_id)
+            if case is None or case.customer_id != customer_id:
+                raise ToolExecutionRejected("ERR_CASE_SCOPE: Дело другого владельца")
+        if case_items is not None:
+            values = [CashbackInvestigationItem.model_validate(x) for x in case_items]
+            if case is None:
+                raise ToolExecutionRejected("ERR_CASE_SCOPE: Не указано дело")
+        if not text.strip() or len(text) > 8000:
+            raise _error(ERR_INVALID_ARGUMENT, "Нужен текст длиной 1–8000 символов.")
+        receipt = {
+            "id": f"support-message-{len(self.db.support_messages) + 1}",
+            "customer_id": customer_id,
+            "text": text,
+            "status": "sent",
+        }
+        if case_id is not None:
+            receipt["case_id"] = case_id
+        if case_items is not None:
+            receipt["case_items"] = [x.model_dump() for x in values]
+            case.explanation_version = case.version
+        self.db.support_messages.append(receipt)
+        result = {k: v for k, v in receipt.items() if k != "text"}
+        if case is not None:
+            index = (
+                sum(row.get("case_id") == case_id for row in self.db.support_messages)
+                - 1
+            )
+            followups = self.db.case_followups.get(case_id, [])
+            if index < len(followups):
+                result["client_followup"] = deepcopy(followups[index])
+            from tau2.domains.banking_ru.processing_notes import with_processing_notes
+
+            result = with_processing_notes(
+                self.db, result, customer_id, "client_reply", customer_id
+            )
+            if "processing_notes" in result:
+                result["processing_notes"] = [
+                    note
+                    for note in result["processing_notes"]
+                    if note["case_id"] == case_id
+                ]
+        return result
 
     @is_tool(ToolType.WRITE)
     def reply_to_ticket(self, customer_id: str, text: str) -> str:

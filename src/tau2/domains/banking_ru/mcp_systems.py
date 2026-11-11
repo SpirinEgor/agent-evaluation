@@ -66,6 +66,9 @@ TOOL_PUBLISHER_ANNOTATIONS = {
 TOOL_OWNERS = {
     "case_workspace": "crm",
     "send_case_message": "support",
+    "record_case_handover": "crm",
+    "process_case_instruction": "crm",
+    "get_case_exchange_requests": "support",
     "get_reward_duplicate_reviews": "loyalty",
     "resolve_reward_duplicate_review": "loyalty",
     "get_payment_basis": "payments",
@@ -97,6 +100,7 @@ TOOL_OWNERS = {
     "check_otp": "identity",
     "ask_client": "support",
     "reply_to_ticket": "support",
+    "send_support_message": "support",
     "escalate_to_human": "support",
     "done": "support",
     "file_list": "knowledge",

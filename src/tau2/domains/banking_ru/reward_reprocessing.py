@@ -39,6 +39,10 @@ def list_cases(tools, customer_id):
 
 def repair(tools, reprocessing_id, contract_id, replacement_card_id):
     record = owned_case(tools, reprocessing_id)
+    if not record.repair_allowed:
+        raise ToolExecutionRejected(
+            "ERR_BINDING_RESTRICTED: Изменение привязки ограничено по этому инциденту"
+        )
     contract = tools.db.reward_contracts.get(contract_id)
     card = tools.db.cards.get(replacement_card_id)
     if (
@@ -119,6 +123,10 @@ def recovery_reversals(tools, record, method, credits):
     if len(pools) != 1:
         raise ToolExecutionRejected("ERR_RECOVERY_POOL: Неоднозначный лимит метода")
     pool = pools[0]
+    if set(pool.protected_minimums) - set(pool.allocation_ids):
+        raise ToolExecutionRejected(
+            "ERR_RECOVERY_POOL: Минимум относится к другой записи"
+        )
     register = allocation_register(tools, record)
     if len(pool.allocation_ids) != len(set(pool.allocation_ids)) or len(
         pool.reversal_order
@@ -156,7 +164,14 @@ def recovery_reversals(tools, record, method, credits):
             and (tools.db.transactions[r.posting_id].posted_at or tools.db.today)[:10]
             <= tools.db.today
         )
-        amount = min(excess, cents(row.amount) - already)
+        available = (
+            cents(row.amount) - already - cents(pool.protected_minimums.get(ident, 0))
+        )
+        if available < 0:
+            raise ToolExecutionRejected(
+                "ERR_RECOVERY_POOL: Защищённый минимум превышает остаток"
+            )
+        amount = min(excess, available)
         if amount:
             reversals.append({"allocation_id": ident, "amount": money(amount)})
             excess -= amount

@@ -363,3 +363,57 @@ def test_legacy_profile_recognizes_gateway_completion():
     assert not bank_call(s, "support", "done", {}).is_error
     reward = s.grade()
     assert "missing_successful_done" not in (reward.info or {}).get("completion", [])
+
+
+def test_budget_counter_covers_every_gateway_result(task):
+    s = session(task, max_calls=2)
+
+    def check(result, banking, discovery):
+        blocks = [x.text for x in result.content if x.type == "text"]
+        assert len(blocks) == 2
+        assert f"использовано {banking}/2; осталось {2 - banking}" in blocks[1]
+        assert f"Discovery: использовано {discovery};" in blocks[1]
+        return result
+
+    check(
+        s.call(
+            "bank_directory",
+            {
+                "operation": "open_tool",
+                "system_id": "knowledge",
+                "tool_name": "corpus_command",
+            },
+        ),
+        0,
+        1,
+    )
+    check(
+        bank_call(s, "knowledge", "corpus_command", {"command": "ls /policies"}), 0, 2
+    )
+    check(
+        bank_call(
+            s, "knowledge", "corpus_command", {"command": "cat /policies/general.md"}
+        ),
+        1,
+        2,
+    )
+    assert check(bank_call(s, "unknown", "nonexistent", {}), 2, 2).is_error
+    before = s.env.tools.get_db_hash()
+    assert check(
+        bank_call(
+            s, "knowledge", "corpus_command", {"command": "cat /policies/general.md"}
+        ),
+        2,
+        2,
+    ).is_error
+    assert s.env.tools.get_db_hash() == before
+    check(
+        s.call(
+            "bank_directory",
+            {"operation": "open_tool", "system_id": "support", "tool_name": "done"},
+        ),
+        2,
+        3,
+    )
+    check(bank_call(s, "support", "done", {}), 2, 3)
+    assert len(s.log) == 2 and s.status is SessionStatus.DONE

@@ -429,13 +429,33 @@ def below_minimum(rows, snapshot):
     return any(amounts.get(tid, 0) < minimum for tid, (minimum, _) in snapshot.items())
 
 
+def payouts_within_consent(consent, payouts):
+    """Bound only purchase amounts; total, beneficiary, rights and versions stay fixed."""
+    expected = {
+        r["transaction_id"]: cents(r["amount"]) for r in consent.get("payouts", [])
+    }
+    actual = {r["transaction_id"]: cents(r["amount"]) for r in payouts}
+    tolerance = cents(consent.get("payout_tolerance", 0))
+    return (
+        len(expected) == len(consent.get("payouts", []))
+        and len(actual) == len(payouts)
+        and set(expected) == set(actual)
+        and sum(expected.values()) == sum(actual.values())
+        and all(abs(actual[k] - v) <= tolerance for k, v in expected.items())
+    )
+
+
 def confirm(tools, customer_id, request):
     offer, case = owned_offer(tools, request.offer_id, request.case_id)
     if customer_id != offer.customer_id:
         raise ToolExecutionRejected("ERR_FOREIGN_OWNER: Чужое предложение")
     validate_fallback(tools, offer, request.fallback_operation_id)
-    packet = request.model_dump(exclude={"type"})
+    packet = request.model_dump(exclude={"type", "payout_tolerance"})
     if packet["resolution_operation_id"] is not None:
+        if request.payout_tolerance:
+            raise ToolExecutionRejected(
+                "ERR_CONSENT_SCOPE: Изменение остатка требует точного согласия"
+            )
         from tau2.domains.banking_ru.reward_resolution_amendment import (
             confirm_amendment,
         )
@@ -470,6 +490,12 @@ def confirm(tools, customer_id, request):
     preferences = tools.db.reward_resolution_preferences.get(customer_id)
     if preferences is None:
         return {"status": "unsupported_context", "data": None}
+    if request.payout_tolerance > preferences.consent_payout_tolerance:
+        raise ToolExecutionRejected(
+            "ERR_CONSENT_SCOPE: Диапазон выходит за поручение клиента"
+        )
+    if request.payout_tolerance:
+        packet["payout_tolerance"] = request.payout_tolerance
     # Client accepts the presented package, not its mathematical correctness or bank approval.
     snapshot = minimum_snapshot(tools, customer_id, case.id, offer.transaction_ids)
     declined = (
@@ -517,13 +543,6 @@ def execute(
 ):
     """Execute one chosen offer; never choose or advertise the optimal offer."""
     offer, case = owned_offer(tools, offer_id, case_id)
-    from tau2.domains.banking_ru.reward_payment_register import (
-        require_reconciled_payments,
-    )
-
-    require_reconciled_payments(
-        tools.db, offer.customer_id, offer.period, set(offer.transaction_ids)
-    )
 
     def reject(message):
         tools._resolution_violations.add(offer.customer_id)
@@ -567,6 +586,26 @@ def execute(
             raise ToolExecutionRejected(
                 "ERR_RESOLUTION_ALREADY_SELECTED: Уже выбран способ урегулирования этих покупок"
             )
+    if case.pre_execution_handover_required and (
+        not case.handover_receipt
+        or case.handover_receipt.get("source_version") != case.version
+        or case.handover_receipt.get("items")
+        != sorted(
+            [x.model_dump() for x in case.reward_items],
+            key=lambda x: x["transaction_id"],
+        )
+    ):
+        raise ToolExecutionRejected(
+            "ERR_HANDOVER_PENDING: Нет предварительной передачи дела"
+        )
+    from tau2.domains.banking_ru.reward_payment_register import (
+        require_reconciled_payments,
+    )
+
+    require_reconciled_payments(
+        tools.db, offer.customer_id, offer.period, set(offer.transaction_ids)
+    )
+
     validate_fallback(tools, offer, fallback_operation_id)
     if not idempotency_key.strip():
         reject("Пустой ключ")
@@ -640,7 +679,12 @@ def execute(
         raise ToolExecutionRejected(
             "ERR_COMPONENT_NOT_APPLICABLE: Основания не соответствуют согласованному пакету"
         )
-    if not consent or any(consent.get(k) != v for k, v in packet.items()):
+    if not consent or any(
+        not payouts_within_consent(consent, v)
+        if k == "payouts"
+        else consent.get(k) != v
+        for k, v in packet.items()
+    ):
         reject("Нет согласия на точный пакет")
     if tools._resolution_consent_minimums.get(confirmation_id, {}) != snapshot:
         return {

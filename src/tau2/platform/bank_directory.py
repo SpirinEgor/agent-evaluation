@@ -72,7 +72,15 @@ def directory_tools():
                             "list_tools",
                             "search_tools",
                             "open_tool",
+                            "open_tools",
                         ],
+                    },
+                    "tool_names": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "minItems": 1,
+                        "maxItems": 20,
+                        "uniqueItems": True,
                     },
                     **{
                         key: {"type": "string"}
@@ -180,6 +188,7 @@ class BankDirectory:
             "list_tools": ({"operation", "system_id"}, {"cursor"}),
             "search_tools": ({"operation", "query"}, {"cursor", "system_id"}),
             "open_tool": ({"operation", "system_id", "tool_name"}, set()),
+            "open_tools": ({"operation", "system_id", "tool_names"}, set()),
         }
         if not isinstance(operation, str) or operation not in fields:
             raise DirectoryError("INVALID_ARGUMENT", "Неизвестная операция каталога")
@@ -190,7 +199,8 @@ class BankDirectory:
             )
         if any(
             not isinstance(value, str) or not value.strip()
-            for value in request.values()
+            for key, value in request.items()
+            if key != "tool_names"
         ):
             raise DirectoryError(
                 "INVALID_ARGUMENT", "Поля каталога должны быть непустыми строками"
@@ -198,6 +208,18 @@ class BankDirectory:
         system = request.get("system_id")
         if system is not None and system not in self._systems:
             raise DirectoryError("UNKNOWN_SYSTEM", "Неизвестная банковская система")
+        if operation == "open_tools":
+            names = request["tool_names"]
+            if (
+                not isinstance(names, list)
+                or not 1 <= len(names) <= 20
+                or any(not isinstance(n, str) or not n.strip() for n in names)
+                or len(set(names)) != len(names)
+            ):
+                raise DirectoryError("INVALID_ARGUMENT", "Некорректный список операций")
+            tools = [deepcopy(self._tool(system, n)) for n in names]
+            self._opened.update((system, n) for n in names)
+            return {"tools": tools}
         if operation == "open_tool":
             tool = self._tool(system, request["tool_name"])
             self._opened.add((system, request["tool_name"]))

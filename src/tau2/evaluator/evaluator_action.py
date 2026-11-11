@@ -338,6 +338,7 @@ def _tool_access_failures(
     policy: Optional[ToolAccessPolicy],
     *,
     allow_rejected: bool = False,
+    initial_db: dict | None = None,
 ) -> list[dict]:
     """Check each attempt against ownership and completed identification.
 
@@ -381,6 +382,8 @@ def _tool_access_failures(
         failures.append(failure)
 
     def is_authenticated(owner, item):
+        if owner in (initial_db or {}).get("session", {}).get("verified_customers", []):
+            return True
         source = authenticated.get(owner)
         return source is not None and (
             source.call_position == item.call_position
@@ -1592,6 +1595,7 @@ class ActionEvaluator(EvaluatorBase[Message]):
             observed,
             task.evaluation_criteria.actions or [],
             access_policy,
+            initial_db=confidentiality_db,
             allow_rejected=task.evaluation_criteria.banking_contract_version
             == "db_action_v1",
         )
@@ -1611,6 +1615,13 @@ class ActionEvaluator(EvaluatorBase[Message]):
             forbidden_patterns,
         )
         message_failures = _message_pattern_failures(trace, task.evaluation_criteria)
+        from tau2.evaluator.service_boundary import service_boundary_failures
+
+        message_failures.extend(
+            service_boundary_failures(
+                trace, task.evaluation_criteria.service_boundary_policy
+            )
+        )
         evidence_failures = _result_evidence_failures(
             business_observed,
             _semantic_actions(task.evaluation_criteria),
@@ -1638,7 +1649,9 @@ class ActionEvaluator(EvaluatorBase[Message]):
 
             binding_failures.extend(
                 reward_business_failures(
-                    trace, task.evaluation_criteria.reward_business_contract
+                    trace,
+                    task.evaluation_criteria.reward_business_contract,
+                    initial_db=confidentiality_db,
                 )
             )
             binding_failures.extend(
@@ -1815,6 +1828,7 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             observed,
             task.evaluation_criteria.actions or [],
             access_policy,
+            initial_db=confidentiality_db,
             allow_rejected=task.evaluation_criteria.banking_contract_version
             == "db_action_v1",
         )
@@ -1834,6 +1848,13 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
             forbidden_patterns,
         )
         message_failures = _message_pattern_failures(trace, task.evaluation_criteria)
+        from tau2.evaluator.service_boundary import service_boundary_failures
+
+        message_failures.extend(
+            service_boundary_failures(
+                trace, task.evaluation_criteria.service_boundary_policy
+            )
+        )
         evidence_failures = _result_evidence_failures(
             business_observed,
             _semantic_actions(task.evaluation_criteria),
@@ -1861,7 +1882,9 @@ class FullDuplexActionEvaluator(EvaluatorBase[Tick]):
 
             binding_failures.extend(
                 reward_business_failures(
-                    trace, task.evaluation_criteria.reward_business_contract
+                    trace,
+                    task.evaluation_criteria.reward_business_contract,
+                    initial_db=confidentiality_db,
                 )
             )
             binding_failures.extend(

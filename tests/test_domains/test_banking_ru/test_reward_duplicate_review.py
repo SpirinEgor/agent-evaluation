@@ -75,7 +75,13 @@ def test_pending_scope_and_no_effect_rejection():
 def test_invalid_evidence_cannot_release_or_change_state(defect):
     session = pending()
     tools = session.env.tools
-    args = dict(review_id=REVIEW, basis_id=BASIS, expected_revision=2, basis_revision=2)
+    args = dict(
+        review_id=REVIEW,
+        basis_id=BASIS,
+        expected_revision=2,
+        basis_revision=2,
+        decision="cleared",
+    )
     if defect == "old_review":
         args["expected_revision"] = 1
     elif defect == "old_basis":
@@ -233,7 +239,11 @@ def test_decision_after_amendment_requires_fresh_consent():
         session.call(
             "resolve_reward_duplicate_review",
             dict(
-                review_id=REVIEW, basis_id=BASIS, expected_revision=2, basis_revision=2
+                review_id=REVIEW,
+                basis_id=BASIS,
+                expected_revision=2,
+                basis_revision=2,
+                decision="cleared",
             ),
         )
     )

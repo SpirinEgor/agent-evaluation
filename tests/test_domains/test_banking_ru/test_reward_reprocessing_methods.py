@@ -128,7 +128,10 @@ def packet(session, method="individual_correction", reversals=None):
             else (
                 []
                 if method == "individual_correction"
-                else [{"allocation_id": "alloc_8801_a", "amount": 5.2}]
+                else [
+                    {"allocation_id": "alloc_8801_a", "amount": 2.9},
+                    {"allocation_id": "alloc_8803_a", "amount": 2.3},
+                ]
             ),
             "state_revision": revision(session.env.tools.db, C, "2026-07"),
         },
@@ -182,6 +185,7 @@ def test_independent_pool_control_removes_displacement():
     db = session.env.tools.db
     pool = db.reward_reprocessing_cases[RID].funding_pools[0]
     pool.allocation_ids = []
+    pool.protected_minimums = {}
     pool.reversal_order = []
     before = db.accounts["acc_1187"].balance
     answer = data(
@@ -241,6 +245,16 @@ def test_legal_suboptimal_route_gets_db_zero_action_one():
             args["payouts"][1]["amount"] = 16.25
         elif action.action_id == "bank2:v4:amend":
             args["items"][1]["amount"] = 5.85
+        if action.name == "record_case_handover":
+            args["items"] = [
+                x.model_dump()
+                for x in session.env.tools.db.cases["case_610903"].reward_items
+            ]
+        if action.action_id == "bank2:v37:explanation":
+            args["case_items"] = [
+                x.model_dump()
+                for x in session.env.tools.db.cases["case_610903"].reward_items
+            ]
         data(session.call(action.name, args))
     data(session.call("done", {}))
     reward = grade_full_session(session).reward_info

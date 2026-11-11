@@ -21,8 +21,45 @@ def setup_guard(max_requests=4):
     contract, request = request_contract()
     request["stream"] = True
     return broker().ConversationGuard(
-        contract, load_module().validate_model_request, max_requests=max_requests
+        contract,
+        load_module().validate_model_request,
+        max_requests=max_requests,
+        history_mode="strict",
     ), request
+
+
+def test_native_resume_is_explicit_and_preserves_model_and_tool_checks():
+    contract, request = request_contract()
+    request["stream"] = True
+    request["input"].append(
+        {
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": "Follow-up"}],
+        }
+    )
+
+    def factory():
+        return broker().ConversationGuard(
+            contract, load_module().validate_model_request, resumed=True
+        )
+
+    assert factory().check(request) == 1
+    with pytest.raises(ValueError, match="Inherited history"):
+        broker().ConversationGuard(
+            contract, load_module().validate_model_request
+        ).check(request)
+    for mutate in [
+        lambda r: r.update(model="other-model"),
+        lambda r: r["input"].append({"type": "additional_tools", "tools": []}),
+        lambda r: r["input"][0]["tools"][0]["tools"].append(
+            {"type": "function", "name": "shell"}
+        ),
+    ]:
+        bad = deepcopy(request)
+        mutate(bad)
+        with pytest.raises(ValueError):
+            factory().check(bad)
 
 
 def call_item(call_id="c1", tool="bank_directory", args='{"operation":"list_systems"}'):
@@ -244,6 +281,13 @@ def test_host_auth_is_added_only_to_fixed_upstream_and_redirects_are_rejected(
         "stage": "upstream_transport",
         "code": "upstream_http_status",
         "http_status": 429,
+        "classification": "technical_error",
+        "upstream_reason": "unknown",
+        "provider": {
+            "fields": {},
+            "explicit_safety_signal": False,
+            "body_truncated": False,
+        },
     }
 
 
@@ -464,7 +508,18 @@ def test_relay_records_safe_failure_diagnostics(case, expected):
         return relay.errors, sent
 
     errors, sent = asyncio.run(run())
-    assert errors == [expected]
+    assert len(errors) == 1
+    assert {key: errors[0][key] for key in expected} == expected
+    assert errors[0]["classification"] == {
+        "failed": "provider_error_unknown",
+        "secret": "broker_error",
+    }.get(case, "technical_error")
+    assert errors[0]["request"] == 1
+    assert bool(errors[0]["response_bytes_forwarded"]) == (case == "truncated")
+    assert errors[0]["relay_response_started"] == (case == "truncated")
+    assert not errors[0]["model_refusal_observed"]
+    assert not errors[0]["output_started"]
+    assert not errors[0]["response_completed"]
     assert "TOKEN_CANARY" not in json.dumps(errors)
     assert "PRIVATE_BODY" not in json.dumps(errors)
     assert guard.failed and sent[-1]["end"] is True
@@ -488,7 +543,11 @@ def test_transport_and_bad_json_have_safe_codes():
         json.loads("{SECRET")
     except json.JSONDecodeError as error:
         diagnostic = b.diagnostic(error, "response_stream")
-    assert diagnostic == {"stage": "response_stream", "code": "invalid_sse_json"}
+    assert diagnostic == {
+        "stage": "response_stream",
+        "code": "invalid_sse_json",
+        "classification": "technical_error",
+    }
     assert "SECRET" not in json.dumps(diagnostic)
 
 
@@ -768,3 +827,577 @@ def test_inference_deadline_retries_only_before_any_response(monkeypatch, partia
     assert sent[-1]["end"] is True
     if not partial:
         assert relay.retries[0]["diagnostic"]["code"] == "timeout"
+
+
+@pytest.mark.parametrize(
+    "event,classification",
+    [
+        (
+            {
+                "type": "response.incomplete",
+                "response": {"incomplete_details": {"reason": "content_filter"}},
+            },
+            "safety_block",
+        ),
+        (
+            {
+                "type": "response.failed",
+                "response": {"error": {"code": "server_error"}},
+            },
+            "technical_error",
+        ),
+        (
+            {
+                "type": "error",
+                "error": {
+                    "code": "new_safety_sounding_code",
+                    "message": "safety blocked SECRET",
+                },
+            },
+            "provider_error_unknown",
+        ),
+        (
+            {
+                "type": "error",
+                "error": {
+                    "misalignment": {
+                        "error_type": "potentially_unintended_data_transfer"
+                    }
+                },
+            },
+            "safety_block",
+        ),
+        (
+            {"type": "error", "error": {"misalignment": {"error_type": "other"}}},
+            "provider_error_unknown",
+        ),
+        (
+            {
+                "type": "error",
+                "code": "authentication_error",
+                "error": {"code": "content_filter"},
+            },
+            "safety_block",
+        ),
+        (
+            {
+                "type": "response.incomplete",
+                "response": {"incomplete_details": {"reason": "max_output_tokens"}},
+            },
+            "generation_limit",
+        ),
+    ],
+)
+def test_provider_error_evidence_is_structural_not_keyword_based(event, classification):
+    import json
+
+    b = broker()
+    guard, request = setup_guard()
+    guard.check(request)
+    stream = b.ResponseStream(guard)
+    with pytest.raises(b.BrokerFailure) as caught:
+        stream.feed(("data: " + json.dumps(event) + "\n\n").encode())
+    result = b.diagnostic(caught.value, "response_stream")
+    assert result["classification"] == classification
+    assert "SECRET" not in json.dumps(result)
+    assert "new_safety_sounding_code" not in json.dumps(result)
+    if classification == "safety_block":
+        assert not b.retryable_upstream(caught.value)
+
+
+def test_refusal_is_preserved_as_model_output_not_provider_block():
+    import json
+
+    b = broker()
+    guard, request = setup_guard()
+    guard.check(request)
+    stream = b.ResponseStream(guard)
+    item = {
+        "type": "message",
+        "role": "assistant",
+        "content": [{"type": "refusal", "refusal": "Not available."}],
+    }
+    stream.feed(
+        (
+            "data: "
+            + json.dumps(
+                {
+                    "type": "response.completed",
+                    "response": {"status": "completed", "output": [item]},
+                }
+            )
+            + "\n\n"
+        ).encode()
+    )
+    stream.finish()
+    assert stream.completed and stream.refusal_observed
+    completed = next(e for e in guard.events if e["event"] == "response_completed")
+    assert completed["response_signals"] == {
+        "model_refusal": True,
+        "response_completed": True,
+    }
+
+
+@pytest.mark.parametrize(
+    "status,error_code,expected",
+    [
+        (403, None, "provider_error_unknown"),
+        (403, "content_filter", "safety_block"),
+        (429, "content_filter", "safety_block"),
+        (429, "rate_limit_exceeded", "technical_error"),
+        (503, None, "technical_error"),
+    ],
+)
+def test_http_failure_body_retains_sanitized_reason(
+    tmp_path, monkeypatch, status, error_code, expected
+):
+    import asyncio
+    import json
+
+    import httpx
+
+    b = broker()
+    home = tmp_path / ".codex"
+    home.mkdir()
+    (home / "auth.json").write_text(
+        json.dumps(
+            {
+                "auth_mode": "chatgpt",
+                "tokens": {"access_token": "fake-token", "account_id": "fake-account"},
+            }
+        )
+    )
+    monkeypatch.setattr(b.Path, "home", lambda: tmp_path)
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        b.httpx,
+        "AsyncClient",
+        lambda **kw: original(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    status,
+                    json={
+                        "error": {
+                            "code": error_code,
+                            "message": "SECRET PROMPT fake-token",
+                        }
+                    },
+                )
+            ),
+            **kw,
+        ),
+    )
+
+    async def run():
+        return [chunk async for chunk in b.SubscriptionInference()({})]
+
+    with pytest.raises(b.BrokerFailure) as caught:
+        asyncio.run(run())
+    info = b.diagnostic(caught.value, "upstream_transport")
+    assert info["classification"] == expected
+    assert info["http_status"] == status
+    assert "SECRET" not in json.dumps(info) and "fake-token" not in json.dumps(info)
+    assert info["provider"]["fields"]["error.message"]["sha256"]
+    if expected == "safety_block":
+        assert not b.retryable_upstream(caught.value)
+
+
+@pytest.mark.parametrize(
+    "reason,expected",
+    [("max_messages", "generation_limit"), ("steered", "interrupted")],
+)
+def test_non_safety_stops_are_not_technical_or_safety(reason, expected):
+    b = broker()
+    e = b.BrokerFailure("upstream_response_incomplete", upstream_reason=reason)
+    assert b.diagnostic(e, "response_stream")["classification"] == expected
+    assert not b.retryable_upstream(e)
+
+
+def test_partial_refusal_and_safety_error_survive_relay_without_retry():
+    import asyncio
+    import json
+    from types import SimpleNamespace
+
+    b = broker()
+    guard, request = setup_guard()
+    attempts = 0
+
+    async def forward(body):
+        nonlocal attempts
+        attempts += 1
+        yield b'data: {"type":"response.refusal.delta","delta":"PRIVATE_REFUSAL"}\n\ndata: {"type":"error","error":{"code":"content_filter","message":"PRIVATE_REASON"}}\n\n'
+
+    async def run():
+        relay = b.InferenceRelay("fixture", guard, forward, None)
+        reader = asyncio.StreamReader()
+        reader.feed_data(
+            (
+                json.dumps(
+                    {
+                        "id": 1,
+                        "method": "POST",
+                        "path": "/v1/responses",
+                        "body": request,
+                    }
+                )
+                + "\n"
+            ).encode()
+        )
+        reader.feed_eof()
+        relay.process = SimpleNamespace(stdout=reader)
+
+        async def send(value):
+            pass
+
+        relay.send = send
+        await relay.serve()
+        return relay
+
+    relay = asyncio.run(run())
+    assert attempts == 1 and not relay.retries
+    error = relay.errors[0]
+    assert error["classification"] == "safety_block"
+    assert error["model_refusal_observed"] and error["output_started"]
+    assert not error["response_completed"] and error["response_bytes_forwarded"] == 0
+    assert not error["retryable_by_reason"]
+    assert "PRIVATE" not in json.dumps(relay.errors)
+
+
+def test_generic_error_type_does_not_hide_unknown_specific_code():
+    b = broker()
+    event = {
+        "type": "error",
+        "error": {"type": "invalid_request_error", "code": "new_provider_policy_code"},
+    }
+    error = b.BrokerFailure(
+        "upstream_error_event",
+        upstream_reason=b.upstream_reason(event),
+        provider=b.provider_diagnostic(event),
+    )
+    info = b.diagnostic(error, "response_stream")
+    assert info["classification"] == "provider_error_unknown"
+    assert info["upstream_reason"] == "invalid_request_error"
+    assert info["provider"]["fields"]["error.code"]["sha256"]
+
+
+def compact_request(guard, followup):
+    request = deepcopy(followup)
+    request["input"].append(deepcopy(broker().COMPACTION_REQUEST))
+    return request
+
+
+def summary_item(text="Own checkpoint"):
+    return dict(
+        type="message", role="assistant", content=[dict(type="output_text", text=text)]
+    )
+
+
+def test_compaction_commits_only_after_eof_and_preserves_rpc_ledger():
+    guard, initial = setup_guard(max_requests=8)
+    full = prepare_result(guard, initial)
+    before = deepcopy(guard.history)
+    guard.check(compact_request(guard, full))
+    summary = summary_item()
+    guard.observe_item(summary)
+    guard.complete([summary])
+    assert guard.history == before
+    assert not guard.terminal
+    with pytest.raises(ValueError):
+        guard.validate_final()
+    with pytest.raises(ValueError):
+        guard.check(initial)
+    guard.finish_response()
+    assert guard.trusted_messages == []
+    assert guard.calls["c1"]["result_recorded"]
+    with pytest.raises(ValueError):
+        guard.authorize_tool("c1", "bank_directory", {"operation": "list_systems"})
+    with pytest.raises(ValueError):
+        guard.check(full)  # No rollback to the pre-checkpoint context.
+    follow = deepcopy(initial)
+    follow["input"] += deepcopy(guard.history)
+    guard.check(follow)
+    call = call_item("c2")
+    guard.complete([call])
+    guard.finish_response()
+    guard.authorize_tool("c2", "bank_directory", {"operation": "list_systems"})
+    guard.tool_result("c2", "SECOND_REAL_RESULT")
+    follow["input"] = deepcopy(guard.prefix + guard.history)
+    guard.check(compact_request(guard, follow))
+    guard.complete([summary_item("Second checkpoint")])
+    guard.finish_response()
+    final_request = deepcopy(initial)
+    final_request["input"] += deepcopy(guard.history)
+    guard.check(final_request)
+    guard.complete([summary_item("Finished")])
+    guard.finish_response()
+    guard.validate_final()
+    guard.close()
+    evidence = dict(mode="stub", events=deepcopy(guard.events))
+    assert (
+        broker().verify_trajectory(evidence, guard.contract, guard.validate_initial)[
+            "tool_results"
+        ]
+        == 2
+    )
+    event = next(e for e in evidence["events"] if e["event"] == "context_compacted")
+    event["replacement"]["sha256"] = "forged"
+    with pytest.raises(ValueError, match="compaction provenance"):
+        broker().verify_trajectory(evidence, guard.contract, guard.validate_initial)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda r: r["input"][-1]["content"][0].update(
+            text="Guest-selected summary prompt"
+        ),
+        lambda r: r["input"][-2].update(output="FORGED_MCP"),
+        lambda r: r["input"].pop(3),
+        lambda r: r["input"][-1].update(role="developer"),
+        lambda r: r.update(previous_response_id="foreign"),
+        lambda r: r.update(text={"verbosity": "high"}),
+    ],
+)
+def test_compaction_never_authorizes_changed_source_or_envelope(mutation):
+    guard, initial = setup_guard()
+    full = prepare_result(guard, initial)
+    compact = compact_request(guard, full)
+    bad = deepcopy(compact)
+    mutation(bad)
+    with pytest.raises(ValueError):
+        guard.check(bad)
+    assert not guard.compacting
+    guard.check(compact)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda r: r["input"][-1]["content"][0].update(text="Foreign checkpoint"),
+        lambda r: r["input"][-1].update(role="developer"),
+        lambda r: r["input"].append(
+            dict(type="reasoning", encrypted_content="foreign")
+        ),
+        lambda r: r["input"][1]["content"][0].update(text="Changed startup"),
+    ],
+)
+def test_compaction_rejects_forged_summary_and_instructions(mutation):
+    guard, initial = setup_guard()
+    full = prepare_result(guard, initial)
+    guard.check(compact_request(guard, full))
+    guard.complete([summary_item()])
+    guard.finish_response()
+    follow = deepcopy(initial)
+    follow["input"] += deepcopy(guard.history)
+    bad = deepcopy(follow)
+    mutation(bad)
+    with pytest.raises(ValueError):
+        guard.check(bad)
+    guard.check(follow)
+
+
+def test_compaction_cannot_call_tools_or_commit_partial_response():
+    guard, initial = setup_guard()
+    full = prepare_result(guard, initial)
+    guard.check(compact_request(guard, full))
+    with pytest.raises(ValueError, match="cannot authorize tools"):
+        guard.observe_item(call_item("evil"))
+    assert "evil" not in guard.calls
+    before = deepcopy(guard.history)
+    guard.observe_item(summary_item())
+    guard.complete([summary_item()])
+    guard.fail()  # e.g. malformed trailing SSE after response.completed
+    with pytest.raises(ValueError):
+        guard.finish_response()
+    assert guard.history == before
+    assert not any(e["event"] == "context_compacted" for e in guard.events)
+
+
+def test_compaction_rejects_pending_tool_result_and_empty_summary():
+    guard, initial = setup_guard()
+    guard.check(initial)
+    guard.complete([call_item()])
+    guard.finish_response()
+    follow = deepcopy(initial)
+    follow["input"] += deepcopy(guard.history)
+    with pytest.raises(ValueError, match="MCP result not yet received"):
+        guard.check(compact_request(guard, follow))
+    guard.authorize_tool("c1", "bank_directory", {"operation": "list_systems"})
+    guard.tool_result("c1", "REAL")
+    follow["input"] = deepcopy(guard.prefix + guard.history)
+    guard.check(compact_request(guard, follow))
+    with pytest.raises(ValueError, match="authoritative text summary"):
+        guard.complete([summary_item("")])
+
+
+def test_history_mismatch_diagnostics_are_content_free():
+    guard, initial = setup_guard()
+    full = prepare_result(guard, initial)
+    full["input"][-1]["output"] = "DO_NOT_LOG_THIS_PRIVATE_TEXT"
+    with pytest.raises(ValueError):
+        guard.check(full)
+    import json
+
+    evidence = json.dumps(guard.validation_details)
+    assert "DO_NOT_LOG" not in evidence
+    assert guard.validation_details["first_mismatch"] == 4
+    assert guard.validation_details["envelope_matches"]
+    assert (
+        guard.validation_details["expected"]["sha256"]
+        != guard.validation_details["received"]["sha256"]
+    )
+
+
+def test_relay_preserves_history_mismatch_metadata_without_forwarding():
+    import asyncio
+    import json
+    from types import SimpleNamespace
+
+    b = broker()
+    guard, initial = setup_guard()
+    request = prepare_result(guard, initial)
+    request["input"][-1]["output"] = "PRIVATE_FORGED_OUTPUT"
+
+    async def forward(body):
+        pytest.fail("Rejected history must never reach inference")
+        yield b""
+
+    async def run():
+        relay = b.InferenceRelay("fixture", guard, forward, None)
+        reader = asyncio.StreamReader()
+        reader.feed_data(
+            (
+                json.dumps(
+                    dict(id=2, method="POST", path="/v1/responses", body=request)
+                )
+                + "\n"
+            ).encode()
+        )
+        reader.feed_eof()
+        relay.process = SimpleNamespace(stdout=reader)
+
+        async def send(value):
+            pass
+
+        relay.send = send
+        with pytest.raises(ValueError, match="Untrusted inference request rejected"):
+            await relay.serve()
+        return relay
+
+    relay = asyncio.run(run())
+    error = relay.errors[0]
+    assert error["code"] == "history_mismatch"
+    assert error["classification"] == "broker_error"
+    assert error["history_validation"]["first_mismatch"] == 4
+    assert error["response_bytes_forwarded"] == 0
+    assert relay.upstream_requests == 0
+    assert "PRIVATE_FORGED_OUTPUT" not in json.dumps(relay.errors)
+
+
+def test_observation_mode_leaves_context_to_codex_but_binds_tool_execution():
+    b = broker()
+    contract, initial = request_contract()
+    initial["stream"] = True
+    guard = b.ConversationGuard(contract, load_module().validate_model_request)
+    full = prepare_result(guard, initial)
+    assert guard.history_mode == "observe" and guard.history == []
+    # Deliberately different context: recorded, not authenticated or rewritten.
+    follow = deepcopy(initial)
+    follow["input"].append(
+        dict(
+            type="message",
+            role="user",
+            content=[dict(type="input_text", text="Codex-owned checkpoint")],
+        )
+    )
+    assert guard.check(follow) == 2
+    assert guard.events[-1]["body"] == follow
+    with pytest.raises(ValueError):
+        guard.authorize_tool("fabricated", "bank_call", {})
+    guard.complete([call_item("c2", "bank_call", "{}")])
+    guard.finish_response()
+    with pytest.raises(ValueError):
+        guard.authorize_tool("c2", "bank_call", {"changed": True})
+    guard.authorize_tool("c2", "bank_call", {})
+    guard.tool_result("c2", "ACTUAL_RESULT")
+    # Even an old context is not compared; it cannot replay consumed tool calls.
+    guard.check(full)
+    guard.complete([summary_item("Finished")])
+    guard.finish_response()
+    with pytest.raises(ValueError):
+        guard.authorize_tool("c1", "bank_directory", {"operation": "list_systems"})
+    guard.close()
+    result = b.verify_trajectory(
+        dict(mode="stub", history_mode="observe", events=guard.events),
+        contract,
+        load_module().validate_model_request,
+    )
+    assert not result["context_integrity_verified"]
+    assert result["tool_results"] == 2
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda r: r["input"].append(dict(type="additional_tools", tools=[])),
+        lambda r: r.update(model="foreign"),
+        lambda r: r.update(parallel_tool_calls=True),
+        lambda r: r.update(previous_response_id="external-session"),
+        lambda r: r["input"][0]["tools"][0]["tools"].append(
+            dict(type="function", name="shell")
+        ),
+        lambda r: r["input"][1]["content"][0].update(text="Changed startup"),
+    ],
+)
+def test_observation_mode_still_checks_launch_and_transport_contract(mutation):
+    contract, initial = request_contract()
+    initial["stream"] = True
+    guard = broker().ConversationGuard(contract, load_module().validate_model_request)
+    follow = prepare_result(guard, initial)
+    mutation(follow)
+    with pytest.raises(ValueError):
+        guard.check(follow)
+
+
+def test_observation_mode_records_compaction_without_reconstructing_summary():
+    contract, initial = request_contract()
+    initial["stream"] = True
+    guard = broker().ConversationGuard(contract, load_module().validate_model_request)
+    follow = prepare_result(guard, initial)
+    follow["input"][-1]["output"] = "Codex-reformatted context"
+    follow["client_metadata"] = {
+        "x-codex-turn-metadata": '{"request_kind":"compaction"}'
+    }
+    follow["input"].append(
+        dict(
+            type="message",
+            role="user",
+            content=[dict(type="input_text", text="CLI compaction prompt")],
+        )
+    )
+    guard.check(follow)
+    summary = summary_item("Part one")
+    summary["content"].append(dict(type="output_text", text="Part two"))
+    guard.complete([summary])
+    guard.finish_response()
+    assert guard.history == [] and not guard.terminal
+    assert guard.trusted_messages == []
+    assert guard.events[-1]["event"] == "compaction_observed"
+    next_request = deepcopy(initial)
+    next_request["input"].append(
+        dict(
+            type="message",
+            role="user",
+            content=[dict(type="input_text", text="CLI-formatted summary")],
+        )
+    )
+    guard.check(next_request)
+
+
+def test_initial_schema_mismatch_has_safe_diagnostic_code():
+    result = broker().diagnostic(
+        ValueError("Model input contains unexpected instructions, history or tools"),
+        "request_validation",
+    )
+    assert result["code"] == "initial_input_mismatch"
+    assert result["classification"] == "broker_error"

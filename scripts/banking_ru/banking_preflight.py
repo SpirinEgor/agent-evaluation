@@ -332,6 +332,28 @@ def allow_attempt(previous, maximum):
         )
 
 
+def verify_directory_schema_proof(contract):
+    """A toy CLI fixture cannot prove compatibility with the real banking API."""
+    from tau2.platform.bank_directory import directory_tools
+
+    expected = {
+        t.name: {"description": t.description, "inputSchema": t.input_schema}
+        for t in directory_tools()
+    }
+    actual = {
+        t["name"]: {
+            "description": t["description"],
+            "inputSchema": t.get("inputSchema", t.get("input_schema")),
+        }
+        for t in contract["schemas"]
+        if t["name"] in expected
+    }
+    if actual != expected:
+        raise ValueError(
+            "Physical CLI proof must use current real banking directory schemas"
+        )
+
+
 def boundary_check(spec):
     """Reuse real apply_patch/CLI-stub proof only for unchanged runtime and image."""
     b = spec["boundary"]
@@ -360,6 +382,7 @@ def boundary_check(spec):
     runtime = importlib.util.module_from_spec(runtime_spec)
     runtime_spec.loader.exec_module(runtime)
     contract = read(parent / "request-contract.json")
+    verify_directory_schema_proof(contract)
     capture = read(parent / "cli-request.json")
     if spec.get("agent_profile", "baseline") != contract.get(
         "agent_profile", "baseline"
@@ -435,7 +458,8 @@ def boundary_check(spec):
     if (
         thread.get("sandbox") != "danger-full-access"
         or thread.get("approvalPolicy") != "never"
-        or thread.get("ephemeral") is not True
+        or thread.get("ephemeral")
+        is not (not spec["model"].get("retain_session", False))
     ):
         raise ValueError("Preflight did not verify required full-access CLI")
     anchor = read(path_for(b["anchor_version"]))["files"]
@@ -461,6 +485,7 @@ def boundary_check(spec):
     return {
         "passed": True,
         "files_verified": len(names),
+        "real_directory_schema_verified": True,
         "image": spec["model"]["image"],
     }
 

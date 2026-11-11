@@ -266,3 +266,45 @@ def test_locked_write_is_an_attempt_but_cannot_mutate_on_replay(workflow_tools):
     calls = [c for m in s._messages for c in getattr(m, "tool_calls", []) or []]
     assert calls[-1].name == "execute_reward_resolution"
     assert messages[-1].execution_rejected is True
+
+
+def test_customer_action_is_discoverable_without_corpus_recipe():
+    from tau2.domains.banking_ru.environment import get_environment
+    from tau2.platform.session import PlatformSession
+    from tests.test_domains.test_banking_ru.test_bank2_linked_goals import task2
+
+    session = PlatformSession(task2(), get_environment, mcp_layout="directory")
+    schema_result = session.call(
+        "bank_directory",
+        {
+            "operation": "open_tool",
+            "system_id": "support",
+            "tool_name": "give_discoverable_user_tool",
+        },
+    )
+    assert not schema_result.is_error
+    schema = json.loads(schema_result.content[0].text)["input_schema"]
+    field = schema["properties"]["name"]
+    action = field.get("const") or field["enum"][0]
+    assert action == "submit_reward_statement"
+    before = session.env.tools.db.model_dump()
+    bad = session.call(
+        "bank_call",
+        {
+            "system_id": "support",
+            "tool_name": "give_discoverable_user_tool",
+            "arguments": {"name": "invented_customer_action"},
+        },
+    )
+    assert bad.is_error
+    assert session.env.tools.db.model_dump() == before
+    good = session.call(
+        "bank_call",
+        {
+            "system_id": "support",
+            "tool_name": "give_discoverable_user_tool",
+            "arguments": {"name": action},
+        },
+    )
+    assert not good.is_error
+    assert json.loads(good.content[0].text)["name"] == action

@@ -73,7 +73,12 @@ def path(task, extra=None):
                 "arguments": arguments,
             },
         )
-        received[action.action_id] = content
+        # The SDK observation contains the domain result followed by public
+        # accounting. Reference bindings consume only the first JSON payload.
+        try:
+            received[action.action_id] = json.JSONDecoder().raw_decode(content)[0]
+        except json.JSONDecodeError:
+            received[action.action_id] = content
     if extra is not None:
         yield sdk.ToolCall(
             "bank_directory",
@@ -141,7 +146,13 @@ def grade(task, bench, journal, stop="done"):
 
 def test_projection_schemas_and_deterministic_pagination(task):
     assert len(collect()) == 61
-    assert set(task.input["scenario"]) == {"id", "initial_state", "max_bank_calls"}
+    assert set(task.input["scenario"]) == {
+        "id",
+        "initial_state",
+        "max_bank_calls",
+        "bank_budget_mode",
+        "scheduled_client_messages",
+    }
     assert not hasattr(
         sdk.task_info_from_payload(sdk.task_input_projection(task)), "gold"
     )
@@ -150,21 +161,23 @@ def test_projection_schemas_and_deterministic_pagination(task):
     assert a.on_start().opening == task.input["ticket"]
     assert "evaluation_criteria" not in a.on_start().instructions
     assert (
-        f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов"
+        f"Лимит: {task.input['scenario']['max_bank_calls']} вызовов"
         in a.on_start().instructions
     )
-    assert (
-        "Discovery: отдельный бюджет, числовой лимит не установлен"
-        in a.on_start().instructions
+    assert a.on_start().instructions == (
+        "Вы — специалист поддержки банка. Обработайте обращение клиента.\n\n"
+        "Лимит: 100 вызовов\nОстаток — в ответах инструментов."
+        "\nЛимит диагностический: превышение не останавливает операции."
     )
-    assert (
-        f"После {task.input['scenario']['max_bank_calls']}-го банковского вызова"
-        in a.on_start().instructions
-    )
+    assert "done" not in a.on_start().instructions
+    assert "list_documents" not in a.on_start().instructions
+    assert len(a.on_start().instructions) < 400
     action = sdk.ToolCall("bank_directory", {"operation": "list_systems"})
     x, y = a.on_action(action), b.on_action(action)
     assert x == y and a.report_state() == b.report_state()
-    cursor = json.loads(x.content)["next_cursor"]
+    cursor = json.JSONDecoder().raw_decode(x.content)[0]["next_cursor"]
+    assert "Банковские вызовы: использовано 0/100; осталось 100" in x.content
+    assert "Discovery: использовано 1" in x.content
     assert cursor
     next_page = sdk.ToolCall(
         "bank_directory", {"operation": "list_systems", "cursor": cursor}
@@ -241,19 +254,16 @@ def test_announced_limits_match_execution_and_discovery_accounting(task, limit):
     # Copies of task inputs, not changes to the supplied task files.
     data = deepcopy(task.input)
     data["scenario"]["max_bank_calls"] = limit
+    data["scenario"]["bank_budget_mode"] = "hard"
     bench = benchmark(replace(task, input=data))
     expected_limit = 100 if limit is None else 2
     assert bench.session.max_calls == expected_limit
-    assert (
-        f"Банковский лимит: {expected_limit} вызовов" in bench.on_start().instructions
-    )
+    assert f"Лимит: {expected_limit} вызовов" in bench.on_start().instructions
     if limit is None:
         return
     bench.session.max_discovery_calls = 2
-    assert (
-        "Discovery: отдельный бюджет, лимит 2 вызовов" in bench.on_start().instructions
-    )
-    assert "После 2-го банковского вызова" in bench.on_start().instructions
+    assert "Discovery" not in bench.on_start().instructions
+    assert "done" not in bench.on_start().instructions
     execute(bench, path_for_find(task))
     assert bench.report_state()["bank_calls"] == 1
     assert bench.report_state()["status"] == "open"
@@ -448,14 +458,11 @@ def test_real_platform_coordinator_through_a2a(task, tmp_path, plan_name):
     async def engine(exchange):
         assert exchange.setup["instructions"] == bench.on_start().instructions
         assert (
-            f"Банковский лимит: {task.input['scenario']['max_bank_calls']} вызовов"
+            f"Лимит: {task.input['scenario']['max_bank_calls']} вызовов"
             in exchange.setup["instructions"]
         )
-        assert (
-            "Discovery: отдельный бюджет, числовой лимит не установлен"
-            in exchange.setup["instructions"]
-        )
-        assert "Общие ходы (max_turns)" in exchange.setup["instructions"]
+        assert "Discovery" not in exchange.setup["instructions"]
+        assert "done" not in exchange.setup["instructions"]
         assert exchange.setup["rules"]["max_turns"] == (
             1 if plan_name == "limit" else 500
         )

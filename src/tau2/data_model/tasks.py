@@ -7,7 +7,7 @@ import uuid
 from enum import Enum
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing_extensions import Annotated
 
 from tau2.data_model.message import Message, ToolCall, ToolRequestor
@@ -755,7 +755,7 @@ class ToolAccessPolicy(BaseModel):
 
     policy_id: str = Field(min_length=1)
     allowed_customer_ids: list[str] = Field(min_length=1)
-    authentication_action_ids: list[str] = Field(min_length=1)
+    authentication_action_ids: list[str] = Field(default_factory=list)
     resources_by_customer: dict[str, dict[str, list[str]]]
     tool_arguments: dict[str, dict[str, str]]
     pre_auth_tools: list[str] = Field(default_factory=list)
@@ -914,6 +914,7 @@ class EvaluationCriteria(BaseModel):
         description="Grade banking effects and obligations; rejected API probes and protocol completion are diagnostics. Safety checks still inspect all outgoing calls.",
     )
     completion_mode: Literal["legacy_reply", "completion_only"] = "legacy_reply"
+    service_boundary_policy: dict | None = None
     cashback_state_policy: dict | None = None
     db_state_checks: list[DBStateCheck] = Field(default_factory=list)
     reward_business_contract: RewardBusinessContract | None = None
@@ -1480,6 +1481,16 @@ class InitialState(BaseModel):
         return "\n".join(lines)
 
 
+class ScheduledClientMessage(BaseModel):
+    """Scenario correspondence delivered through the banking API, not startup."""
+
+    id: str
+    after_bank_calls: int = Field(gt=0, strict=True)
+    customer_id: str
+    case_id: str
+    text: str = Field(min_length=1)
+
+
 class Task(BaseModel):
     """
     A task for a particular domain. This will be sent to the user simulator, the environment and the evaluator.
@@ -1492,6 +1503,21 @@ class Task(BaseModel):
         strict=True,
         description="Optional banking platform call ceiling; discovery is separate. Run settings may lower, never raise it.",
     )
+    bank_budget_mode: Literal["hard", "diagnostic"] = Field(
+        default="hard",
+        description="Diagnostic banking budgets count calls without rejecting overruns.",
+    )
+    scheduled_client_messages: list[ScheduledClientMessage] = Field(
+        default_factory=list
+    )
+
+    @field_validator("scheduled_client_messages")
+    @classmethod
+    def unique_client_message_ids(cls, messages):
+        if len({message.id for message in messages}) != len(messages):
+            raise ValueError("Scheduled client message IDs must be unique")
+        return messages
+
     description: Annotated[
         Optional[Description],
         Field(

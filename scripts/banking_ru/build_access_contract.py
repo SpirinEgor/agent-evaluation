@@ -22,6 +22,9 @@ from tau2.domains.banking_ru.task_store import (
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS_FILE = ROOT / "src/tau2/domains/banking_ru/tools.py"
 ARGUMENT_COLLECTIONS = {
+    "purchase_id": "transactions",
+    "related_purchase_id": "transactions",
+    "incident_id": "service_incidents",
     "review_id": "reward_duplicate_reviews",
     "payment_id": "transactions",
     "basis_id": "payment_bases",
@@ -69,9 +72,14 @@ PUBLIC_ID_ARGUMENTS = {
 # Component IDs are offer-local keys, never selectors of another customer's data.
 # The enclosing offer_id is protected; execution verifies membership in that offer.
 LOCAL_ID_ARGUMENTS = {
+    "process_case_instruction": {"instruction_id"},
+    "record_case_handover": {"source_ids"},
     "get_partner_confirmations": {"receipt_id"},  # filter inside verified customer
     "case_workspace": {"source_ids"},  # checked against visible case sources
-    "send_case_message": {"recipient_id"},  # checked against case participants
+    "send_case_message": {
+        "recipient_id",
+        "exchange_id",
+    },  # checked against case participants
     "execute_reward_resolution": {"component_ids"},
     "reprocess_rewards": {"method_id"},  # member of the protected reprocessing case
     "ask_client": {"component_ids", "method_id"},
@@ -171,6 +179,11 @@ def protected_arguments() -> dict[str, dict[str, str]]:
             raise ValueError(
                 f"A new write needs an explicit access contract: {method.name}"
             )
+    result["reconcile_payment_allocation"].update(
+        COMMON_TOOL_ACCESS["reconcile_payment_allocation"]
+    )
+    result["record_case_handover"]["items.*.transaction_id"] = "transactions"
+    result["send_support_message"]["case_items.*.transaction_id"] = "transactions"
     # The shared structured ask_client override exposes this optional owner selector.
     result["ask_client"]["transaction_id"] = "transactions"
     result["ask_client"]["loan_id"] = "loans"
@@ -276,7 +289,12 @@ def resource_catalog(db: dict) -> dict[str, dict[str, list[str]]]:
         # Do not add empty catalogs to every task when no base record exists.
         if (
             collection
-            in {"payment_bases", "payment_allocations", "reward_duplicate_reviews"}
+            in {
+                "payment_bases",
+                "payment_allocations",
+                "reward_duplicate_reviews",
+                "service_incidents",
+            }
             and collection not in db
         ):
             continue
@@ -356,6 +374,13 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
             for a in criteria["actions"]
             if a["name"] == "verify_identity"
         }
+        initialized = (
+            ((task.get("initial_state") or {}).get("initialization_data") or {})
+            .get("agent_data", {})
+            .get("session", {})
+            .get("verified_customers", [])
+        )
+        subjects.update(initialized)
         if len(subjects) != 1:
             raise ValueError(f"Task {task['id']} needs one explicitly defined customer")
         customer_id = next(iter(subjects))
@@ -365,7 +390,7 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
             if a["name"] == "verify_identity"
             and a["arguments"].get("customer_id") == customer_id
         ]
-        if not auth:
+        if not auth and customer_id not in initialized:
             raise ValueError(f"Missing authentication reference in {task['id']}")
         criteria["tool_access_policy"] = {
             "policy_id": "banking_private_access",

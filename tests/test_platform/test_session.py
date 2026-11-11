@@ -128,9 +128,12 @@ def test_business_success_requires_agent_done():
     assert s.grade().final_reward == 1.0
 
 
-@pytest.mark.parametrize("configured,expected", [(None, 50), (100, 50), (20, 20)])
+@pytest.mark.parametrize("configured,expected", [(None, 100), (200, 100), (20, 20)])
 def test_scenario_call_ceiling_is_effective_and_cannot_be_raised(configured, expected):
-    session = make("Bank 2", max_calls=configured, mcp_layout="directory")
+    task = TASKS["Bank 2"].model_copy(update={"bank_budget_mode": "hard"})
+    session = PlatformSession(
+        task, get_environment, max_calls=configured, mcp_layout="directory"
+    )
     assert session.max_calls == expected
     session.call("bank_directory", {"operation": "list_systems"})
     assert session.discovery_calls == 1
@@ -162,6 +165,46 @@ def test_scenario_call_ceiling_is_effective_and_cannot_be_raised(configured, exp
             "arguments": {"phone": "+7 926 118-77-30"},
         },
     ).is_error
+
+
+@pytest.mark.parametrize("layout", ["flat", "directory"])
+def test_diagnostic_budget_executes_after_100_and_keeps_accounting(layout):
+    session = make("Bank 2", mcp_layout=layout)
+    assert session.task.bank_budget_mode == "diagnostic"
+    if layout == "directory":
+        session.call(
+            "bank_directory",
+            {
+                "operation": "open_tool",
+                "system_id": "crm",
+                "tool_name": "find_customer",
+            },
+        )
+    for _ in range(102):
+        if layout == "directory":
+            result = session.call(
+                "bank_call",
+                {
+                    "system_id": "crm",
+                    "tool_name": "find_customer",
+                    "arguments": {"phone": "+7 926 118-77-30"},
+                },
+            )
+        else:
+            result = session.call("find_customer", {"phone": "+7 926 118-77-30"})
+        assert not result.is_error
+    assert len(session.log) == 102
+    assert session.status is SessionStatus.OPEN
+    assert "102/100" in session.budget_status_text()
+    assert "превышение 2" in session.budget_status_text()
+    if layout == "directory":
+        from tests.test_domains.test_banking_ru.test_bank2_linked_goals import invoke
+
+        assert not invoke(session, "done", {}).is_error
+    else:
+        assert not session.call("done", {}).is_error
+    assert len(session.log) == 102
+    assert session.status is SessionStatus.DONE
 
 
 @pytest.mark.parametrize("invalid", [0, -1, True, "50", 1.5])

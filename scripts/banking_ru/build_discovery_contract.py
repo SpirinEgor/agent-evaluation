@@ -6,6 +6,7 @@ import json
 
 from build_access_contract import discovery_catalog
 from build_confidentiality_contract import DATA, TASK_FILE, render_contract
+from build_identity_contract import has_initial_identity
 
 from tau2.domains.banking_ru.task_store import (
     is_task_index,
@@ -22,6 +23,14 @@ def with_contract(tasks: list[dict], db: dict) -> list[dict]:
         actions = criteria["actions"]
         finds = [a for a in actions if a["name"] == "find_customer"]
         verifies = [a for a in actions if a["name"] == "verify_identity"]
+        if not finds and not verifies and has_initial_identity(task):
+            criteria["tool_access_policy"]["discovery_tools"] = discovery
+            if any(
+                e["evidence_id"].startswith("common_discovery_")
+                for e in criteria.get("result_evidence", [])
+            ):
+                raise ValueError(f"Stale discovery evidence in {task['id']}")
+            continue
         if len(finds) != 1 or len(verifies) != 1:
             raise ValueError(f"Ambiguous discovery/identity in {task['id']}")
         find, verify = finds[0], verifies[0]

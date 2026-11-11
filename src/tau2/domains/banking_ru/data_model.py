@@ -236,6 +236,7 @@ class CardLimits(BaseModel):
 
 
 class Transaction(BaseModel):
+    reward_statement_required: bool = False
     purchase_group_id: str | None = None
     reward_posting_role: RewardPostingRole | None = None
     reward_discrepancy_type: str | None = None
@@ -506,6 +507,19 @@ class Case(BaseModel):
     version: int = 1
     review_status: Literal["draft", "registered"] = "draft"
     review_source_version: Optional[int] = None
+    exchange_request_ids: list[str] = Field(default_factory=list)
+    parties: dict[str, dict] = Field(default_factory=dict)
+    incoming_instructions: dict[str, dict] = Field(default_factory=dict)
+    supplemental_requests: dict[str, str] = Field(default_factory=dict)
+    accepted_document_ids: list[str] = Field(default_factory=list)
+    required_evidence: dict[str, str] = Field(default_factory=dict)
+    accepted_evidence: dict[str, dict] = Field(default_factory=dict)
+    handover_required: bool = False
+    pre_execution_handover_required: bool = False
+    handover_receipt: Optional[dict] = None
+    explanation_required: bool = False
+    explanation_version: Optional[int] = None
+    item_assignments: dict[str, dict[str, str]] = Field(default_factory=dict)
     review_amount: Optional[float] = None
     review_items: list[CashbackInvestigationItem] = Field(default_factory=list)
     state_revision: Optional[int] = None
@@ -1140,7 +1154,12 @@ class BankingDB(DB):
     client_receipt_declarations: dict[str, dict] = Field(default_factory=dict)
     case_working_notes: dict[str, dict] = Field(default_factory=dict)
     case_external_recipients: dict[str, list[str]] = Field(default_factory=dict)
+    case_exchange_requests: dict[str, dict] = Field(default_factory=dict)
+    case_exchange_receipts: dict[str, dict] = Field(default_factory=dict)
+    reward_funding_commitments: dict[str, dict] = Field(default_factory=dict)
     case_outbound_messages: list[dict] = Field(default_factory=list)
+    support_messages: list[dict] = Field(default_factory=list)
+    case_followups: dict[str, list[dict]] = Field(default_factory=dict)
     reward_duplicate_reviews: dict[str, RewardDuplicateReview] = Field(
         default_factory=dict
     )

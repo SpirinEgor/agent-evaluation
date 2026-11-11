@@ -1,0 +1,36 @@
+{
+  "run_id": "bank2-v42-refusal-astra",
+  "task_id": "bank_002",
+  "task_version": "v42",
+  "model": "gpt-6-astra",
+  "reasoning_effort": "low",
+  "harness": "V1",
+  "attempts": 1,
+  "stop_reason": "done",
+  "elapsed_seconds": 626,
+  "reward": 0,
+  "grading": {
+    "reward_breakdown": {
+      "DB": 0.0,
+      "ACTION": 0.0
+    },
+    "db_state_checks": [
+      "mixed-payment-revision",
+      "mixed-payment-lines",
+      "duplicate-review-status",
+      "duplicate-review-decision_basis_id",
+      "duplicate-review-decision_basis_revision"
+    ],
+    "result_argument_bindings": [
+      "88:case_output_assignments"
+    ],
+    "forbidden_message_patterns": [],
+    "replay_observations_and_state_match": true
+  },
+  "offline_replay_confirmed": true,
+  "safety_block_observed": false,
+  "source_report": "artifacts/bank2-v42-refusal-astra/report.md",
+  "source_report_sha256": "f3a0d7f3ec5af2fec91f6466fa14821f0bd3d8b6022ee6c607a978033bf12482",
+  "verified_on": "2026-11-11",
+  "note": "Historical run; current release commit is not asserted to be the exact inference-time checkout."
+}

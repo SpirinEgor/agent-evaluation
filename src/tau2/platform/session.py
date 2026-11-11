@@ -132,6 +132,7 @@ class PlatformSession:
         self._canonical_trace_calls: dict[str, ToolCall] = {}
         self._event_order = 0
         self._finish_notified = False
+        self._delivered_client_messages: set[str] = set()
         self.mcp_tools: list[t.Tool] = [
             to_mcp_tool(tool) for tool in self.env.get_tools()
         ] + [done_tool()]
@@ -183,11 +184,80 @@ class PlatformSession:
     ) -> t.CallToolResult:
         """Исполнить вызов участника на среде сессии и записать его в журнал."""
         with self._call_lock:
+            previous_calls = len(self.log)
             dispatch = (
                 self._directory_call if self.directory is not None else self._call
             )
             result = dispatch(name, arguments, system=system, attempt=attempt)
+            if self.env.domain_name == "banking_ru":
+                if len(self.log) > previous_calls and not result.is_error:
+                    self._append_client_messages(result)
+                result.content.append(
+                    t.TextContent(type="text", text=self.budget_status_text())
+                )
             return result
+
+    def _append_client_messages(self, result: t.CallToolResult) -> None:
+        """Publish due correspondence once, on a successful banking response.
+
+        The schedule is scenario data. Never give it system authority, change
+        the banking result, or infer receipt before the enclosing HTTP response.
+        """
+        if self.status is not SessionStatus.OPEN:
+            return
+        db = self.env.tools.db
+        for message in self.task.scheduled_client_messages:
+            if (
+                message.id in self._delivered_client_messages
+                or len(self.log) < message.after_bank_calls
+                or message.customer_id not in db.session.verified_customers
+            ):
+                continue
+            case = db.cases.get(message.case_id)
+            if case is None or case.customer_id != message.customer_id:
+                continue
+            payload = {
+                "type": "client_message",
+                "id": message.id,
+                "customer_id": message.customer_id,
+                "case_id": message.case_id,
+                "source": "customer_correspondence",
+                "text": message.text,
+            }
+            result.content.append(
+                t.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))
+            )
+            self._delivered_client_messages.add(message.id)
+            self.mcp_events[-1].setdefault("client_message_deliveries", []).append(
+                {
+                    "id": message.id,
+                    "bank_call": len(self.log),
+                    "text_sha256": hashlib.sha256(message.text.encode()).hexdigest(),
+                }
+            )
+
+    def budget_status_text(self) -> str:
+        """Public accounting only: no solution progress or hidden target lengths."""
+        used = len(self.log)
+        discovery = (
+            "лимит не установлен"
+            if self.max_discovery_calls is None
+            else (
+                f"лимит {self.max_discovery_calls}, осталось "
+                f"{max(0, self.max_discovery_calls - self.discovery_calls)}"
+            )
+        )
+        return (
+            f"Банковские вызовы: использовано {used}/{self.max_calls}; "
+            f"осталось {max(0, self.max_calls - used)}. "
+            + (
+                f"Диагностический бюджет; превышение {max(0, used - self.max_calls)}; операции продолжаются. "
+                if self.task.bank_budget_mode == "diagnostic"
+                else ""
+            )
+            + f"Discovery: использовано {self.discovery_calls}; {discovery}. "
+            "Discovery учитывается отдельно; корректный done не расходует банковский бюджет."
+        )
 
     def begin_call(
         self, name: str, arguments: Optional[dict], system: Optional[str]
@@ -277,7 +347,11 @@ class PlatformSession:
         return call, event
 
     def _bank_budget_spent(self) -> bool:
-        return self.env.domain_name == "banking_ru" and len(self.log) >= self.max_calls
+        return (
+            self.env.domain_name == "banking_ru"
+            and self.task.bank_budget_mode == "hard"
+            and len(self.log) >= self.max_calls
+        )
 
     def _reject_bank_budget(self, attempt, direct):
         call, event = attempt
@@ -347,9 +421,13 @@ class PlatformSession:
                 # already received schema never revokes the earlier receipt.
                 if not any(
                     e.get("original_name") == "bank_directory"
-                    and e.get("arguments", {}).get("operation") == "open_tool"
+                    and e.get("arguments", {}).get("operation")
+                    in {"open_tool", "open_tools"}
                     and e["arguments"].get("system_id") == owner
-                    and e["arguments"].get("tool_name") == target
+                    and (
+                        e["arguments"].get("tool_name") == target
+                        or target in e["arguments"].get("tool_names", [])
+                    )
                     and "response_order" in e
                     and e["response_order"] < event["request_order"]
                     and not e.get("error")
@@ -610,17 +688,18 @@ class PlatformSession:
         elif len(self.log) >= self.max_calls and self.env.domain_name != "banking_ru":
             self.finish(SessionStatus.BUDGET_EXHAUSTED)
         result = to_call_result(message)
-        result.content.append(
-            t.TextContent(
-                type="text",
-                text=f"Ресурсный бюджет: использовано {len(self.log)}/{self.max_calls}, осталось {max(0, self.max_calls - len(self.log))}; ошибок {self.errors}"
-                + (
-                    f"/{self.max_errors}."
-                    if self.max_errors > 0
-                    else "; без отдельного лимита."
-                ),
+        if self.env.domain_name != "banking_ru":
+            result.content.append(
+                t.TextContent(
+                    type="text",
+                    text=f"Ресурсный бюджет: использовано {len(self.log)}/{self.max_calls}, осталось {max(0, self.max_calls - len(self.log))}; ошибок {self.errors}"
+                    + (
+                        f"/{self.max_errors}."
+                        if self.max_errors > 0
+                        else "; без отдельного лимита."
+                    ),
+                )
             )
-        )
         return result
 
     def finish(self, status: SessionStatus) -> None:

@@ -8,6 +8,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from tau2.domains.banking_ru.reward_payment_register import (
+    PaymentBasisLine,
+    validate_payment_basis,
+)
 from tau2.environment.tool import ToolExecutionRejected
 
 
@@ -27,6 +31,7 @@ class RewardDuplicateReview(BaseModel):
     revision: int = Field(default=1, ge=1)
     status: Literal["queued", "pending", "cleared", "duplicate_confirmed"] = "queued"
     renew_basis_id: str | None = None
+    replacement_basis_lines: list[PaymentBasisLine] = Field(default_factory=list)
     decision_basis_id: str | None = None
     decision_basis_revision: int | None = None
 
@@ -46,6 +51,12 @@ def validate_trigger(db, offer):
                 raise ToolExecutionRejected(
                     "ERR_REVIEW_SCOPE: Основание обновления не принадлежит проверке"
                 )
+            if review.replacement_basis_lines:
+                candidate = basis.model_copy(deep=True)
+                candidate.lines = review.replacement_basis_lines
+                validate_payment_basis(db, candidate)
+        if review.replacement_basis_lines and not review.renew_basis_id:
+            raise ToolExecutionRejected("ERR_REVIEW_SCOPE: Нет основания для поправки")
         if (
             review.customer_id != offer.customer_id
             or review.case_id != offer.case_id
@@ -75,6 +86,10 @@ def activate(db, offer):
         ):
             if review.renew_basis_id is not None:
                 basis = db.payment_bases[review.renew_basis_id]
+                if review.replacement_basis_lines:
+                    basis.lines = [
+                        x.model_copy(deep=True) for x in review.replacement_basis_lines
+                    ]
                 basis.revision += 1
             review.status = "pending"
             review.revision += 1
@@ -114,9 +129,8 @@ def require_unrestricted(db, customer_id, transaction_ids):
         )
 
 
-def resolve(tools, review_id, basis_id, expected_revision, basis_revision):
+def resolve(tools, review_id, basis_id, expected_revision, basis_revision, decision):
     from tau2.domains.banking_ru.cashback_state import advance, revision
-    from tau2.domains.banking_ru.reward_payment_register import validate_payment_basis
 
     db = tools.db
     review = db.reward_duplicate_reviews.get(review_id)
@@ -127,18 +141,10 @@ def resolve(tools, review_id, basis_id, expected_revision, basis_revision):
     if basis is None:
         raise ToolExecutionRejected("ERR_PAYMENT_BASIS: Основание не найдено")
     tools._require_verified(basis.customer_id)
-    if (
-        basis.customer_id != review.customer_id
-        or basis.period != review.period
-        or basis.external_reference != review.external_reference
-        or basis.revision != basis_revision
-    ):
-        raise ToolExecutionRejected(
-            "ERR_REVIEW_EVIDENCE: Другая область или версия основания"
-        )
-    payment = validate_payment_basis(db, basis)
-    if payment.status != "posted":
-        raise ToolExecutionRejected("ERR_REVIEW_EVIDENCE: Нет проведённого платежа")
+    if basis.customer_id != review.customer_id:
+        raise ToolExecutionRejected("ERR_FOREIGN_RESOURCE")
+    if decision not in {"cleared", "duplicate_confirmed"}:
+        raise ToolExecutionRejected("ERR_INVALID_ARGUMENT")
     if current_status(db, review) in {"cleared", "duplicate_confirmed"}:
         if (
             review.decision_basis_id == basis_id
@@ -156,13 +162,7 @@ def resolve(tools, review_id, basis_id, expected_revision, basis_revision):
         raise ToolExecutionRejected(
             "ERR_VERSION_CONFLICT: Проверка ещё не опубликована или версия устарела"
         )
-    duplicate = any(
-        line.purpose == "cashback"
-        and line.purchase_id == review.transaction_id
-        and line.reward_program == review.reward_program
-        for line in basis.lines
-    )
-    review.status = "duplicate_confirmed" if duplicate else "cleared"
+    review.status = decision
     review.decision_basis_id = basis_id
     review.decision_basis_revision = basis_revision
     review.revision += 1

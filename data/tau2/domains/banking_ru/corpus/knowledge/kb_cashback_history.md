@@ -6,7 +6,7 @@ keywords: ["кешбэк", "N40", "возврат", "выплата", "недо�
 effective_from: "2026-07-01"
 effective_to: null
 superseded_by: null
-revision_id: "2026-10-14-composite-v1"
+revision_id: "2026-11-11-business-policy-r2-kb_cashback_history"
 document_type: "knowledge"
 trust: "bank-policy"
 document_kind: "bank-knowledge"
@@ -18,7 +18,7 @@ updated_at: "2026-05-25"
 # Выбор категории и лимита обычного кешбэка
 
 Для standard_cashback применяйте категорию и ставку, действовавшие на дату покупки.
-История categories_history в get_cashback_rules задаёт effective_from/effective_to
+История categories_history в банковские правила и реестры начисления задаёт effective_from/effective_to
 включительно и categories. Сегодняшние categories не заменяют историю.
 Сопоставьте MCC и историю, не выбирайте ставку по дате обращения.
 

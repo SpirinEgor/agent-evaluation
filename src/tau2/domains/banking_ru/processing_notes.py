@@ -16,10 +16,19 @@ class ProcessingNote(BaseModel):
     customer_id: str
     case_id: str
     subject_type: Literal[
-        "case", "payment", "reprocessing", "offer", "resolution", "reply"
+        "case",
+        "payment",
+        "reprocessing",
+        "offer",
+        "resolution",
+        "reply",
+        "client_reply",
+        "exchange_reply",
     ]
     subject_id: str
-    available_after: Literal["opened", "statement_accepted", "partial_execution"]
+    available_after: Literal[
+        "opened", "statement_accepted", "partial_execution", "client_explanation_sent"
+    ]
     author: str
     source_ref: str
     created_at: str
@@ -28,6 +37,7 @@ class ProcessingNote(BaseModel):
     revision: int = 1
     supersedes: str | None = None
     recommended_evidence_id: str | None = None
+    required_exchange_id: str | None = None
 
 
 def with_processing_notes(db, row, customer_id, subject_type, subject_id):
@@ -42,6 +52,21 @@ def with_processing_notes(db, row, customer_id, subject_type, subject_id):
             continue
         case = db.cases.get(note.case_id)
         if case is None or case.customer_id != customer_id:
+            continue
+        if note.required_exchange_id is not None:
+            receipt = db.case_exchange_receipts.get(note.required_exchange_id, {})
+            if (
+                receipt.get("status") != "matched"
+                or receipt.get("case_id") != note.case_id
+                or receipt.get("customer_id") != customer_id
+            ):
+                continue
+        if note.available_after == "client_explanation_sent" and not any(
+            message.get("case_id") == case.id
+            and message.get("status") == "sent"
+            and message.get("case_items") is not None
+            for message in db.support_messages
+        ):
             continue
         if note.available_after == "statement_accepted" and not any(
             r.get("customer_id") == customer_id
@@ -62,7 +87,9 @@ def with_processing_notes(db, row, customer_id, subject_type, subject_id):
             for op in db.reward_resolution_executions.values()
         ):
             continue
-        notes.append(note.model_dump(exclude={"available_after"}))
+        notes.append(
+            note.model_dump(exclude={"available_after", "required_exchange_id"})
+        )
     result = deepcopy(row)
     if notes:
         result["processing_notes"] = notes

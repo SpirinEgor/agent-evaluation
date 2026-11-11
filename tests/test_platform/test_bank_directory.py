@@ -174,3 +174,20 @@ def test_public_session_token_cannot_sign_a_cursor_for_another_session():
         )
         with pytest.raises(DirectoryError, match="CURSOR"):
             d2.handle({"operation": "list_systems", "cursor": forged})
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        [],
+        ["tool_00", "tool_00"],
+        [f"tool_{i:02d}" for i in range(21)],
+        "tool_00",
+        [None],
+    ],
+)
+def test_batch_limits_enforced_by_runtime_without_opening_tools(names):
+    d = directory()
+    with pytest.raises(DirectoryError, match="INVALID_ARGUMENT"):
+        d.handle({"operation": "open_tools", "system_id": "crm", "tool_names": names})
+    assert not d._opened

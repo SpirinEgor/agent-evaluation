@@ -20,7 +20,13 @@ from tau2.domains.banking_ru.environment import get_environment
 from tau2.platform.bank_directory import directory_tools
 from tau2.platform.session import PlatformSession, SessionStatus
 
-SCENARIO_FIELDS = {"id", "initial_state", "max_bank_calls"}
+SCENARIO_FIELDS = {
+    "id",
+    "initial_state",
+    "max_bank_calls",
+    "bank_budget_mode",
+    "scheduled_client_messages",
+}
 
 
 class BankingBenchmark(Benchmark):
@@ -50,28 +56,12 @@ class BankingBenchmark(Benchmark):
         )
 
     def on_start(self) -> TaskStart:
-        bank_limit = self.session.max_calls
-        discovery_limit = self.session.max_discovery_calls
-        discovery = (
-            "числовой лимит не установлен"
-            if discovery_limit is None
-            else f"лимит {discovery_limit} вызовов"
-        )
         budgets = (
-            "Бюджеты банковской среды:\n"
-            f"- Банковский лимит: {bank_limit} вызовов. "
-            "Полное чтение документов входит в этот бюджет.\n"
-            f"- Discovery: отдельный бюджет, {discovery}. "
-            "К нему относятся bank_directory и операции knowledge MCP: "
-            "list_documents, search_documents, list_revisions, "
-            "corpus_command с ls/find/grep. Они не расходуют банковский лимит. "
-            "Остальные bank_call, кроме done, расходуют банковский бюджет.\n"
-            "- Общие ходы (max_turns) задаются платформой отдельно и включают "
-            "банковские вызовы, discovery и done.\n"
-            f"После {bank_limit}-го банковского вызова новые банковские операции "
-            "отклоняются без исполнения. Сессия остаётся открытой для bank_call(done) "
-            "и discovery в его отдельном бюджете. Сам done банковский бюджет не расходует."
+            f"Лимит: {self.session.max_calls} вызовов\n"
+            "Остаток — в ответах инструментов."
         )
+        if self.session.task.bank_budget_mode == "diagnostic":
+            budgets += "\nЛимит диагностический: превышение не останавливает операции."
         return TaskStart(
             instructions=self.session.policy.rstrip() + "\n\n" + budgets,
             opening=self.task.input["ticket"],
@@ -85,7 +75,11 @@ class BankingBenchmark(Benchmark):
         result = self.session.call(action.name, action.arguments)
         terminal = self.session.status is not SessionStatus.OPEN
         return ActionResult(
-            content=result.content[0].text,
+            # MCP may carry accounting after the domain payload. Forward all
+            # text blocks so the A2A agent observes the same budget as MCP.
+            content="\n\n".join(
+                block.text for block in result.content if block.type == "text"
+            ),
             done=terminal,
             domain_reason=self.session.status.value if terminal else None,
         )

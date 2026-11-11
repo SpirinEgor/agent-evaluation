@@ -16,7 +16,13 @@ def collect() -> list[TaskDefinition]:
                 input={
                     "scenario": {
                         key: raw[key]
-                        for key in ("id", "initial_state", "max_bank_calls")
+                        for key in (
+                            "id",
+                            "initial_state",
+                            "max_bank_calls",
+                            "bank_budget_mode",
+                            "scheduled_client_messages",
+                        )
                     },
                     "ticket": task.agent_ticket(),
                 },

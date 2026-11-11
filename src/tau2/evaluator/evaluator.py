@@ -250,6 +250,7 @@ def evaluate_simulation(
                 strict=strict_replay,
             )
         confidentiality_db = env.tools.db.model_dump(mode="json")
+        confidentiality_db["session"] = env.tools.db.session.model_dump(mode="json")
         if resolve_access:
             task = task.model_copy(deep=True)
             task.evaluation_criteria.tool_access_policy = resolve_initial_access_policy(

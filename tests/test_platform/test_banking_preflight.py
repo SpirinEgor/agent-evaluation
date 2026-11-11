@@ -390,6 +390,13 @@ def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
     from test_platform.test_codex_broker import valid_evidence
 
     contract, evidence = valid_evidence()
+    from test_platform.test_codex_container import real_directory_request_contract
+
+    real_contract, real_request = real_directory_request_contract()
+    contract["schemas"] = real_contract["schemas"]
+    for event in evidence["events"]:
+        if event["event"] == "request":
+            event["body"]["input"][0] = real_request["input"][0]
     requests = [e["body"] for e in evidence["events"] if e["event"] == "request"]
     (proof / "broker-evidence.json").write_text(json.dumps(evidence))
     (proof / "isolation.json").write_text(
@@ -442,14 +449,14 @@ def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
                     "developerInstructions": "",
                     "allowProviderModelFallback": False,
                     "dynamicTools": [
-                        {
-                            "type": "function",
-                            "name": n,
-                            "description": n,
-                            "inputSchema": {"type": "object"},
-                            "deferLoading": False,
-                        }
-                        for n in ["bank_directory", "bank_call"]
+                        dict(
+                            type="function",
+                            name=t["name"],
+                            description=t["description"],
+                            inputSchema=t["inputSchema"],
+                            deferLoading=False,
+                        )
+                        for t in contract["schemas"]
                     ],
                     "sandbox": "danger-full-access",
                     "approvalPolicy": "never",
@@ -911,3 +918,19 @@ def test_probe_persists_runtime_before_postprocessing_and_cleanup_errors(
     assert outcome["outcome"] == "technical_failure" and outcome["error"] == expected
     if failure_stage == "journal":
         assert len(outcome["error_notes"]) == 3
+
+
+def test_physical_schema_proof_rejects_toy_and_stale_schemas():
+    from test_platform.test_codex_container import (
+        real_directory_request_contract,
+        request_contract,
+    )
+
+    m = module()
+    with pytest.raises(ValueError, match="real banking directory schemas"):
+        m.verify_directory_schema_proof(request_contract()[0])
+    contract, _ = real_directory_request_contract()
+    m.verify_directory_schema_proof(contract)
+    contract["schemas"][0]["inputSchema"]["properties"]["tool_names"].pop("maxItems")
+    with pytest.raises(ValueError, match="real banking directory schemas"):
+        m.verify_directory_schema_proof(contract)

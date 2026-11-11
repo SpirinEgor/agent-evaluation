@@ -82,7 +82,7 @@ class FileCorpus:
             == revision
         )
 
-    def read(self, path: str) -> dict:
+    def read(self, path: str, *, expand_receipts: bool = True) -> dict:
         """Return the exact whole file with snapshot and revision metadata."""
         self.validate_path(path)
         if path not in self.documents:
@@ -153,6 +153,10 @@ class FileCorpus:
             )
         if equivalents:
             receipt["equivalent_documents"] = equivalents
+        if not expand_receipts:
+            for key in ("included_documents", "equivalent_documents"):
+                for related in receipt.get(key, []):
+                    related.pop("content", None)
         return receipt
 
     def list(self, path: str) -> dict:

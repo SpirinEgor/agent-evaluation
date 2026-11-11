@@ -1,0 +1,23 @@
+name: Banking frozen releases
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  freeze-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check dependencies and immutable evidence
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
+            python3 scripts/banking_ru/check_frozen_bank2.py --base "$BASE_SHA"
+          else
+            python3 scripts/banking_ru/check_frozen_bank2.py
+          fi

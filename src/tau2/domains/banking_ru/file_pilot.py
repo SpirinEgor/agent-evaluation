@@ -75,7 +75,7 @@ class FileBankingTools(DiscoveryBankingTools, BankingTools):
         Args:
             path: Canonical absolute virtual file path obtained from the corpus.
         """
-        return FileResponse(self.corpus.read(path))
+        return FileResponse(self.corpus.read(path, expand_receipts=False))
 
     def assert_file_is_reachable(self, path: str, pattern: str) -> bool:
         """Private assertion: the required document is available via file search."""

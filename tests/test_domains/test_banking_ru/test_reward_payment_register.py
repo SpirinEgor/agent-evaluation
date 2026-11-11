@@ -199,29 +199,29 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
                 and "resolution_operation_id" not in packet
             ):
                 packet.update(
-                    component_ids=["1A", "2A", "5A", "6B"],
-                    total_amount=33,
+                    component_ids=["1A", "2A", "3B", "6B"],
+                    total_amount=32.75,
                     payouts=[
                         {"transaction_id": "txn_804219", "amount": 18.25},
-                        {"transaction_id": "txn_804227", "amount": 14.75},
+                        {"transaction_id": "txn_804227", "amount": 14.5},
                     ],
                 )
                 if "resulting_claims" in packet:
                     packet["resulting_claims"] = [
-                        {"transaction_id": "txn_804219", "amount": 0.75},
-                        {"transaction_id": "txn_804227", "amount": 1.15},
+                        {"transaction_id": "txn_804219", "amount": 2.45},
+                        {"transaction_id": "txn_804227", "amount": 1.4},
                         {"transaction_id": "txn_804205", "amount": 7},
                     ]
             if packet.get("resolution_operation_id") and "payouts" in packet:
                 packet.update(
-                    total_amount=12.65,
+                    total_amount=14.35,
                     payouts=[
-                        {"transaction_id": "txn_804219", "amount": 0.75},
+                        {"transaction_id": "txn_804219", "amount": 2.45},
                         {"transaction_id": "txn_804227", "amount": 11.9},
                     ],
                 )
                 if "component_ids" in packet:
-                    packet["component_ids"] = ["1A", "2A", "5A", "6B"]
+                    packet["component_ids"] = ["1A", "2A", "3B", "6B"]
         for action in task.evaluation_criteria.actions:
             packet = action.arguments.get("request", action.arguments)
             if packet.get("resolution_operation_id") and "resulting_claims" in packet:
@@ -230,11 +230,31 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
                 ]
             if action.name == "amend_cashback_investigation":
                 action.arguments["items"][1]["amount"] = 0
+            if action.action_id == "bank2:v37:handover":
+                action.arguments["items"] = [
+                    {"transaction_id": "txn_804205", "amount": 7}
+                ]
+                action.arguments["assignments"] = {
+                    key: value
+                    for key, value in action.arguments["assignments"].items()
+                    if key == "txn_804205"
+                }
+            if action.action_id == "bank2:v37:explanation":
+                action.arguments["case_items"] = [
+                    {"transaction_id": "txn_804205", "amount": 7}
+                ]
+    from tests.test_domains.test_banking_ru.test_bank2_linked_goals import (
+        current_case_output_arguments,
+    )
+
     session = PlatformSession(task, get_environment, max_calls=100, max_errors=0)
     for action in original_packets if wrong else task.evaluation_criteria.actions:
-        result = session.call(action.name, action.arguments)
+        result = session.call(
+            action.name,
+            current_case_output_arguments(session, action.name, action.arguments),
+        )
         if not wrong:
-            assert not result.is_error, result.content
+            assert not result.is_error, (action.action_id, action.name)
     assert not session.call("done", {}).is_error
     for reward in [session.grade(), grade_full_session(session).reward_info]:
         if wrong:
@@ -246,17 +266,17 @@ def test_bank2_batch_contrasts_whole_grade(variant, wrong):
             }, reward.info
     if not wrong:
         case = session.env.tools.db.cases["case_610903"]
-        assert case.review_amount == (7 if different else 7.4)
+        assert case.review_amount == (7 if different else 9.35)
         assert {r.transaction_id: r.amount for r in case.review_items} == {
             "txn_804205": 7,
-            **({} if different else {"txn_804227": 0.4}),
+            **({} if different else {"txn_804227": 2.35}),
         }
         operation = next(
             o
             for o in session.env.tools.db.reward_resolution_executions.values()
             if o.packet["offer_id"] == "offer_610735"
         )
-        assert operation.result["total_amount"] == (30.9 if different else 35.5)
+        assert operation.result["total_amount"] == (32.6 if different else 35.25)
 
 
 @pytest.mark.parametrize(
@@ -272,7 +292,7 @@ def test_merchant_attachment_does_not_authorize_foreign_access(route):
     session = PlatformSession(task, get_environment, max_errors=0)
     for action in task.evaluation_criteria.actions:
         result = session.call(action.name, action.arguments)
-        assert not result.is_error, result.content
+        assert not result.is_error, (action.action_id, action.name)
         if action.action_id == "bank2:v13:allocation-register":
             assert "CF-2607-1188" in result.content[0].text
             if route == "follow_instruction":
@@ -327,7 +347,10 @@ def test_mixed_reconciliation_preserves_money_and_replay(mixed_tools):
     original_balance = db.accounts["acc_1187"].balance
     original_hash = mixed_tools.get_db_hash()
     result = mixed_tools.reconcile_payment_allocation(
-        "allocation_mixed_01", "decision_mixed_01", 1
+        "allocation_mixed_01",
+        "decision_mixed_01",
+        1,
+        lines=db.payment_bases["decision_mixed_01"].lines,
     )
     assert result["status"] == "reconciled" and result["revision"] == 2
     assert mixed_tools.get_db_hash() != original_hash
@@ -335,7 +358,10 @@ def test_mixed_reconciliation_preserves_money_and_replay(mixed_tools):
     snapshot = db.model_dump()
     assert (
         mixed_tools.reconcile_payment_allocation(
-            "allocation_mixed_01", "decision_mixed_01", 1
+            "allocation_mixed_01",
+            "decision_mixed_01",
+            1,
+            lines=db.payment_bases["decision_mixed_01"].lines,
         )
         == result
     )
@@ -363,7 +389,7 @@ def test_mixed_invalid_reconciliation_has_no_effect(mixed_tools, variant):
     before = db.model_dump()
     with pytest.raises(ValueError):
         mixed_tools.reconcile_payment_allocation(
-            "allocation_mixed_01", basis.id, revision
+            "allocation_mixed_01", basis.id, revision, lines=basis.lines
         )
     assert db.model_dump() == before
 

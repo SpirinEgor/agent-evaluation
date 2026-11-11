@@ -65,12 +65,37 @@ def render_client_sources(original: str, updated: dict) -> str:
     return rendered
 
 
+def has_initial_identity(task: dict) -> bool:
+    """Accept seeded authorization, never a ticket's unverified identity claim."""
+    criteria = task["evaluation_criteria"]
+    policy = criteria.get("tool_access_policy", {})
+    allowed = set(policy.get("allowed_customer_ids", []))
+    session = (
+        task.get("initial_state", {})
+        .get("initialization_data", {})
+        .get("agent_data", {})
+        .get("session", {})
+    )
+    return (
+        bool(allowed)
+        and allowed <= set(session.get("verified_customers", []))
+        and not policy.get("authentication_action_ids")
+    )
+
+
 def with_contract(tasks: list[dict]) -> list[dict]:
     """Replace route-specific identity gates with received-value binding."""
     for task in tasks:
         criteria = task["evaluation_criteria"]
         actions = criteria["actions"]
         checks = [a for a in actions if a["name"] == "verify_identity"]
+        if not checks and has_initial_identity(task):
+            if any(
+                b["binding_id"].startswith((PREFIX, "common_identity_receipt_"))
+                for b in criteria.get("result_argument_bindings", [])
+            ):
+                raise ValueError(f"Stale identity bindings in {task['id']}")
+            continue
         if len(checks) != 1:
             raise ValueError(f"Task {task['id']} needs an explicit identity route")
         target = checks[0]

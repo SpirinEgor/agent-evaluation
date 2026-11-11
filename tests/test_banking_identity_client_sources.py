@@ -16,6 +16,46 @@ def test_client_answer_accepts_canonical_rows_and_historical_keywords():
     assert historical.keywords == ["согласие"]
 
 
+@pytest.mark.parametrize("verified", [[], ["another-customer"], ["c1"]])
+def test_seeded_identity_requires_real_matching_session(identity_generator, verified):
+    from build_discovery_contract import with_contract as discovery
+
+    task = {
+        "id": "Synthetic seeded task",
+        "ticket_context": {"identity_status": "verified"},
+        "initial_state": {
+            "initialization_data": {
+                "agent_data": {"session": {"verified_customers": verified}}
+            }
+        },
+        "evaluation_criteria": {
+            "actions": [],
+            "tool_access_policy": {
+                "allowed_customer_ids": ["c1"],
+                "authentication_action_ids": [],
+            },
+        },
+    }
+    db = {
+        "customers": {
+            "c1": {
+                "id": "c1",
+                "full_name": "Synthetic Client",
+                "phone": "+70000000000",
+                "birth_date": "1990-01-01",
+            }
+        }
+    }
+    if verified == ["c1"]:
+        assert identity_generator.with_contract([task]) == [task]
+        assert discovery([task], db) == [task]
+    else:
+        with pytest.raises(ValueError):
+            identity_generator.with_contract([task])
+        with pytest.raises(ValueError):
+            discovery([task], db)
+
+
 @pytest.fixture
 def identity_generator(monkeypatch):
     directory = Path(__file__).resolve().parents[1] / "scripts/banking_ru"

@@ -141,6 +141,7 @@ class PaymentBasisLine(BaseModel):
     amount: float = Field(gt=0, allow_inf_nan=False)
     purchase_id: str | None = None
     incident_id: str | None = None
+    related_purchase_id: str | None = None
     reward_program: Literal["standard_cashback", "partner_cashback"] | None = None
 
     @field_validator("amount")
@@ -196,6 +197,14 @@ def validate_payment_basis(db, basis):
     ):
         raise ValueError("ERR_PAYMENT_BASIS: Несогласованное основание выплаты")
     for line in basis.lines:
+        if line.related_purchase_id is not None:
+            related = db.transactions.get(line.related_purchase_id)
+            if (
+                related is None
+                or related.kind != "purchase"
+                or related.customer_id != basis.customer_id
+            ):
+                raise ValueError("ERR_PAYMENT_BASIS: Чужая связанная покупка")
         if line.purpose == "cashback":
             purchase = db.transactions.get(line.purchase_id)
             if (
@@ -286,8 +295,9 @@ def require_reconciled_payments(db, customer_id, period, transaction_ids=None):
         validate_payment_basis(db, basis)
 
 
-def reconcile_payment(tools, allocation_id, basis_id, expected_revision):
+def reconcile_payment(tools, allocation_id, basis_id, expected_revision, lines):
     from tau2.domains.banking_ru.cashback_state import revision
+    from tau2.domains.banking_ru.reward_workflows import cents
     from tau2.environment.tool import ToolExecutionRejected
 
     allocation = tools.db.payment_allocations.get(allocation_id)
@@ -304,11 +314,33 @@ def reconcile_payment(tools, allocation_id, basis_id, expected_revision):
         or basis.period != allocation.period
     ):
         raise ToolExecutionRejected("ERR_PAYMENT_BASIS: Основание другой выплаты")
+    lines = sorted(
+        (PaymentBasisLine.model_validate(line) for line in lines),
+        key=lambda line: line.id,
+    )
+    payment = tools.db.transactions.get(allocation.payment_id)
+    if not lines or len({line.id for line in lines}) != len(lines):
+        raise ToolExecutionRejected("ERR_INVALID_ARGUMENT")
+    if payment is None or sum(cents(line.amount) for line in lines) != cents(
+        payment.amount
+    ):
+        raise ToolExecutionRejected("ERR_INVALID_ARGUMENT")
+    for line in lines:
+        for purchase_id in (line.purchase_id, line.related_purchase_id):
+            if purchase_id is not None:
+                tx = tools.db.transactions.get(purchase_id)
+                if tx is None or tx.customer_id != allocation.customer_id:
+                    raise ToolExecutionRejected("ERR_FOREIGN_RESOURCE")
+    for line in lines:
+        if line.incident_id is not None:
+            incident = tools.db.service_incidents.get(line.incident_id)
+            if incident is None or incident.customer_id != allocation.customer_id:
+                raise ToolExecutionRejected("ERR_FOREIGN_RESOURCE")
     validate_payment_basis(tools.db, basis)
     if (
         allocation.status == "reconciled"
         and allocation.basis_id == basis_id
-        and allocation.lines == basis.lines
+        and allocation.lines == lines
         and expected_revision in {allocation.revision, allocation.revision - 1}
     ):
         return {
@@ -321,11 +353,28 @@ def reconcile_payment(tools, allocation_id, basis_id, expected_revision):
         raise ToolExecutionRejected(
             "ERR_VERSION_CONFLICT: Изменилась версия распределения"
         )
-    allocation.lines = deepcopy(basis.lines)
+
+    def economic_lines(lines):
+        return sorted(
+            (
+                x.id,
+                x.purpose,
+                x.amount,
+                x.purchase_id or "",
+                x.reward_program or "",
+                x.incident_id or "",
+            )
+            for x in lines
+        )
+
+    changes_money = economic_lines(allocation.lines) != economic_lines(lines)
+    allocation.lines = deepcopy(lines)
     allocation.status = "reconciled"
     allocation.basis_id = basis.id
     allocation.revision += 1
     from tau2.domains.banking_ru.cashback_state import advance
 
-    current = advance(tools.db, allocation.customer_id, allocation.period)
+    current = (advance if changes_money else revision)(
+        tools.db, allocation.customer_id, allocation.period
+    )
     return {**allocation.model_dump(), "state_revision": current}

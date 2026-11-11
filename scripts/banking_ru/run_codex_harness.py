@@ -297,6 +297,7 @@ async def invoke_isolated_codex(
     inference_forward=None,
     agent_profile="baseline",
     tool_transport=None,
+    retain_session=False,
 ) -> dict:
     """Run full-access Codex in a fresh container without any host mounts."""
     spec = importlib.util.spec_from_file_location(
@@ -340,6 +341,7 @@ async def invoke_isolated_codex(
             **(
                 {"tool_transport": tool_transport} if tool_transport is not None else {}
             ),
+            **({"retain_session": True} if retain_session else {}),
         )
         attach_container()
         return run
@@ -352,7 +354,21 @@ async def invoke_isolated_codex(
     finally:
         primary_error = sys.exc_info()[1]
         try:
-            await asyncio.to_thread(container.remove_container, name)
+            if retain_session and run is not None and run.get("native_thread_id"):
+                current = await asyncio.to_thread(container.inspect_container, name)
+                run["container"].update(
+                    retained=True,
+                    cleanup_verified=False,
+                    running=current["State"]["Running"],
+                    native_thread_id=run["native_thread_id"],
+                )
+                run["container"][
+                    "retention_check"
+                ] = await container.inspect_native_thread(
+                    name, run["app_server_command"], run["native_thread_id"]
+                )
+            else:
+                await asyncio.to_thread(container.remove_container, name)
         except Exception as error:
             if run is not None:
                 error.partial_run = run
@@ -360,7 +376,11 @@ async def invoke_isolated_codex(
                 raise
             primary_error.add_note(f"Container cleanup also failed: {error!r}")
         else:
-            if run is not None and "container" in run:
+            if (
+                run is not None
+                and "container" in run
+                and not run["container"].get("retained")
+            ):
                 run["container"]["cleanup_verified"] = True
 
 

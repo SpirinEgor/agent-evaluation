@@ -5,8 +5,19 @@ from zoneinfo import ZoneInfo
 
 # Shared private reads are declared once, rather than copied into every task.
 COMMON_TOOL_ACCESS = {
+    "process_case_instruction": {"case_id": "cases"},
+    "send_support_message": {
+        "customer_id": "customers",
+        "case_id": "cases",
+        "case_items.*.transaction_id": "transactions",
+    },
     "case_workspace": {"case_id": "cases"},
     "send_case_message": {"case_id": "cases"},
+    "record_case_handover": {
+        "case_id": "cases",
+        "items.*.transaction_id": "transactions",
+    },
+    "get_case_exchange_requests": {"case_id": "cases"},
     "get_reward_duplicate_reviews": {"customer_id": "customers", "case_id": "cases"},
     "resolve_reward_duplicate_review": {
         "review_id": "reward_duplicate_reviews",
@@ -17,6 +28,9 @@ COMMON_TOOL_ACCESS = {
     "reconcile_payment_allocation": {
         "allocation_id": "payment_allocations",
         "basis_id": "payment_bases",
+        "lines.*.purchase_id": "transactions",
+        "lines.*.related_purchase_id": "transactions",
+        "lines.*.incident_id": "service_incidents",
     },
     "get_reward_reprocessing_cases": {"customer_id": "customers"},
     "repair_reward_binding": {
@@ -208,32 +222,79 @@ def prepare_access_policy(policy):
     return type(policy).model_validate(policy.model_dump())
 
 
-def registry_page(collection, customer_id, cursor=None, *, receipt_id=None):
-    """Deterministic pages; the cursor is a public offset, never authorization."""
+def registry_page(
+    collection,
+    customer_id,
+    cursor=None,
+    *,
+    receipt_id=None,
+    snapshots=None,
+    registry_name="registry",
+    limit=5,
+):
+    """Continue an immutable, scope-bound snapshot; a fresh read sees live state."""
+    import hashlib
+    import json
+    from copy import deepcopy
+
     from tau2.environment.tool import ToolExecutionRejected
 
-    records = sorted(
-        (
-            r.model_dump()
-            for r in collection.values()
-            if r.customer_id == customer_id
-            and (receipt_id is None or getattr(r, "receipt_id", None) == receipt_id)
-        ),
-        key=lambda r: r["id"],
-    )
+    if snapshots is None:
+        snapshots = {}
+    if type(limit) is not int or not 1 <= limit <= 50:
+        raise ToolExecutionRejected("ERR_INVALID_ARGUMENT")
+    scope = {
+        "limit": limit,
+        "registry": registry_name,
+        "customer_id": customer_id,
+        "receipt_id": receipt_id,
+    }
     try:
-        offset = 0 if cursor is None else int(cursor)
-        if offset < 0 or offset % 5 or (cursor is not None and str(offset) != cursor):
-            raise ValueError()
-        if offset and offset >= len(records):
-            raise ValueError()
-    except (ValueError, TypeError):
-        raise ToolExecutionRejected("ERR_CURSOR: Неверный курсор реестра")
-    end = offset + 5
+        if cursor is None:
+            records = sorted(
+                (
+                    r.model_dump()
+                    for r in collection.values()
+                    if r.customer_id == customer_id
+                    and (
+                        receipt_id is None
+                        or getattr(r, "receipt_id", None) == receipt_id
+                    )
+                ),
+                key=lambda r: r["id"],
+            )
+            snapshot_id = hashlib.sha256(
+                json.dumps(
+                    [scope, records],
+                    sort_keys=True,
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ).encode()
+            ).hexdigest()[:24]
+            snapshots[snapshot_id] = (deepcopy(scope), deepcopy(records))
+            offset = 0
+        else:
+            snapshot_id, raw_offset = cursor.split(":")
+            offset = int(raw_offset)
+            saved_scope, records = snapshots[snapshot_id]
+            if (
+                saved_scope != scope
+                or offset <= 0
+                or offset % limit
+                or str(offset) != raw_offset
+                or offset >= len(records)
+            ):
+                raise ValueError()
+    except (ValueError, TypeError, KeyError, AttributeError):
+        raise ToolExecutionRejected(
+            "ERR_CURSOR: Неверный курсор или область снимка"
+        ) from None
+    end = offset + limit
     return {
         "customer_id": customer_id,
         "scope": {"customer_id": customer_id, "receipt_id": receipt_id},
-        "records": records[offset:end],
+        "snapshot_id": snapshot_id,
+        "records": deepcopy(records[offset:end]),
         "complete": end >= len(records),
-        "next_cursor": str(end) if end < len(records) else None,
+        "next_cursor": f"{snapshot_id}:{end}" if end < len(records) else None,
     }

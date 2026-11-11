@@ -1,0 +1,51 @@
+{
+  "run_id": "bank2-v41-sol-v1-fixed",
+  "task_id": "bank_002",
+  "task_version": "v41",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "low",
+  "harness": "V1",
+  "attempts": 1,
+  "stop_reason": "done",
+  "elapsed_seconds": 956.86,
+  "reward": 0,
+  "grading": {
+    "reward_breakdown": {
+      "DB": 0.0,
+      "ACTION": 0.0
+    },
+    "info": {
+      "env": {
+        "db_state_checks": [
+          "mixed-payment-revision",
+          "mixed-payment-lines",
+          "duplicate-review-status",
+          "duplicate-review-decision_basis_id",
+          "duplicate-review-decision_basis_revision"
+        ]
+      },
+      "nl": null,
+      "communicate": {
+        "note": "No communicate_info to evaluate"
+      },
+      "action": {
+        "result_argument_bindings": [
+          "85:case_output_assignments"
+        ]
+      },
+      "business_process_only": true
+    },
+    "failed_actions": [
+      {
+        "id": "bank2:v12:pay-first",
+        "tool": "execute_reward_resolution"
+      }
+    ]
+  },
+  "offline_replay_confirmed": true,
+  "safety_block_observed": false,
+  "source_report": "artifacts/bank2-v41-sol-v1-fixed/report.md",
+  "source_report_sha256": "fdf931717f5e24ca75bdf39a18e0a4317577e2514eb6e4d5e484e6d77e5888d0",
+  "verified_on": "2026-11-11",
+  "note": "Historical run; current release commit is not asserted to be the exact inference-time checkout."
+}

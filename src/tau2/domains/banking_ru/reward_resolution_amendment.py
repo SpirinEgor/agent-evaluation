@@ -129,7 +129,7 @@ def confirm_amendment(tools, customer_id, request):
         raise ToolExecutionRejected(
             "ERR_AMENDMENT_NOT_PENDING: Нет неисполненной части"
         )
-    packet = request.model_dump(exclude={"type"})
+    packet = request.model_dump(exclude={"type", "payout_tolerance"})
     for key in ("payouts", "resulting_claims"):
         packet[key] = normalized(packet[key])
         for item in packet[key]:

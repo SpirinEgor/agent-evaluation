@@ -3,10 +3,10 @@
 from copy import deepcopy
 
 from tau2.domains.banking_ru.reward_funding import (
+    other_commitments,
     reserve_key,
     reserve_members,
     reserve_operations,
-    shared_held,
     shared_spent,
 )
 from tau2.domains.banking_ru.reward_workflows import (
@@ -122,6 +122,28 @@ def funding_replacement(tools, offer, update):
         for tid in offer.transaction_ids
         if statement_needed(tools._get_transaction(tid))
     }
+    if "statement_scope" in update:
+        accepted = set().union(
+            *(
+                set(row["transaction_ids"])
+                for row in tools.db.reward_statement_registrations.values()
+                if row["customer_id"] == offer.customer_id
+                and row["case_id"] == offer.case_id
+                and row["status"] == "accepted"
+            )
+        )
+        if set(update["statement_scope"]) != needed or not needed <= accepted:
+            raise ValueError(
+                "ERR_INVALID_OFFER_DECISION: Не все части заявления приняты"
+            )
+        # A scoped decision accepts equivalent combined or separate submissions.
+        statement = dict(
+            id=update.get("statement_id"),
+            status="accepted",
+            customer_id=offer.customer_id,
+            case_id=offer.case_id,
+            transaction_ids=sorted(needed),
+        )
     if (
         type(update.get("previous_version")) is not int
         or type(update.get("new_version")) is not int
@@ -130,7 +152,7 @@ def funding_replacement(tools, offer, update):
         or offer.status != "approved"
         or not needed
         or not statement
-        or statement.get("id") != update["statement_id"]
+        or statement.get("id") != update.get("statement_id")
         or statement.get("status") != "accepted"
         or statement.get("customer_id") != offer.customer_id
         or statement.get("case_id") != offer.case_id
@@ -163,10 +185,20 @@ def funding_replacement(tools, offer, update):
             raise ValueError("Отсутствует бюджет финансирования")
         if reserve_key(offer) is not None:
             members = reserve_members(tools.db, offer)
+            if any(
+                sum(
+                    cents(row[source])
+                    for row in other_commitments(tools.db, offer)
+                    if not row.get("released_" + source, False)
+                    and row.get(source + "_status") != "canceled_final"
+                )
+                > cents(getattr(replacement.selection_budget, source))
+                for source in ("bank", "partner")
+            ):
+                raise ValueError("Новый резерв меньше сохранённых обязательств")
             if (
                 reserve_key(replacement) != reserve_key(offer)
                 or any(shared_spent(tools.db, offer).values())
-                or any(shared_held(tools.db, offer).values())
                 or any(
                     row["status"] == "execution_unknown"
                     for row in reserve_operations(tools.db, offer)
@@ -350,6 +382,22 @@ def refresh(tools, customer_id, period):
         s.update(status="settled", ledger_ids=[row["id"] for row in s["credits"]])
     tools.db.reward_resolution_offers.update(replacements)
     tools.db.service_incidents.update(incidents)
+    # Independent obligations release each funding source only after its own
+    # authoritative final cancellation. Pending partner money stays reserved.
+    changed_reserves = {
+        (o.case_id, o.selection_budget.id)
+        for o in replacements.values()
+        if o.selection_budget is not None
+    }
+    for commitment in tools.db.reward_funding_commitments.values():
+        if (
+            commitment["customer_id"] == customer_id
+            and commitment["period"] == period
+            and (commitment["case_id"], commitment["reserve_id"]) in changed_reserves
+        ):
+            for source in ("bank", "partner"):
+                if commitment.get(source + "_status") == "canceled_final":
+                    commitment["released_" + source] = True
     for update in updates:
         if update["offer_id"] in replacements:
             tools.db.reward_resolution_offers[update["offer_id"]] = replacements[
@@ -375,7 +423,11 @@ def refresh(tools, customer_id, period):
                     {
                         "event_id": u["id"],
                         "offer_id": u["offer_id"],
-                        "statement_id": u["statement_id"],
+                        **(
+                            {"statement_scope": u["statement_scope"]}
+                            if "statement_scope" in u
+                            else {"statement_id": u["statement_id"]}
+                        ),
                         "previous_version": u["previous_version"],
                         "new_version": u["new_version"],
                     }

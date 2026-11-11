@@ -2,6 +2,7 @@
 
 from decimal import Decimal, InvalidOperation
 
+from tau2.domains.banking_ru.reward_resolution import payouts_within_consent
 from tau2.evaluator.cashback_state import payload, records
 
 
@@ -520,7 +521,7 @@ def _amendment_failures(observed, target, policy):
     return failures
 
 
-def reward_business_failures(trace, policy):
+def reward_business_failures(trace, policy, *, initial_db=None):
     """Validate every successful protected mutation, including later repaired ones."""
     if not policy:
         return []
@@ -646,6 +647,23 @@ def reward_business_failures(trace, policy):
                     break
         if name == "refresh_cashback_settlement" and isinstance(result, dict):
             for decision in result.get("funding_decisions", []):
+                rows = [
+                    row
+                    for source in received(target, "get_reward_statement_status")
+                    for row in records(payload(source))
+                    if row.get("status") == "accepted"
+                    and row.get("customer_id") == policy["customer_id"]
+                    and row.get("case_id") == policy["case_id"]
+                ]
+                rows.extend(
+                    row
+                    for row in (initial_db or {})
+                    .get("reward_statement_registrations", {})
+                    .values()
+                    if row.get("status") == "accepted"
+                    and row.get("customer_id") == policy["customer_id"]
+                    and row.get("case_id") == policy["case_id"]
+                )
                 accepted = any(
                     row.get("id") == decision.get("statement_id")
                     and row.get("status") == "accepted"
@@ -653,9 +671,14 @@ def reward_business_failures(trace, policy):
                     and row.get("case_id") == policy["case_id"]
                     and bool(row.get("transaction_ids"))
                     and set(row["transaction_ids"]) <= selected
-                    for source in received(target, "get_reward_statement_status")
-                    for row in records(payload(source))
+                    for row in rows
                 )
+                if "statement_scope" in decision:
+                    scope = set(decision["statement_scope"])
+                    coverage = set().union(
+                        *(set(row.get("transaction_ids", [])) for row in rows)
+                    )
+                    accepted = bool(scope) and scope <= selected and scope <= coverage
                 if not accepted:
                     failures.append(f"{ident}:funding_acceptance_not_received")
         if name in {"create_cashback_investigation", "grant_cashback"}:
@@ -783,10 +806,7 @@ def reward_business_failures(trace, policy):
                             "total_amount",
                         ]
                     )
-                    and sorted(
-                        data.get("payouts", []), key=lambda x: x["transaction_id"]
-                    )
-                    == sorted(payouts, key=lambda x: x["transaction_id"])
+                    and payouts_within_consent(data, payouts)
                     and data.get("state_revision") == args.get("expected_revision")
                     and sorted(data.get("component_ids") or [])
                     == sorted(args.get("component_ids") or [])

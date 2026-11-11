@@ -28,7 +28,11 @@ def test_startup_has_no_system_map_or_document_targets():
     assert not re.search(r"/policies/|/knowledge/|РО-\d|kb_", policy)
     assert "Системы банка:" not in policy
     assert not any(description in policy for description in SYSTEMS.values())
-    assert "MCP" in policy and "done" in policy
+    assert (
+        policy.strip()
+        == "Вы — специалист поддержки банка. Обработайте обращение клиента."
+    )
+    assert len(policy) < 250
 
 
 @pytest.mark.parametrize("layout", ["single", "systems", "directory"])

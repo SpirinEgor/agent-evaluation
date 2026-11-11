@@ -5,6 +5,7 @@ import json
 import shlex
 from copy import deepcopy
 from datetime import datetime
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from pydantic import RootModel
@@ -35,7 +36,10 @@ class DiscoveryResponse(RootModel[object]):
 
 
 def statement_needed(tx):
-    return tx.reward_discrepancy_type == "partner_activation_review"
+    return (
+        tx.reward_discrepancy_type == "partner_activation_review"
+        or tx.reward_statement_required
+    )
 
 
 def require_bank_acceptance(tools, customer_id, transaction_ids, case_id=None):
@@ -108,11 +112,14 @@ class DiscoveryBankingTools(ToolKitBase):
         return result
 
     @is_tool(ToolType.READ, mutates_state=True)
-    def give_discoverable_user_tool(self, name: str) -> DiscoveryResponse:
+    def give_discoverable_user_tool(
+        self, name: Literal["submit_reward_statement"]
+    ) -> DiscoveryResponse:
         """Make a documented action available to the deterministic customer channel.
 
         Args:
-            name: Exact customer-action name from documentation.
+            name: Customer action identifier. The schema lists supported actions.
+                submit_reward_statement submits a customer reward statement.
         """
         if name != CLIENT_TOOL:
             raise ValueError("ERR_UNKNOWN_CUSTOMER_TOOL")
@@ -292,7 +299,9 @@ class DiscoveryBankingTools(ToolKitBase):
         verb, *args = words
         if verb == "cat" and args:
             return DiscoveryResponse(
-                dict(documents=[self.corpus.read(p) for p in args])
+                dict(
+                    documents=[self.corpus.read(p, expand_receipts=False) for p in args]
+                )
             )
         if verb == "ls" and len(args) <= 1:
             return DiscoveryResponse(self.corpus.list(args[0] if args else "/"))
@@ -307,7 +316,9 @@ class DiscoveryBankingTools(ToolKitBase):
             return DiscoveryResponse(
                 dict(
                     **found,
-                    documents=[self.corpus.read(p) for p in paths[:20]],
+                    documents=[
+                        self.corpus.read(p, expand_receipts=False) for p in paths[:20]
+                    ],
                     articles_truncated=len(paths) > 20,
                 )
             )

@@ -231,8 +231,12 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
     "case",
     [
         "success",
+        "compaction",
+        "compaction_v1",
         "v1",
         "a2a_v1",
+        "a2a_bank2",
+        "retained_bank2",
         "a2a_cancel",
         "upstream_failure",
         "tool_error",
@@ -250,6 +254,9 @@ def test_file_delivery_reaches_running_tmpfs_when_image_is_available():
 )
 def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
     """Real Codex must consume MCP output, with no native tools or model call."""
+    retain_session = case == "retained_bank2"
+    if retain_session:
+        case = "a2a_bank2"
     import asyncio
     import json
     import os
@@ -298,13 +305,40 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
             },
             "required": ["system_id", "tool_name", "arguments"],
         }
+    bank_benchmark = None
+    bank_prompt, bank_startup = "BANK TICKET", "BANK STARTUP"
+    if case == "a2a_bank2":
+        import platform_sdk as sdk
+        from platform_harness.context import build_context
+
+        from tau2.platform.agents import prompt_for
+        from tau2.platform.bank_directory import directory_tools
+        from tau2.platform.sdk.benchmark import BankingBenchmark
+        from tau2.platform.sdk.tasks import collect
+
+        definition = next(t for t in collect() if t.id == "Bank 2")
+        info = sdk.task_info_from_payload(sdk.task_input_projection(definition))
+        bank_benchmark = BankingBenchmark(info, 0, build_context(info, {}))
+        start = bank_benchmark.on_start()
+        bank_startup = start.instructions
+        bank_prompt = prompt_for(start.opening, "v1")
+        schemas = [
+            dict(name=t.name, description=t.description, inputSchema=t.input_schema)
+            for t in directory_tools()
+        ]
+        assert not bank_benchmark.session.task.initial_state.message_history
+        assert not bank_benchmark.session.trajectory()
+        assert bank_benchmark.session.max_calls == 100
+        assert "evaluation_criteria" not in bank_startup + bank_prompt
+        assert "/knowledge/" not in bank_startup
+        assert "35.25" not in bank_startup + bank_prompt
     final_wait = None
 
     class Stub(BaseHTTPRequestHandler):
         def do_POST(self):
             request = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             if self.path == "/mcp":
-                assert case not in {"a2a_v1", "a2a_cancel"}, (
+                assert case not in {"a2a_v1", "a2a_bank2", "a2a_cancel"}, (
                     "A2A must not connect to direct MCP"
                 )
                 method = request.get("method")
@@ -353,13 +387,25 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                         },
                         arguments='{"operation":"list_systems"}',
                     )
-                elif len(payloads) == 2:
+                elif case.startswith("compaction") and len(payloads) in {2, 4}:
+                    item = dict(
+                        type="message",
+                        id="summary",
+                        role="assistant",
+                        content=[
+                            dict(
+                                type="output_text", text="Own summary\n", annotations=[]
+                            )
+                        ],
+                    )
+                elif len(payloads) == (3 if case.startswith("compaction") else 2):
                     item = dict(
                         type="function_call",
                         id="fc_second",
                         call_id="call_second",
                         name="workbench"
-                        if case in {"v1", "a2a_v1", "a2a_cancel"}
+                        if case
+                        in {"v1", "a2a_v1", "a2a_bank2", "a2a_cancel", "compaction_v1"}
                         else "bank_call",
                         namespace="functions",
                         arguments=json.dumps(
@@ -369,7 +415,8 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                                 "data": [19, 23, 31],
                             }
                         )
-                        if case in {"v1", "a2a_v1", "a2a_cancel"}
+                        if case
+                        in {"v1", "a2a_v1", "a2a_bank2", "a2a_cancel", "compaction_v1"}
                         else "{}",
                     )
                 elif case == "a2a_cancel" and len(payloads) == 3:
@@ -403,6 +450,10 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                     output=[item],
                     usage={"input_tokens": 20, "output_tokens": 10, "total_tokens": 30},
                 )
+                if case.startswith("compaction") and len(payloads) in {1, 3}:
+                    response["usage"] = dict(
+                        input_tokens=250000, output_tokens=10, total_tokens=250010
+                    )
                 events = [
                     (
                         "response.created",
@@ -625,10 +676,10 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         prepared = module.prepare_container(image, name)
         assert all(not paths for paths in prepared["banking_fresh_state"].values())
 
-        async def invoke():
+        async def invoke(resume=None):
             transport = None
             coordinator = None
-            if case in {"a2a_v1", "a2a_cancel"}:
+            if case in {"a2a_v1", "a2a_bank2", "a2a_cancel"}:
                 from tau2.platform.a2a import Exchange
 
                 transport = Exchange(
@@ -648,6 +699,7 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 )
 
                 async def answer():
+                    nonlocal fixture_result
                     for index in range(2 if case == "a2a_cancel" else 1):
                         state, parts = await transport.outgoing.get()
                         assert state == "input-required"
@@ -655,6 +707,12 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                         calls.append(
                             {"name": call["name"], "arguments": call["arguments"]}
                         )
+                        if bank_benchmark is not None:
+                            fixture_result = bank_benchmark.on_action(
+                                sdk.ToolCall(call["name"], call["arguments"])
+                            ).content
+                            assert "использовано 0/100; осталось 100" in fixture_result
+                            assert "Discovery: использовано 1" in fixture_result
                         transport.receive(
                             [
                                 {
@@ -666,20 +724,33 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                             ]
                         )
 
-                coordinator = asyncio.create_task(answer())
+                if resume is None:
+                    coordinator = asyncio.create_task(answer())
             nonlocal final_wait
             final_wait = asyncio.Event()
             task = asyncio.create_task(
                 module.invoke_app_server(
                     name,
                     command,
-                    "BANK TICKET",
-                    "BANK STARTUP",
+                    "Continue the same conversation: reply with Fixture finished."
+                    if resume
+                    else bank_prompt,
+                    bank_startup,
                     30,
                     inference_forward=forward,
+                    retain_session=retain_session,
+                    **(
+                        {
+                            "resume_thread_id": resume["native_thread_id"],
+                            "resume_contract": resume["request_contract"],
+                        }
+                        if resume
+                        else {}
+                    ),
                     **(
                         {"agent_profile": "v1"}
-                        if case in {"v1", "a2a_v1", "a2a_cancel"}
+                        if case
+                        in {"v1", "a2a_v1", "a2a_bank2", "a2a_cancel", "compaction_v1"}
                         else {}
                     ),
                     **({"tool_transport": transport} if transport else {}),
@@ -698,6 +769,14 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
             return result
 
         run = asyncio.run(invoke())
+        if retain_session:
+            assert run["thread_start"]["ephemeral"] is False
+            run["retention_check"] = asyncio.run(
+                module.inspect_native_thread(
+                    name, run["app_server_command"], run["native_thread_id"]
+                )
+            )
+            assert run["retention_check"]["persisted"]
         if case == "a2a_cancel":
             assert run["cancelled"] and run["exit_code"] == 1
             assert run["workbench_events"][0]["output"] == "73"
@@ -723,12 +802,14 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
         module.validate_model_request(payloads[0], run["request_contract"])
         expected_calls = [("bank_directory", {"operation": "list_systems"})]
         if not upstream_failure:
-            if case not in {"v1", "a2a_v1", "a2a_cancel"}:
+            if case not in {"v1", "a2a_v1", "a2a_bank2", "a2a_cancel", "compaction_v1"}:
                 expected_calls.append(("bank_call", {}))
             else:
                 assert run["agent_profile"]["version"] == "V1"
                 assert run["workbench_events"][0]["output"] == "73"
-            assert len(payloads) == (2 if late_failure else 3)
+            assert len(payloads) == (
+                2 if late_failure else 5 if case.startswith("compaction") else 3
+            )
         assert [(c["name"], c["arguments"]) for c in calls] == expected_calls
         if case != "policy_error":
             assert any(
@@ -740,6 +821,23 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 run["broker_evidence"]["errors"][0]["upstream_reason"]
                 == "content_filter"
             )
+        if case.startswith("compaction"):
+            assert payloads[1]["input"][-1] == module.broker_module().COMPACTION_REQUEST
+            assert "Own summary" in payloads[2]["input"][-1]["content"][0]["text"]
+            assert len(payloads[2]["input"]) == 4
+            assert (
+                sum(
+                    e["event"] == "compaction_observed"
+                    for e in run["broker_evidence"]["events"]
+                )
+                == 2
+            )
+            module.broker_module().verify_evidence(
+                run["broker_evidence"],
+                run["request_contract"],
+                module.validate_model_request,
+            )
+            assert "Own summary" not in run["stdout"]
         if case == "transient_error":
             assert len(run["broker_evidence"]["retries"]) == 1
             assert run["broker_evidence"]["upstream_requests"] == 4
@@ -770,6 +868,22 @@ def test_app_server_wire_and_mcp_roundtrip_with_local_stub(case):
                 json.dumps(
                     {"requests": payloads, "run": run}, ensure_ascii=False, indent=2
                 )
+            )
+        if retain_session:
+            resumed = asyncio.run(invoke(run))
+            assert resumed["exit_code"] == 0, resumed["stdout"]
+            assert resumed["native_thread_id"] == run["native_thread_id"]
+            assert resumed["resumed"] and "Fixture finished" in resumed["stdout"]
+            assert len(payloads[-1]["input"]) > 3
+            assert payloads[-1]["input"][2] == payloads[0]["input"][2]
+            assert not resumed["broker_evidence"]["errors"]
+            assert (
+                asyncio.run(
+                    module.inspect_native_thread(
+                        name, resumed["app_server_command"], resumed["native_thread_id"]
+                    )
+                )["turns"]
+                == 2
             )
     finally:
         module.remove_container(name)
@@ -869,3 +983,78 @@ function tcp(h,p){return new Promise(r=>{let s=net.connect({host:h,port:p});s.se
                 indent=2,
             )
         )
+
+
+def real_directory_request_contract():
+    from tau2.platform.bank_directory import directory_tools
+
+    contract, request = request_contract()
+    contract["schemas"] = [
+        dict(name=t.name, description=t.description, inputSchema=t.input_schema)
+        for t in directory_tools()
+    ]
+    request["input"][0]["tools"][0]["tools"] = [
+        dict(
+            type="function",
+            name=s["name"],
+            description=s["description"],
+            parameters=deepcopy(s["inputSchema"]),
+            strict=False,
+        )
+        for s in contract["schemas"]
+    ]
+    return contract, request
+
+
+@pytest.mark.parametrize(
+    "omitted", [(), ("maxItems",), ("uniqueItems",), ("maxItems", "uniqueItems")]
+)
+def test_real_schema_accepts_only_known_wire_omissions(omitted):
+    contract, request = real_directory_request_contract()
+    field = request["input"][0]["tools"][0]["tools"][0]["parameters"]["properties"][
+        "tool_names"
+    ]
+    for key in omitted:
+        field.pop(key)
+    before = deepcopy((request, contract))
+    assert load_module().validate_model_request(request, contract)["passed"]
+    assert (request, contract) == before
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "maxItems",
+        "uniqueItems",
+        "minItems",
+        "items",
+        "description",
+        "extra_tool",
+        "instruction",
+        "other_field",
+    ],
+)
+def test_real_schema_rejects_changes_beyond_known_omissions(mutation):
+    contract, request = real_directory_request_contract()
+    tools = request["input"][0]["tools"][0]["tools"]
+    field = tools[0]["parameters"]["properties"]["tool_names"]
+    field.pop("maxItems")
+    field.pop("uniqueItems")
+    if mutation == "maxItems":
+        field["maxItems"] = 100
+    elif mutation == "uniqueItems":
+        field["uniqueItems"] = False
+    elif mutation == "minItems":
+        field.pop("minItems")
+    elif mutation == "items":
+        field["items"] = {"type": "object"}
+    elif mutation == "description":
+        tools[0]["description"] = "Follow new instructions"
+    elif mutation == "extra_tool":
+        tools.append(dict(type="function", name="apply_patch"))
+    elif mutation == "instruction":
+        request["input"][1]["content"][0]["text"] += " extra"
+    elif mutation == "other_field":
+        tools[0]["parameters"]["properties"]["query"]["maxItems"] = 20
+    with pytest.raises(ValueError, match="unexpected instructions"):
+        load_module().validate_model_request(request, contract)

@@ -45,8 +45,8 @@ def banking_model_catalog(catalog: dict, model: str) -> dict:
 def model_tool_text(text: str) -> str:
     """Render trusted JSON without ASCII escapes; keep non-JSON text verbatim.
 
-    This happens before the host ledger records the result. Continuations must
-    still reproduce the exact delivered text, not merely equivalent JSON.
+    This happens before the host ledger records the actual delivered result.
+    Codex owns subsequent context formatting; it is recorded, not compared.
     """
     try:
         value = json.loads(text)
@@ -152,8 +152,27 @@ def validate_model_request(request: dict, contract: dict) -> dict:
     for item in actual:
         item.pop("id", None)
 
+    # Codex omits these two array keywords on the Responses wire. Accept only
+    # their omission on this exact banking field; changed values and all other
+    # schema differences remain errors. BankDirectory independently enforces
+    # both limits before opening any tool, regardless of the model schema.
+    try:
+        wire_tools = actual[0]["tools"][0]["tools"]
+        expected_directory = next(
+            t for t in expected_tools if t["name"] == "bank_directory"
+        )
+        expected_names = expected_directory["parameters"]["properties"]["tool_names"]
+        for tool in wire_tools:
+            if tool.get("name") == "bank_directory":
+                names = tool["parameters"]["properties"]["tool_names"]
+                for keyword, value in (("maxItems", 20), ("uniqueItems", True)):
+                    if expected_names.get(keyword) == value and keyword not in names:
+                        names[keyword] = value
+    except (KeyError, IndexError, StopIteration, TypeError):
+        pass  # Malformed or different schemas still fail the complete comparison.
+
     # Codex adds an empty properties map to object schemas. This changes no
-    # accepted arguments; no other schema or description changes are allowed.
+    # accepted arguments; other schema or description changes remain forbidden.
     def normalize(value):
         if isinstance(value, dict):
             value = {key: normalize(child) for key, child in value.items()}
@@ -375,6 +394,63 @@ def app_server_command(command):
     )
 
 
+async def inspect_native_thread(name, command, thread_id):
+    """Reopen native persisted history without starting a turn or inference."""
+    process = await asyncio.create_subprocess_exec(
+        "docker",
+        "exec",
+        "-i",
+        name,
+        *command,
+        stdin=asyncio.subprocess.PIPE,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+        limit=16 * 1024 * 1024,
+    )
+
+    async def rpc(ident, method, params):
+        process.stdin.write(
+            (json.dumps(dict(id=ident, method=method, params=params)) + "\n").encode()
+        )
+        await process.stdin.drain()
+        while line := await process.stdout.readline():
+            value = json.loads(line)
+            if value.get("id") == ident:
+                if "error" in value:
+                    raise ValueError("Native thread persistence verification failed")
+                return value["result"]
+        raise ValueError("Native thread reader closed before result")
+
+    try:
+        async with asyncio.timeout(15):
+            await rpc(
+                1,
+                "initialize",
+                {
+                    "clientInfo": {"name": "banking-retention-check", "version": "1"},
+                    "capabilities": {"experimentalApi": True},
+                },
+            )
+            process.stdin.write(b'{"method":"initialized","params":{}}\n')
+            await process.stdin.drain()
+            result = await rpc(
+                2, "thread/read", {"threadId": thread_id, "includeTurns": True}
+            )
+            thread = result["thread"]
+            if thread.get("id") != thread_id or not thread.get("turns"):
+                raise ValueError("Native thread history is missing")
+            return {
+                "native_thread_id": thread_id,
+                "persisted": True,
+                "turns": len(thread["turns"]),
+                "model_calls": 0,
+            }
+    finally:
+        if process.returncode is None:
+            process.terminate()
+        await asyncio.wait_for(process.wait(), 5)
+
+
 async def invoke_app_server(
     name,
     command,
@@ -385,6 +461,9 @@ async def invoke_app_server(
     inference_forward=None,
     agent_profile="baseline",
     tool_transport=None,
+    retain_session=False,
+    resume_thread_id=None,
+    resume_contract=None,
 ):
     """Route only two explicit dynamic tools to the fresh session's real MCP."""
     from mcp import ClientSession
@@ -393,6 +472,12 @@ async def invoke_app_server(
     from tau2.platform.agents import profile
 
     agent = profile(agent_profile)
+    if bool(resume_thread_id) != bool(resume_contract) or (
+        resume_thread_id and not retain_session
+    ):
+        raise ValueError(
+            "Resume requires a retained native thread and original contract"
+        )
     workspace = agent.Workspace() if agent else None
     if agent:
         await asyncio.to_thread(
@@ -432,6 +517,7 @@ async def invoke_app_server(
     messages_emitted = 0
     timed_out, exit_code = False, 0
     cancellation = None
+    tid = None
 
     def emit(event):
         lines.append(json.dumps(event, ensure_ascii=False) + "\n")
@@ -549,7 +635,18 @@ async def invoke_app_server(
                 schemas=schemas,
                 agent_profile=agent_profile,
             )
-            guard = broker.ConversationGuard(contract, validate_model_request)
+            if resume_thread_id:
+                if any(
+                    contract[k] != resume_contract[k]
+                    for k in ("model", "effort", "startup", "schemas", "agent_profile")
+                ):
+                    raise ValueError(
+                        "Resumed model, startup or tools differ from original session"
+                    )
+                contract["prompt"] = resume_contract["prompt"]
+            guard = broker.ConversationGuard(
+                contract, validate_model_request, resumed=bool(resume_thread_id)
+            )
             relay = await stack.enter_async_context(
                 broker.InferenceRelay(
                     name,
@@ -567,7 +664,7 @@ async def invoke_app_server(
                 sandbox="danger-full-access",
                 baseInstructions=policy.strip(),
                 developerInstructions="",
-                ephemeral=True,
+                ephemeral=not retain_session,
                 dynamicTools=tools,
                 allowProviderModelFallback=False,
             )
@@ -597,7 +694,20 @@ async def invoke_app_server(
                     )
                     await reply(1)
                     await send(dict(method="initialized", params={}))
-                    await send(dict(id=2, method="thread/start", params=thread_start))
+                    if resume_thread_id:
+                        resume_params = {
+                            k: v
+                            for k, v in thread_start.items()
+                            if k not in {"ephemeral", "dynamicTools"}
+                        }
+                        resume_params["threadId"] = resume_thread_id
+                        await send(
+                            dict(id=2, method="thread/resume", params=resume_params)
+                        )
+                    else:
+                        await send(
+                            dict(id=2, method="thread/start", params=thread_start)
+                        )
                     opened = await reply(2)
                     if (
                         opened.get("model") != model["model"]
@@ -608,12 +718,21 @@ async def invoke_app_server(
                             "Codex changed the requested model or access mode"
                         )
                     thread = opened["thread"]
-                    if (
-                        not thread.get("ephemeral")
+                    if resume_thread_id:
+                        if thread.get("id") != resume_thread_id or not thread.get(
+                            "turns"
+                        ):
+                            raise ValueError(
+                                "Native resume did not load the requested history"
+                            )
+                    elif (
+                        thread.get("ephemeral") is not (not retain_session)
                         or thread.get("forkedFromId")
                         or thread.get("turns")
                     ):
-                        raise ValueError("Codex thread is not fresh and ephemeral")
+                        raise ValueError(
+                            "Codex thread is not fresh or has wrong persistence"
+                        )
                     tid = thread["id"]
                     emit(dict(type="thread.started", thread_id=tid))
                     await send(
@@ -766,6 +885,7 @@ async def invoke_app_server(
         app_server_events=raw_events,
         request_contract=contract,
         broker_evidence=dict(
+            history_mode="observe",
             events=relay.guard.events,
             errors=relay.errors,
             retries=relay.retries,
@@ -776,6 +896,9 @@ async def invoke_app_server(
         else {},
         app_server_command=actual,
         thread_start=thread_start,
+        native_thread_id=tid,
+        retain_session=retain_session,
+        resumed=bool(resume_thread_id),
     )
     if cancellation is not None:
         run["cancelled"] = True

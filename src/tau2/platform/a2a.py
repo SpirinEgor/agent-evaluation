@@ -122,7 +122,9 @@ def load_harness():
     return module
 
 
-def codex_engine(*, model, effort, image, agent_profile, timeout_seconds):
+def codex_engine(
+    *, model, effort, image, agent_profile, timeout_seconds, retain_session=False
+):
     profile(agent_profile)
     if not re.fullmatch(r"sha256:[a-f0-9]{64}", image):
         raise ValueError("A verified immutable image ID is required")
@@ -159,6 +161,7 @@ def codex_engine(*, model, effort, image, agent_profile, timeout_seconds):
             expected_image_id=image,
             agent_profile=agent_profile,
             tool_transport=exchange,
+            **({"retain_session": True} if retain_session else {}),
         )
 
     return run

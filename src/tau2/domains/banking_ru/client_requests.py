@@ -126,6 +126,9 @@ class RewardResolutionConfirmationRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     type: Literal["reward_resolution_confirmation"]
+    payout_tolerance: float = Field(
+        default=0, ge=0, multiple_of=0.01, allow_inf_nan=False
+    )
     fallback_operation_id: str | None = None
     resolution_operation_id: str | None = None
     offer_id: str
@@ -252,63 +255,20 @@ class StructuredIdentityBankingTools(FileBankingTools):
     ) -> FileResponse | str:
         """Запросить сведения у клиента с обязательным явным типом запроса.
 
-        Для подписанного заявления выберите account_closure_signature с
-        channel=bank_app и передайте account_id, payout_account_id отдельными
-        аргументами.
-        Клиент видит точный документ и подписывает его ПЭП в приложении по
-        соглашению bank-app-pep-v1; агент не получает OTP или ключ подписи.
-        Получите status=signed, document, document_sha256 и confirmation_id до
-        request_account_closure(submission_channel=bank_app, confirmation_id).
-        Declined/unknown/agreement_missing не являются подписью. Не подменяйте
-        подписанный документ другим счётом или немедленным переводом.
+        Вид запроса и его обязательные поля определены входной схемой.
+        Вопрос формируется из структурированных данных. Свободный question
+        не поддерживается. Ответ фиксирует факты или волеизъявление клиента,
+        а не банковское полномочие и не исполнение последующей операции.
 
-        Для реструктуризации выберите restructuring_documents и передайте loan_id.
-        Получите свой кредит и связанные заявки через get_loans/get_loan_cases.
-        question не передавайте: вопрос и пакет выдаются из явного сценария клиента.
-        Получите data.loan_id и data.documents до create_case/restructuring и запроса пакета.
-        Для погашения выберите loan_repayment_confirmation с amount, mode, date,
-        quote_id из get_loans и передайте loan_id, account_id отдельными аргументами.
-        Клиент подтверждает конкретное распоряжение в приложении без передачи OTP;
-        получите confirmation_id до early_repayment.
-        Для разрешённого снятия внутренней блокировки выберите operation_confirmation
-        с amount, передайте transaction_id отдельным аргументом. Клиент подтверждает
-        эту операцию в защищённом интерфейсе; инструмент возвращает confirmation_id
-        без платёжного кода. Получите результат до unblock_operation с этим ID.
-        Предварительно прочитайте свою операцию, restriction_basis и release_allowed.
-        Для identity выберите method=code_word или birth_date и не передавайте
-        question: инструмент сам формирует вопрос. Ответ содержит answer_id и
-        data.credential; передайте оба в verify_identity после получения ответа.
-        Для распознавания операций активного обращения выберите confirm_operations
-        без question; получите data.items с id и recognized до создания заявления.
-        Для ошибочного платежа ЖКХ выберите utility_payment_accounts без question.
-        Получите data.wrong_account и data.correct_account и передайте их в
-        create_case как utility_wrong_account и utility_correct_account для CRM.
-        Для подтверждения интернет-настройки используйте internet_operations_confirmation,
-        card_last4 и enabled; question не передавайте, ответ определяется явно заданным
-        контекстом клиента. Для смены тарифа используйте tariff_change_confirmation
-        с new_tariff_id. Инструмент формирует вопрос с фактической
-        ценой, датой начала, сохранением долга и запретом пересчёта старых покупок.
-        Получите confirmation_id до change_tariff и передайте его в этот вызов.
-        Для распознавания своих устройств выберите device_recognition без question
-        после получения get_devices. Получите data.items с id и recognized до
-        регистрации suspicious_device; неизвестное устройство не разблокируйте.
-        Для уточнения покупки выберите transaction_selection с merchant и amount.
-        Ответ содержит data.id, дату и чек выбранной клиентом операции.
-        Для уточнения согласия на допустимую часть, существующего дела или
-        обстоятельств сообщения третьего лица используйте case_clarification
-        с topic из схемы. Это факты клиента, не банковские полномочия и не identity.
-        Для согласия на набор возвратов выберите fee_refund_confirmation с card_id,
-        refunds (transaction_id и amount каждого возврата) и total_amount.
-        Ответ confirmed содержит confirmation_id для последующих refund_fee.
-        state_versions связывает согласие с версией каждой операции.
-        reward_resolution_minimum_change с case_id и minimum_amount запрашивает
-        изменение минимума выплаты по своей transaction_id, переданной отдельно.
-        Ответ accepted отдельно изменяет клиентское условие; согласие на сам
-        пакет выплаты запрашивается через reward_resolution_confirmation.
-        document_channel_confirmation с contact_id моделирует подтверждение
-        контакта клиентом; банковский статус доступен в контактах сервиса.
-        Все вопросы формируются по явному типу запроса. Свободные question и
-        clarification не поддерживаются; итоговый клиентский ответ запрещён.
+        Подпись заявления в приложении возвращает документ, его хеш,
+        состояние подписи и идентификатор подтверждения; код подписи не выдаётся.
+        Отказ, отсутствие ответа или соглашения не являются подписью.
+        Идентификационный ответ содержит answer_id и data.credential.
+        Подтверждения распоряжений относятся к указанным объектам, суммам,
+        условиям и версиям. Изменение клиентского минимума и согласие на выплату
+        являются разными волеизъявлениями. Ответ о документах отражает намерение
+        их предоставить, а не факт получения банком. Результат клиентского
+        действия содержит его квитанцию, но не подтверждает банковское принятие.
 
         Args:
             customer_id: Идентификатор найденного клиента.

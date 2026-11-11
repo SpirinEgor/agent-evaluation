@@ -2,6 +2,7 @@
 
 import asyncio
 import base64
+import hashlib
 import json
 import threading
 from copy import deepcopy
@@ -17,14 +18,34 @@ MAX_TRANSCRIPT = 128 * 1024 * 1024
 INFERENCE_ATTEMPT_TIMEOUT = 300
 
 
+# Pinned CLI local compaction prompt; exact match, never guest-defined.
+COMPACTION_REQUEST = {
+    "type": "message",
+    "role": "user",
+    "content": [
+        {
+            "type": "input_text",
+            "text": "You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.\n\nInclude:\n- Current progress and key decisions made\n- Important context, constraints, or user preferences\n- What remains to be done (clear next steps)\n- Any critical data, examples, or references needed to continue\n\nBe concise, structured, and focused on helping the next LLM seamlessly continue the work.\n",
+        }
+    ],
+}
+COMPACTION_SUMMARY_PREFIX = "Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\n"
+
+
+def fingerprint(value):
+    raw = json.dumps(value, ensure_ascii=False, sort_keys=True).encode()
+    return {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+
+
 class BrokerFailure(ValueError):
     """Known failure metadata only; never retain upstream text or credentials."""
 
-    def __init__(self, code, status=None, upstream_reason=None):
+    def __init__(self, code, status=None, upstream_reason=None, provider=None):
         super().__init__(code)
         self.code = code
         self.status = status
         self.upstream_reason = upstream_reason
+        self.provider = provider
 
 
 # Only these known literals can be emitted from an untrusted provider event.
@@ -40,9 +61,125 @@ SAFE_UPSTREAM_REASONS = frozenset(
         "model_not_found",
         "content_filter",
         "max_output_tokens",
+        "max_messages",
+        "steered",
         "timeout",
     }
 )
+
+
+SAFETY_ALERT_TYPES = frozenset(
+    {
+        "potentially_unintended_data_transfer",
+        "potentially_unintended_data_access",
+        "potentially_unintended_destructive_activity",
+    }
+)
+
+
+def provider_diagnostic(event):
+    """Bounded structural evidence; never store free-form messages or unknown codes.
+
+    Unknown values retain field paths, size and hash for correlation. A new code
+    is not safety evidence merely because it contains a safety-related word.
+    """
+    fields = {}
+    for path in (
+        "type",
+        "code",
+        "error.code",
+        "error.type",
+        "error.message",
+        "message",
+        "response.status",
+        "response.error.code",
+        "response.error.type",
+        "response.error.message",
+        "response.incomplete_details.reason",
+        "error.misalignment.error_type",
+        "response.error.misalignment.error_type",
+    ):
+        value = event
+        for key in path.split("."):
+            value = value.get(key) if isinstance(value, dict) else None
+        if value is None:
+            continue
+        if not isinstance(value, str):
+            fields[path] = {"invalid_type": True}
+            continue
+        raw = value.encode("utf-8")
+        entry = {"bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest()}
+        allowed = (
+            SAFE_UPSTREAM_REASONS
+            | SAFETY_ALERT_TYPES
+            | {
+                "error",
+                "response.failed",
+                "response.incomplete",
+                "response.completed",
+                "failed",
+                "incomplete",
+                "completed",
+                "max_messages",
+                "steered",
+            }
+        )
+        if not path.endswith("message") and value in allowed:
+            entry["value"] = value
+        fields[path] = entry
+    reasons = {
+        v.get("value")
+        for k, v in fields.items()
+        if k.endswith(("code", "type", "reason"))
+    }
+    safety = "content_filter" in reasons or bool(reasons & SAFETY_ALERT_TYPES)
+    return {"fields": fields, "explicit_safety_signal": safety}
+
+
+def failure_classification(error, code):
+    provider = getattr(error, "provider", None) or {}
+    reason = getattr(error, "upstream_reason", None)
+    if provider.get("explicit_safety_signal") or reason == "content_filter":
+        return "safety_block"
+    if any(
+        "value" not in value
+        for path, value in provider.get("fields", {}).items()
+        if path == "code" or path.endswith((".code", ".reason"))
+    ):
+        # A generic error.type cannot explain an unrecognized specific code.
+        return "provider_error_unknown"
+    if reason in {"max_output_tokens", "max_messages"}:
+        return "generation_limit"
+    if reason == "steered":
+        return "interrupted"
+    if reason in SAFE_UPSTREAM_REASONS - {"content_filter", "max_output_tokens"}:
+        return "technical_error"
+    if code in {
+        "timeout",
+        "transport_error",
+        "upstream_partial_transport",
+        "stream_missing_completion",
+        "invalid_sse_format",
+        "invalid_sse_json",
+        "unexpected_media_type",
+        "upstream_sse_failure",
+    }:
+        return "technical_error"
+    if code == "upstream_http_status":
+        # A bare 403 is not evidence of a safety decision.
+        return (
+            "technical_error"
+            if error.status in {400, 401, 404, 408, 429}
+            or (isinstance(error.status, int) and 500 <= error.status <= 599)
+            else "provider_error_unknown"
+        )
+    if code in {
+        "upstream_error_event",
+        "upstream_response_failed",
+        "upstream_response_incomplete",
+    }:
+        return "provider_error_unknown"
+    return "broker_error"
 
 
 def upstream_reason(event):
@@ -76,6 +213,9 @@ def upstream_reason(event):
 
 def diagnostic(error, stage):
     known = {
+        "Model input contains unexpected instructions, history or tools": "initial_input_mismatch",
+        "Unexpected model request fields or model": "request_envelope_mismatch",
+        "Unexpected model request persistence or reasoning effort": "request_settings_mismatch",
         "Incomplete model response": "upstream_sse_failure",
         "Missing complete authoritative model response": "stream_missing_completion",
         "Expected SSE, not HTML/JSON": "invalid_sse_format",
@@ -108,7 +248,13 @@ def diagnostic(error, stage):
         code = "transport_error"
     elif isinstance(error, json.JSONDecodeError) and stage == "response_stream":
         code = "invalid_sse_json"
-    result = {"stage": stage, "code": code}
+    result = {
+        "stage": stage,
+        "code": code,
+        "classification": failure_classification(error, code),
+    }
+    if isinstance(error, BrokerFailure) and error.provider is not None:
+        result["provider"] = deepcopy(error.provider)
     if isinstance(
         error, BrokerFailure
     ) and error.upstream_reason in SAFE_UPSTREAM_REASONS | {"unknown"}:
@@ -127,6 +273,10 @@ def retryable_upstream(error):
     if isinstance(error, (TimeoutError, httpx.TransportError)):
         return True
     if not isinstance(error, BrokerFailure):
+        return False
+    if (error.provider or {}).get(
+        "explicit_safety_signal"
+    ) or error.upstream_reason == "content_filter":
         return False
     if error.code == "upstream_http_status":
         return error.status in {429, 500, 502, 503, 504}
@@ -184,7 +334,21 @@ def same_json(left, right):
 class ConversationGuard:
     """The authoritative ledger is filled on the host, never from CLI history."""
 
-    def __init__(self, contract, validate_initial, max_requests=MAX_REQUESTS):
+    def __init__(
+        self,
+        contract,
+        validate_initial,
+        max_requests=MAX_REQUESTS,
+        *,
+        history_mode="observe",
+        resumed=False,
+    ):
+        if history_mode not in {"observe", "strict"}:
+            raise ValueError("Unknown history policy")
+        self.history_mode = history_mode
+        if resumed and history_mode != "observe":
+            raise ValueError("Native resume requires observed Codex context")
+        self.resumed = resumed
         self.contract = contract
         self.validate_initial = validate_initial
         self.max_requests = max_requests
@@ -195,6 +359,8 @@ class ConversationGuard:
         self.failed = False
         self.prefix = None
         self.envelope = None
+        self.compacting = False
+        self.validation_details = None
         self.history = []
         self.current = []
         self.response_complete = False
@@ -206,6 +372,8 @@ class ConversationGuard:
 
     def check(self, body):
         with self.lock:
+            self.validation_details = None
+            compacting = False
             if self.inflight or self.terminal or self.requests >= self.max_requests:
                 raise ValueError("Inference is in flight, finished or over budget")
             size = len(json.dumps(body, ensure_ascii=False).encode())
@@ -224,18 +392,68 @@ class ConversationGuard:
                 if k not in {"input", "client_metadata", "prompt_cache_key"}
             }
             if self.prefix is None:
-                if len(inputs) != 3:
+                if not self.resumed and len(inputs) != 3:
                     raise ValueError("Inherited history in the initial request")
-            else:
-                if (
-                    envelope != self.envelope
-                    or canonical(inputs) != self.prefix + self.history
+                if self.resumed and (
+                    len(inputs) <= 3
+                    or any(
+                        item.get("type") == "additional_tools" for item in inputs[3:]
+                    )
                 ):
+                    raise ValueError("Invalid native resumed context")
+            elif self.history_mode == "observe":
+                if any(item.get("type") == "additional_tools" for item in inputs[3:]):
+                    raise ValueError("Additional tool declarations in context")
+                # Context belongs to Codex. Validate the transport/tool contract,
+                # but never compare, reconstruct or replace its continuation.
+                if not same_json(envelope, self.envelope):
+                    raise ValueError("Inference envelope changed")
+                metadata = body.get("client_metadata", {}).get(
+                    "x-codex-turn-metadata", "{}"
+                )
+                try:
+                    metadata = json.loads(metadata)
+                except (TypeError, ValueError):
+                    metadata = {}
+                compacting = (
+                    isinstance(metadata, dict)
+                    and metadata.get("request_kind") == "compaction"
+                ) or (
+                    bool(inputs)
+                    and same_json(canonical(inputs[-1:]), [COMPACTION_REQUEST])
+                )
+                if any(not c.get("result_recorded") for c in self.calls.values()):
+                    raise ValueError("MCP result not yet received")
+            else:
+                expected = self.prefix + self.history
+                compacting = bool(self.history) and same_json(
+                    canonical(inputs), expected + [COMPACTION_REQUEST]
+                )
+                if not same_json(envelope, self.envelope) or not (
+                    same_json(canonical(inputs), expected) or compacting
+                ):
+                    actual = canonical(inputs)
+                    self.validation_details = {
+                        "expected": fingerprint(expected),
+                        "received": fingerprint(actual),
+                        "expected_items": len(expected),
+                        "received_items": len(actual),
+                        "envelope_matches": same_json(envelope, self.envelope),
+                        "first_mismatch": next(
+                            (
+                                i
+                                for i, (a, b) in enumerate(zip(expected, actual))
+                                if not same_json(a, b)
+                            ),
+                            min(len(expected), len(actual)),
+                        ),
+                    }
                     raise ValueError(
                         "Continuation is not the exact host-owned trajectory"
                     )
                 if any(not c.get("result_recorded") for c in self.calls.values()):
                     raise ValueError("MCP result not yet received")
+            self.compacting = compacting
             self.prefix = canonical(inputs[:3])
             self.envelope = envelope
             self.inflight = True
@@ -266,6 +484,8 @@ class ConversationGuard:
                 for c in row.get("content", [])
             ):
                 raise ValueError("Only authoritative assistant text is supported")
+            if self.compacting and row["type"] == "function_call":
+                raise ValueError("Compaction cannot authorize tools")
             if row["type"] == "function_call":
                 if row.get("name") not in {
                     s["name"] for s in self.contract["schemas"]
@@ -302,11 +522,23 @@ class ConversationGuard:
                     self.observe_item(item)
             if rows != self.current:
                 raise ValueError("Completed response differs from streamed output")
-            self.history.extend(rows)
+            if self.compacting and self.history_mode == "strict":
+                messages = [r for r in rows if r["type"] == "message"]
+                if (
+                    len(messages) != 1
+                    or len(messages[0].get("content", [])) != 1
+                    or messages[0]["content"][0].get("type") != "output_text"
+                    or not messages[0]["content"][0].get("text", "").strip()
+                ):
+                    raise ValueError(
+                        "Compaction requires one authoritative text summary"
+                    )
+            elif self.history_mode == "strict":
+                self.history.extend(rows)
             for row in rows:
                 if row["type"] == "function_call":
                     call = self.calls[row["call_id"]]
-                    if call.get("result_recorded"):
+                    if call.get("result_recorded") and self.history_mode == "strict":
                         self.history.append(
                             dict(
                                 type="function_call_output",
@@ -315,7 +547,9 @@ class ConversationGuard:
                             )
                         )
             self.response_complete = True
-            self.terminal = not any(x["type"] == "function_call" for x in rows)
+            self.terminal = not self.compacting and not any(
+                x["type"] == "function_call" for x in rows
+            )
             self.events.append(
                 {"event": "response_completed", "output": deepcopy(output)}
             )
@@ -326,10 +560,39 @@ class ConversationGuard:
             if not self.inflight or not self.response_complete or self.failed:
                 raise ValueError("Missing valid complete model stream")
             self.inflight = False
-            self.trusted_messages.extend(
-                deepcopy(row) for row in self.current if row["type"] == "message"
-            )
+            compacted = None
+            if self.compacting and self.history_mode == "observe":
+                compacted = dict(event="compaction_observed", request=self.requests)
+            elif self.compacting:
+                summary = next(r for r in self.current if r["type"] == "message")[
+                    "content"
+                ][0]["text"]
+                previous = fingerprint(self.prefix + self.history)
+                self.history = [
+                    dict(
+                        type="message",
+                        role="user",
+                        content=[
+                            dict(
+                                type="input_text",
+                                text=COMPACTION_SUMMARY_PREFIX + summary,
+                            )
+                        ],
+                    )
+                ]
+                compacted = dict(
+                    event="context_compacted",
+                    request=self.requests,
+                    source=previous,
+                    replacement=fingerprint(self.prefix + self.history),
+                )
+            else:
+                self.trusted_messages.extend(
+                    deepcopy(row) for row in self.current if row["type"] == "message"
+                )
             self.events.append({"event": "response_trusted"})
+            if compacted:
+                self.events.append(compacted)
             self.response_ready.set()
 
     def validate_final(self):
@@ -379,7 +642,7 @@ class ConversationGuard:
             ):
                 raise ValueError("Unbound or duplicate MCP result")
             call.update(result_recorded=True, output=output)
-            if not self.inflight:
+            if not self.inflight and self.history_mode == "strict":
                 self.history.append(
                     dict(type="function_call_output", call_id=call_id, output=output)
                 )
@@ -442,7 +705,29 @@ class SubscriptionInference:
                 "POST", UPSTREAM, headers=headers, json=body
             ) as response:
                 if response.status_code != 200:
-                    raise BrokerFailure("upstream_http_status", response.status_code)
+                    # Error bodies can contain prompts/credentials. Parse only a bounded
+                    # JSON body and retain sanitized structural metadata, never its text.
+                    raw = bytearray()
+                    async for chunk in response.aiter_bytes():
+                        raw.extend(chunk[: 8193 - len(raw)])
+                        if len(raw) > 8192:
+                            break
+                    event = {}
+                    if len(raw) <= 8192:
+                        try:
+                            decoded = json.loads(raw)
+                            if isinstance(decoded, dict):
+                                event = decoded
+                        except (ValueError, UnicodeError):
+                            pass
+                    details = provider_diagnostic(event)
+                    details["body_truncated"] = len(raw) > 8192
+                    raise BrokerFailure(
+                        "upstream_http_status",
+                        response.status_code,
+                        upstream_reason=upstream_reason(event),
+                        provider=details,
+                    )
                 media = (
                     response.headers.get("Content-Type", "")
                     .split(";")[0]
@@ -478,6 +763,7 @@ class ResponseStream:
         self.completed = False
         self.first_line = True
         self.output_started = False
+        self.refusal_observed = False
 
     def feed(self, chunk):
         self.size += len(chunk)
@@ -505,6 +791,25 @@ class ResponseStream:
             return
         event = json.loads(raw)
         kind = event.get("type")
+        if kind in {"response.refusal.delta", "response.refusal.done"}:
+            self.refusal_observed = True
+        item = event.get("item", {})
+        response = event.get("response", {})
+        items = (
+            [item] + (response.get("output", []) or [])
+            if isinstance(response, dict)
+            else [item]
+        )
+        if any(
+            isinstance(row, dict)
+            and row.get("type") == "message"
+            and any(
+                isinstance(c, dict) and c.get("type") == "refusal"
+                for c in row.get("content", [])
+            )
+            for row in items
+        ):
+            self.refusal_observed = True
         # Even an unfinished delta in the same chunk as an error makes retry unsafe.
         if kind not in {
             "response.created",
@@ -536,6 +841,10 @@ class ResponseStream:
                     and value >= 0
                 }
 
+            self.guard.events[-1]["response_signals"] = {
+                "model_refusal": self.refusal_observed,
+                "response_completed": True,
+            }
             self.completed = True
         elif kind in {"response.failed", "response.incomplete", "error"}:
             raise BrokerFailure(
@@ -545,6 +854,7 @@ class ResponseStream:
                     "error": "upstream_error_event",
                 }[kind],
                 upstream_reason=upstream_reason(event),
+                provider=provider_diagnostic(event),
             )
 
     def finish(self):
@@ -574,7 +884,7 @@ const server=http.createServer((req,res)=>{
 });
 readline.createInterface({input:process.stdin}).on('line',l=>{try{const m=JSON.parse(l),res=pending.get(m.id);if(!res)return;
  if(m.status)res.writeHead(m.status,{'Content-Type':m.status===200?'text/event-stream':'application/json','Connection':'close'});
- if(m.chunk)res.write(Buffer.from(m.chunk,'base64'));if(m.end){res.end();pending.delete(m.id)}}catch{process.exit(2)}});
+ if(m.chunk)res.write(Buffer.from(m.chunk,'base64'));if(m.end){res.end();pending.delete(m.id)}}catch{process.exit(2)}}).on('close',()=>{server.closeAllConnections();server.close();process.exit(0)});
 server.listen(8765,'127.0.0.1',()=>process.stdout.write(JSON.stringify({ready:true})+'\n'));
 """
 
@@ -629,6 +939,7 @@ class InferenceRelay:
             while line := await self.process.stdout.readline():
                 received += 1
                 event, ident, started, sent = {}, None, False, False
+                forwarded_bytes = 0
                 stage = "relay_envelope"
                 try:
                     if received > MAX_REQUESTS + 16:
@@ -669,6 +980,7 @@ class InferenceRelay:
                                             chunk=base64.b64encode(chunk).decode(),
                                         )
                                     )
+                                    forwarded_bytes += len(chunk)
                                     stage = "upstream_transport"
                                 stage = "response_stream"
                                 stream.finish()
@@ -697,7 +1009,18 @@ class InferenceRelay:
                             )
                             await asyncio.sleep(attempt + 1)
                 except Exception as error:
-                    self.errors.append(diagnostic(error, stage))
+                    details = diagnostic(error, stage)
+                    if stage == "request_validation" and self.guard.validation_details:
+                        details["history_validation"] = self.guard.validation_details
+                    details["request"] = self.guard.requests
+                    details["relay_response_started"] = sent
+                    details["response_bytes_forwarded"] = forwarded_bytes
+                    details["retryable_by_reason"] = retryable_upstream(error)
+                    if started:
+                        details["output_started"] = stream.output_started
+                        details["model_refusal_observed"] = stream.refusal_observed
+                        details["response_completed"] = stream.completed
+                    self.errors.append(details)
                     self.guard.fail()
                     if ident is None:
                         raise ValueError("Invalid untrusted relay protocol") from None
@@ -729,12 +1052,13 @@ class InferenceRelay:
             except (asyncio.CancelledError, Exception):
                 pass
         if self.process:
-            if self.process.returncode is None:
-                self.process.terminate()
+            if self.process.stdin and not self.process.stdin.is_closing():
+                self.process.stdin.close()
             try:
                 await asyncio.wait_for(self.process.wait(), 5)
             except TimeoutError:
-                self.process.kill()
+                if self.process.returncode is None:
+                    self.process.terminate()
                 await asyncio.wait_for(self.process.wait(), 5)
 
     async def __aexit__(self, *args):
@@ -745,7 +1069,10 @@ def verify_trajectory(evidence, contract, validate_initial):
     """Replay a complete host-owned trajectory without asserting container isolation."""
     if evidence.get("mode") not in {"stub", "subscription"} or evidence.get("errors"):
         raise ValueError("A successful host broker trajectory is required")
-    guard = ConversationGuard(contract, validate_initial)
+    # Old artifacts retain their original strict verification contract.
+    guard = ConversationGuard(
+        contract, validate_initial, history_mode=evidence.get("history_mode", "strict")
+    )
     finished = False
     results = 0
     events = evidence.get("events", [])
@@ -760,6 +1087,13 @@ def verify_trajectory(evidence, contract, validate_initial):
         elif kind == "response_trusted":
             guard.finish_response()
             finished = guard.terminal
+        elif kind in {"context_compacted", "compaction_observed"}:
+            if (
+                not index
+                or events[index - 1].get("event") != "response_trusted"
+                or not same_json(event, guard.events[-1])
+            ):
+                raise ValueError("Unverified compaction provenance")
         elif kind == "tool_authorized":
             guard.authorize_tool(event["call_id"], event["tool"], event["arguments"])
         elif kind == "tool_result":
@@ -780,6 +1114,8 @@ def verify_trajectory(evidence, contract, validate_initial):
         passed=True,
         model_requests=guard.requests,
         tool_results=results,
+        history_mode=guard.history_mode,
+        context_integrity_verified=guard.history_mode == "strict",
     )
 
 

@@ -120,6 +120,9 @@ class RewardResolutionPreferences(BaseModel):
     preserve_unpaid_claims: bool = True
     preserve_other_case_items: bool = True
     allow_new_products: bool = False
+    consent_payout_tolerance: float = Field(
+        default=0, ge=0, multiple_of=0.01, allow_inf_nan=False
+    )
     customer_reported_offer_id: str | None = None
     customer_reported_status: str | None = None
     minimum_payouts: dict[
@@ -172,6 +175,9 @@ class RewardReprocessingPool(BaseModel):
     limit: float = Field(ge=0, multiple_of=0.01, allow_inf_nan=False)
     allocation_ids: list[str] = Field(default_factory=list)
     reversal_order: list[str] = Field(default_factory=list)
+    protected_minimums: dict[
+        str, Annotated[float, Field(ge=0, multiple_of=0.01, allow_inf_nan=False)]
+    ] = Field(default_factory=dict)
 
 
 class RewardReprocessingMethod(BaseModel):
@@ -200,6 +206,8 @@ class RewardReprocessingCase(BaseModel):
     methods: list[RewardReprocessingMethod] = Field(default_factory=list)
     funding_pools: list[RewardReprocessingPool] = Field(default_factory=list)
     selected_method_id: str | None = None
+    repair_allowed: bool = True
+    restriction_reason: str | None = None
 
 
 class RewardResolutionCorrection(BaseModel):

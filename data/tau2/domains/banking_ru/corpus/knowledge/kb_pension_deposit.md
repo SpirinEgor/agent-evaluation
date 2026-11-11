@@ -4,7 +4,7 @@ title: "Пенсионный: договорные условия расчёта
 document_type: "knowledge"
 trust: bank-policy
 effective_from: "2026-03-01"
-revision_id: "2026-10-09-bank8"
+revision_id: "2026-11-11-business-policy-r2-kb_pension_deposit"
 document_kind: "own-product-terms"
 document_id: "kb_pension_deposit"
 created_at: "2026-05-25"
@@ -23,7 +23,7 @@ updated_at: "2026-05-25"
 следующего за внесением средств, до дня возврата включительно. За полный срок
 начисляется 365 дней; договорная дата выплаты — 1 марта 2027 года, без переноса.
 
-Для консультации получите `get_deposit(include_payout_quote=true)`. Поле
+Консультация опирается на банковскую котировку выплаты по вкладу. Поле
 `quote_as_of` — операционная дата банковской сессии и дата досрочного расчёта,
 а не дата запуска модели или редакции документа. `early_withdrawal_payout` и
 `maturity_payout` — подтверждённые системой полные выплаты до налогообложения.
