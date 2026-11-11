@@ -1,0 +1,31 @@
+{
+  "version": "2026-11-11-bank41-tariff-evidence-v3",
+  "branch": "task/bank41-v3-tariff-evidence",
+  "model_calls": 0,
+  "pytest_passed": 35,
+  "new_routes": 10,
+  "half_full": true,
+  "contracts": [
+    "confidentiality",
+    "access",
+    "identity",
+    "discovery"
+  ],
+  "tool_access_policy_unchanged": true,
+  "other_criteria_unchanged": true,
+  "bank2_dependency_hashes_verified": 499,
+  "modified_bank_data_files": [
+    "data/tau2/domains/banking_ru/tasks/bank_041/scenario.json",
+    "data/tau2/domains/banking_ru/tasks/bank_041/evaluation.json"
+  ],
+  "sha256": {
+    "data/tau2/domains/banking_ru/tasks/bank_041/evaluation.json": "4bff50a33197fcd14548c88b4e31563de3fea9690abf0459f3b1ddcefa32bc92",
+    "data/tau2/domains/banking_ru/tasks/bank_041/scenario.json": "2ae56236d18d027740b76691e31ef0efd521b1880010016092ef120913386551",
+    "tests/test_domains/test_banking_ru/test_bank41_tariff_evidence_v3.py": "167d2f30f083042537b5d07604f4f96d106051c6b391672445ba0e219c6f7965"
+  },
+  "limitations": [
+    "No model run",
+    "No full 61-task regression",
+    "Fixed scenario tariff ID; not a generic dynamic join"
+  ]
+}

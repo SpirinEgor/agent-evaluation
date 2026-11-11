@@ -3,7 +3,7 @@
   "description": {
     "purpose": "Корректное дополнение дела и передача только разрешённого актуального подтверждения.",
     "relevant_policies": "/policies/general.md; /policies/identity.md; /policies/fees_rewards.md; /knowledge/kb_320.md–kb_333.md либо полные сборники; /knowledge/kb_reward_reconciliation.md; /knowledge/processing_calendar.md необязателен",
-    "notes": "2026-11-11-bank41-reconciliation-v2; business and service-boundary controls; no model runs."
+    "notes": "v3: authorized profile plus tariff catalogue is equivalent to direct customer tariff; no model runs."
   },
   "user_scenario": {
     "persona": "Егорова Наталья Викторовна, клиент банка с одним обращением.",
@@ -65,7 +65,7 @@
       }
     }
   },
-  "scenario_version": "2026-11-11-bank41-reconciliation-v2",
+  "scenario_version": "2026-11-11-bank41-tariff-evidence-v3",
   "max_bank_calls": 100,
   "bank_budget_mode": "diagnostic",
   "scheduled_client_messages": [
