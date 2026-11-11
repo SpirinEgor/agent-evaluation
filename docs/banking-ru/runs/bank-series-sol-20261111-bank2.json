@@ -1,0 +1,91 @@
+{
+  "run_id": "bank-series-sol-20261111-bank2",
+  "task_id": "bank_002",
+  "task_version": "v42",
+  "commit": "b74dd5f6071180fcbf058c5a8ae76282d8e69236",
+  "model": "gpt-6.1-sol",
+  "reasoning_effort": "low",
+  "harness": "V1",
+  "attempts": 1,
+  "metrics": {
+    "ACTION": 0.0,
+    "DB": 0.0,
+    "bank_calls": 47,
+    "discovery_calls": 40,
+    "protocol_completion": true,
+    "reward": 0.0
+  },
+  "elapsed_seconds": 639.2556592499999,
+  "stop_reason": "done",
+  "grading": {
+    "reward_breakdown": {
+      "DB": 0.0,
+      "ACTION": 0.0
+    },
+    "info": {
+      "env": {
+        "db_state_checks": [
+          "mixed-payment-revision",
+          "mixed-payment-lines",
+          "duplicate-review-status",
+          "duplicate-review-decision_basis_id",
+          "duplicate-review-decision_basis_revision"
+        ]
+      },
+      "nl": null,
+      "communicate": {
+        "note": "No communicate_info to evaluate"
+      },
+      "action": {
+        "result_argument_bindings": [
+          "82:case_output_assignments"
+        ]
+      },
+      "business_process_only": true
+    },
+    "failed_actions": [
+      {
+        "id": "bank2:v12:pay-first",
+        "tool": "execute_reward_resolution"
+      }
+    ]
+  },
+  "message_first_seq": {
+    "R01": 25,
+    "R02": 43,
+    "R03": 63
+  },
+  "runtime_exit_code": 1,
+  "timed_out": false,
+  "broker_errors": [],
+  "transport_retries": [
+    {
+      "request": 4,
+      "failed_attempt": 1,
+      "diagnostic": {
+        "stage": "upstream_transport",
+        "code": "transport_error",
+        "classification": "technical_error"
+      }
+    },
+    {
+      "request": 72,
+      "failed_attempt": 1,
+      "diagnostic": {
+        "stage": "upstream_transport",
+        "code": "transport_error",
+        "classification": "technical_error"
+      }
+    }
+  ],
+  "cleanup_verified": true,
+  "offline_replay_confirmed": true,
+  "inputs_unchanged": true,
+  "source_sha256": {
+    "evaluation.json": "f1d858e77bdb2612a267385a08378e928a952caf35c43d2333fec2e355da9923",
+    "journal.json": "6a20a983867aede461123ac615e7b8c1119f27d6c562f05dbb4e7f00f5b6ad0e",
+    "state-report.json": "85810b88b608efb9bb95bc6ee7876d973b8dbb6835b1bf33d4b86a2be41fc46e"
+  },
+  "source_report": "artifacts/bank-series-sol-20261111/report.md",
+  "source_report_sha256": "757f84c206205cb4a582a14faf7475fc6e482169da6fe96e0118d4fd9e47c837"
+}

@@ -230,3 +230,7 @@ data/simulations/.credentials/
 data/platform/
 *.lock.tmp
 data/tau2/domains/banking_ru/**/*.lock
+
+# Local browser automation and generated previews
+/.playwright-cli/
+/output/

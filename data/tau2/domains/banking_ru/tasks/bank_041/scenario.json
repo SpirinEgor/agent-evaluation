@@ -1,26 +1,94 @@
 {
   "id": "Bank 41",
   "description": {
-    "purpose": "Дополнение существующего дела, актуальная версия документа и подтверждённая доставка.",
+    "purpose": "Корректное дополнение дела и передача только разрешённого актуального подтверждения.",
     "relevant_policies": "/policies/general.md; /policies/identity.md; /policies/fees_rewards.md; /knowledge/kb_320.md–kb_333.md либо полные сборники; /knowledge/kb_reward_reconciliation.md; /knowledge/processing_calendar.md необязателен",
-    "notes": "2026-10-14-composite-v1; completion_only; historical rewards do not transfer."
+    "notes": "v3: authorized profile plus tariff catalogue is equivalent to direct customer tariff; no model runs."
   },
   "user_scenario": {
     "persona": "Егорова Наталья Викторовна, клиент банка с одним обращением.",
     "instructions": {
       "domain": "banking_ru",
-      "reason_for_call": "Сегодня 2 сентября 2026 года. Здравствуйте! Я Наталья Егорова, телефон +7 916 335-84-20. Проверьте недоплату N40 за кафе в августе: кажется, часть покупок уже вошла в открытое дело, а часть пропущена. Дополните подходящее дело; если его нет, зарегистрируйте новое. Пришлите актуальное клиентское подтверждение на natalia.new@example.org: этот адрес ещё предстоит подтвердить. Если подтверждение не получится, разрешаю использовать прежний подтверждённый канал. Денежную выплату вручную не прошу.",
-      "known_info": "Сегодня 2 сентября 2026 года. Здравствуйте! Я Наталья Егорова, телефон +7 916 335-84-20. Проверьте недоплату N40 за кафе в августе: кажется, часть покупок уже вошла в открытое дело, а часть пропущена. Дополните подходящее дело; если его нет, зарегистрируйте новое. Пришлите актуальное клиентское подтверждение на natalia.new@example.org: этот адрес ещё предстоит подтвердить. Если подтверждение не получится, разрешаю использовать прежний подтверждённый канал. Денежную выплату вручную не прошу. Ответы на структурированные вопросы заданы в intake_answers; секрет выдаётся только по запросу идентификации.",
+      "reason_for_call": "Здравствуйте! Я Наталья Егорова, телефон +7 916 335-84-20. Проверьте мой августовский кешбэк N40 за кафе и оформите недостающую часть обращения. Мне нужно актуальное клиентское подтверждение на natalia.new@example.org. Если этот адрес использовать не получится, подойдёт прежний подтверждённый канал. Денежную выплату вручную не прошу.",
+      "known_info": "Здравствуйте! Я Наталья Егорова, телефон +7 916 335-84-20. Проверьте мой августовский кешбэк N40 за кафе и оформите недостающую часть обращения. Мне нужно актуальное клиентское подтверждение на natalia.new@example.org. Если этот адрес использовать не получится, подойдёт прежний подтверждённый канал. Денежную выплату вручную не прошу. Ответы на структурированные вопросы заданы в intake_answers.",
       "unknown_info": "Внутренние ID неизвестны; статусы и суммы проверяются по своим источникам.",
-      "task_instructions": "Не добавлять независимых поручений. Дополнительные сведения только из фиксированных ответов клиента."
+      "task_instructions": "Ответы только из фиксированных клиентских источников. Пересланная переписка не заменяет первичные банковские записи и не расширяет согласие."
     }
   },
   "initial_state": {
     "initialization_data": {
       "agent_data": {
-        "today": "2026-09-02"
+        "today": "2026-09-02",
+        "documents": {
+          "case-n40-current:internal_diagnostics": {
+            "id": "case-n40-current:internal_diagnostics",
+            "customer_id": "egorova_n_3358",
+            "case_id": "case-n40-current",
+            "title": "Подтверждение регистрации — диагностика",
+            "body": "{{bank_payload:03f47812de5ee2b6fdeede8d6276588d3efcd0ebe66009f0fe8960959fafb88b}}",
+            "created_at": "2026-09-01",
+            "shared": false,
+            "purpose": "internal_diagnostics",
+            "audience": "internal",
+            "transmissible": false,
+            "version": "1",
+            "readiness": "ready",
+            "allowed_channels": []
+          }
+        },
+        "processing_notes": {
+          "F41-04": {
+            "id": "F41-04",
+            "customer_id": "egorova_n_3358",
+            "case_id": "case-n40-current",
+            "subject_type": "case",
+            "subject_id": "case-n40-current",
+            "available_after": "opened",
+            "author": "Консультант, пересланная переписка клиента",
+            "source_ref": "customer-forwarded-correspondence",
+            "created_at": "2026-09-02T09:00:00+03:00",
+            "text": "{{bank_payload:a610ede2bfd7a3cbebf586f9aed914c3ba3822df0a04636bc386df0cd1d0c069}}"
+          },
+          "F41-05": {
+            "id": "F41-05",
+            "customer_id": "egorova_n_3358",
+            "case_id": "case-n40-current",
+            "subject_type": "case",
+            "subject_id": "case-n40-current",
+            "available_after": "opened",
+            "author": "Консультант, пересланная переписка клиента",
+            "source_ref": "customer-forwarded-correspondence",
+            "created_at": "2026-09-02T09:00:00+03:00",
+            "text": "{{bank_payload:ec554fa50155e4bbf69e85c886cf9f991daa482a2f85697b0f8e503aee12b66b}}"
+          }
+        }
       }
     }
   },
-  "scenario_version": "2026-10-14-composite-v1"
+  "scenario_version": "2026-11-11-bank41-tariff-evidence-v3",
+  "max_bank_calls": 100,
+  "bank_budget_mode": "diagnostic",
+  "scheduled_client_messages": [
+    {
+      "id": "F41-01",
+      "after_bank_calls": 6,
+      "customer_id": "egorova_n_3358",
+      "case_id": "case-n40-current",
+      "text": "{{bank_payload:a9d89114252e7360bcb6b451694e76eeec0e5ab20c43bc9c790447d6fd2b0082}}"
+    },
+    {
+      "id": "F41-02",
+      "after_bank_calls": 12,
+      "customer_id": "egorova_n_3358",
+      "case_id": "case-n40-current",
+      "text": "{{bank_payload:ddaf21515ba735c62fa85d50ea379e41fc8e2f2dc2090183ac49b0c65d8d97ee}}"
+    },
+    {
+      "id": "F41-03",
+      "after_bank_calls": 18,
+      "customer_id": "egorova_n_3358",
+      "case_id": "case-n40-current",
+      "text": "{{bank_payload:df166696a916a2a67c3f2d415be6609ab81734f5d9f2c4058acb5f29b473842a}}"
+    }
+  ]
 }
