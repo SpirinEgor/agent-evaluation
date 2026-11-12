@@ -1,0 +1,17 @@
+{
+  "version": "v3",
+  "status": "frozen",
+  "shared_dependency": "bank_002/v44",
+  "files": {
+    "data/tau2/domains/banking_ru/tasks/bank_001/scenario.json": "152142f15e37cbe283c2f7ab048d05a8c122b5759e4e3eb30bdfe49c33604474",
+    "data/tau2/domains/banking_ru/tasks/bank_001/ticket.md": "619ff477bb5eeaec60dfc61d5409bd279b12759c221fa8f23832d4d8e7e3444e",
+    "data/tau2/domains/banking_ru/tasks/bank_001/evaluation.json": "57074433f3f0c6050a8d23cabf575ebb88b5fd9fff3fecbab58d3cc6c7a08f05",
+    "data/tau2/domains/banking_ru/tasks/bank_046/scenario.json": "44caa2282f60458b1a72b9663576f7a056a31efa27ae77210f795cc405cf2c21",
+    "data/tau2/domains/banking_ru/tasks/bank_046/ticket.md": "9967e66cb7a81c1a5556e722ab39bd06b58ff766b9447983ccebcd8b854949cd",
+    "data/tau2/domains/banking_ru/tasks/bank_046/evaluation.json": "6859df93eb313668f62cd7af33a08d2598460c3146507ee70b6b8e7167579175",
+    "data/tau2/domains/banking_ru/tasks/bank_047/scenario.json": "657a092c74a03a75521b1c45e9910ca76bc9eee3ae4ac811f3864c591f3a8347",
+    "data/tau2/domains/banking_ru/tasks/bank_047/ticket.md": "ce5470ef8e3cc4fd47650f819a8699934d159a8b4e9e628025c218ec1a942a1b",
+    "data/tau2/domains/banking_ru/tasks/bank_047/evaluation.json": "7a09dbd3b7f3b06e52c91078594f284366864b89f21f17b136e18ccfa4638854"
+  },
+  "git_tag": "bank-security-group-v3-source"
+}

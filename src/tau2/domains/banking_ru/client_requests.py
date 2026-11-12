@@ -484,7 +484,7 @@ class StructuredIdentityBankingTools(FileBankingTools):
                         "customer_id": customer_id,
                         "status": "answered",
                         "request_type": request.type,
-                        "question": f"Уточните дату или чек покупки {request.merchant} на {request.amount:g} ₽.",
+                        "question": f"Уточните дату или номер документа для операции {request.merchant} на {request.amount:g} ₽.",
                         "data": answers[0],
                     }
                 )
@@ -845,6 +845,14 @@ class StructuredIdentityBankingTools(FileBankingTools):
                 "account_id": transaction.account_id,
                 "bank_date": self.db.today,
             }
+            if not answer.confirmed:
+                return FileResponse(
+                    {
+                        "status": "declined",
+                        "request_type": request.type,
+                        "data": data,
+                    }
+                )
             for confirmation_id, existing in self._operation_confirmations.items():
                 if existing == data:
                     return FileResponse(
@@ -914,7 +922,9 @@ class StructuredIdentityBankingTools(FileBankingTools):
                     }
                 )
                 devices.append(
-                    f"{device.model}, страна входа {device.country or 'не установлена'}"
+                    f"{device.model}, регистрация {device.id}, "
+                    f"последний вход {device.last_login or 'не установлен'}, "
+                    f"страна входа {device.country or 'не установлена'}"
                 )
             return FileResponse(
                 {

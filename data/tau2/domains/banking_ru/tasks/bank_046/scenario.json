@@ -3,17 +3,119 @@
   "description": {
     "purpose": "Завершить одну свою операцию с разрешённым внутренним ограничением после защищённого подтверждения. Получить результаты и вызвать done.",
     "relevant_policies": "/policies/general.md; \nПрименимые регламенты: /policies/general.md, /policies/identity.md, /policies/security_escalation.md",
-    "notes": "completion_only: своё разрешённое мягкое внутреннее ограничение на 28.08.2026; получить политики, идентификацию, параметры операции, защищённое подтверждение без OTP и его receipt до снятия. txn_221701 blocked → posted, txn_221702 и остальные продукты неизменны. posted — учебный маркер исполнения без отдельного денежного ledger. Другие основания снять нельзя. Итог не отправляется. Общая среда одинакова для 61 задачи."
+    "notes": "v3: same date, merchant, amount and releasable status on two blocked payments. Client order selection distinguishes the requested payment; separate protected confirmation remains necessary. The other payment must stay blocked."
   },
   "user_scenario": {
     "persona": "Ковалёв Николай Егорович, клиент банка с одним обращением.",
     "instructions": {
       "domain": "banking_ru",
-      "reason_for_call": "Здравствуйте! Я Николай Ковалёв, телефон +7 903 555-11-22. 28 августа 2026 года отправил 48 500 ₽ в ООО «СеверТех» за заказ, но банк остановил перевод для проверки безопасности. Получателя знаю, сумму и реквизиты проверил. Это мой платёж, хочу его завершить. Готов подтвердить именно этот перевод в защищённом приложении банка. Перевод на 48 000 ₽ от 27 августа тому же получателю уже прошёл, его менять не нужно.",
-      "known_info": "Здравствуйте! Я Николай Ковалёв, телефон +7 903 555-11-22. 28 августа 2026 года отправил 48 500 ₽ в ООО «СеверТех» за заказ, но банк остановил перевод для проверки безопасности. Получателя знаю, сумму и реквизиты проверил. Это мой платёж, хочу его завершить. Готов подтвердить именно этот перевод в защищённом приложении банка. Перевод на 48 000 ₽ от 27 августа тому же получателю уже прошёл, его менять не нужно. Кодовое слово и дата рождения доступны только по запросу идентификации.",
+      "reason_for_call": "Здравствуйте, Николай Ковалёв, +7 903 555-11-22. Сегодня, 28 августа, пытался оплатить заказ в ООО «СеверТех» на 48 500 рублей. В приложении вижу две похожие остановленные операции, не понимаю, какая относится к нужному заказу. Мне нужно оплатить только комплект для мастерской; номер заказа найду в письме продавца. Помогите разобраться и завершить эту оплату.",
+      "known_info": "Здравствуйте, Николай Ковалёв, +7 903 555-11-22. Сегодня, 28 августа, пытался оплатить заказ в ООО «СеверТех» на 48 500 рублей. В приложении вижу две похожие остановленные операции, не понимаю, какая относится к нужному заказу. Мне нужно оплатить только комплект для мастерской; номер заказа найду в письме продавца. Помогите разобраться и завершить эту оплату. Дополнительные факты и подтверждения доступны через фиксированные ответы клиента.",
       "unknown_info": "Внутренние ID неизвестны; статусы и суммы проверяются по своим источникам.",
       "task_instructions": "Не добавлять независимых поручений. Дополнительные сведения только из фиксированных ответов клиента."
     }
   },
-  "initial_state": null
+  "initial_state": {
+    "initialization_data": {
+      "agent_data": {
+        "client_answers": {
+          "kovalev_n_2217": [
+            {
+              "identity_method": "code_word",
+              "credential": "причал",
+              "answer": "Кодовое слово — причал"
+            },
+            {
+              "identity_method": "birth_date",
+              "credential": "1982-05-03",
+              "answer": "Дата рождения — 1982-05-03"
+            },
+            {
+              "task_id": "Bank 46",
+              "answer": "Подтверждение выполнено в защищённом приложении.",
+              "operation_confirmation": {
+                "transaction_id": "txn_221701",
+                "account_id": "acc_2217",
+                "amount": 48500,
+                "merchant": "ООО «СеверТех»",
+                "date": "2026-08-28",
+                "confirmed": true
+              }
+            },
+            {
+              "answer": "В письме на комплект для мастерской указан заказ ST-WORK-0828. Второй относится к отдельной покупке, её сейчас оплачивать не прошу.",
+              "transaction_selection": {
+                "id": "workshop-order-selection",
+                "merchant": "ООО «СеверТех»",
+                "amount": 48500,
+                "date": "2026-08-28",
+                "receipt": "ST-WORK-0828"
+              }
+            },
+            {
+              "task_id": "Bank 46",
+              "answer": "Эту покупку сейчас не подтверждаю.",
+              "operation_confirmation": {
+                "transaction_id": "txn_221702",
+                "account_id": "acc_2217",
+                "amount": 48500,
+                "merchant": "ООО «СеверТех»",
+                "date": "2026-08-28",
+                "confirmed": false
+              }
+            }
+          ]
+        },
+        "transactions": {
+          "txn_221701": {
+            "id": "txn_221701",
+            "customer_id": "kovalev_n_2217",
+            "account_id": "acc_2217",
+            "card_id": null,
+            "date": "2026-08-28",
+            "amount": 48500.0,
+            "merchant": "ООО «СеверТех»",
+            "mcc": null,
+            "status": "blocked",
+            "kind": "transfer",
+            "hold_expires_at": null,
+            "fee_amount": null,
+            "is_subscription": false,
+            "country": "RU",
+            "channel": "online",
+            "dispute_id": null,
+            "fee_refunded": false,
+            "cashback_granted": false,
+            "restriction_basis": "internal_soft_antifraud",
+            "release_allowed": true,
+            "order_id": "ST-WORK-0828"
+          },
+          "txn_221702": {
+            "id": "txn_221702",
+            "customer_id": "kovalev_n_2217",
+            "account_id": "acc_2217",
+            "card_id": null,
+            "date": "2026-08-28",
+            "amount": 48500.0,
+            "merchant": "ООО «СеверТех»",
+            "mcc": null,
+            "status": "blocked",
+            "kind": "transfer",
+            "hold_expires_at": null,
+            "fee_amount": null,
+            "is_subscription": false,
+            "country": "RU",
+            "channel": "online",
+            "dispute_id": null,
+            "fee_refunded": false,
+            "cashback_granted": false,
+            "restriction_basis": "internal_soft_antifraud",
+            "release_allowed": true,
+            "order_id": "ST-HOME-0828"
+          }
+        }
+      }
+    }
+  },
+  "scenario_version": "2026-11-12-bank46-selection-v3"
 }

@@ -943,7 +943,15 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         Raises:
             ValueError: Если операция не найдена.
         """
-        return self._get_transaction(transaction_id)
+        # This read has no effects before lookup. Mark only an absent record as
+        # a trusted rejection; successful reads still undergo ownership/auth
+        # grading, and outgoing arguments still undergo confidentiality checks.
+        transaction = self.db.transactions.get(transaction_id)
+        if transaction is None:
+            raise ToolExecutionRejected(
+                f"{ERR_NOT_FOUND}: Операция {transaction_id} не найдена."
+            )
+        return transaction
 
     @is_tool(ToolType.READ)
     def get_disputes(self, customer_id: str) -> list[Dispute]:
