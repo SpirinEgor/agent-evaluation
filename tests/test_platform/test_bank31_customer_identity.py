@@ -5,12 +5,13 @@ import re
 from dataclasses import asdict
 
 import httpx
-from platform_harness.server import ON_ACTION_PATH, ON_START_PATH, WireService
 
 from tests.test_platform import test_platform_sdk as fixture
 
 
 def test_bank31_opening_matches_crm_and_reference():
+    from platform_harness.server import ON_ACTION_PATH, ON_START_PATH, WireService
+
     task = next(t for t in fixture.collect() if t.id == "Bank 31")
     bench = fixture.benchmark(task)
     journal = []
