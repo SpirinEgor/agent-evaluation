@@ -116,11 +116,11 @@ if __name__ == "__main__":
     tasks = get_tasks("banking_ru", task_ids=["Bank 2"])
     task = tasks[0]
     print(f"Task: {task.id}")
-    print(f"User scenario: {task.user_scenario.instructions[:100]}...")
+    print(f"User scenario: {str(task.user_scenario.instructions)[:100]}...")
     print()
 
     # Build the environment
-    env = build_environment("banking_ru")
+    env = build_environment("banking_ru", env_kwargs={"task_id": task.id})
     print(f"Domain policy: {env.get_policy()[:100]}...")
     print(f"Available tools: {[t.name for t in env.get_tools()]}")
     print()

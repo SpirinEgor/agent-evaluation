@@ -258,6 +258,15 @@ def run(
     resume: bool = False,
 ) -> None:
     """Launch a configurable experiment in the private Modal environment."""
+    from tau2.registry import registry
+
+    requested = {domain.strip() for domain in domains.split(",")}
+    unavailable = sorted(requested - set(registry.get_domains()))
+    if unavailable:
+        raise ValueError(
+            f"Unavailable voice experiment domains: {', '.join(unavailable)}. "
+            "Run upstream experiments from a checkout predating domain removal."
+        )
     run_experiment.remote(
         result_root=result_root,
         providers=providers,

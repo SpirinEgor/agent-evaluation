@@ -10,6 +10,14 @@ from loguru import logger
 
 
 async def launch_evaluation():
+    from tau2.registry import registry
+
+    if "mock" not in registry.get_domains():
+        raise RuntimeError(
+            "This upstream experiment requires the mock domain. "
+            "Run it from a checkout predating the domain removal."
+        )
+
     # start green agent
     logger.info("Launching green agent...")
     green_address = ("localhost", 9001)

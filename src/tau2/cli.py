@@ -530,16 +530,13 @@ def run_intro():
         "tau2 check-data\n"
         "\n"
         "# 2. Run a text (half-duplex) evaluation\n"
-        "tau2 run --domain airline --agent-llm gpt-4.1 --user-llm gpt-4.1 "
+        "tau2 run --domain banking_ru --agent-llm gpt-4.1 --user-llm gpt-4.1 "
         "--num-trials 1 --num-tasks 5\n"
         "\n"
-        "# 3. Run a voice (full-duplex) evaluation\n"
-        "tau2 run --domain retail --audio-native --num-tasks 1 --verbose-logs\n"
-        "\n"
-        "# 4. Browse results\n"
+        "# 3. Browse results\n"
         "tau2 view\n"
         "\n"
-        "# 5. Check the leaderboard\n"
+        "# 4. Check the archived leaderboard\n"
         "tau2 leaderboard"
     )
     console.print(
@@ -719,7 +716,7 @@ def main():
     domain_parser.add_argument(
         "domain",
         type=str,
-        help="Name of the domain to show documentation for (e.g., 'airline', 'mock')",
+        help="Name of the domain to show documentation for (e.g., 'banking_ru')",
     )
     domain_parser.set_defaults(func=lambda args: run_show_domain(args))
 
