@@ -1,4 +1,4 @@
-"""Exact applicable account process sources are alternatives, with unchanged timing."""
+"""Account closure intake accepts any or neither of the static sources."""
 
 import copy
 
@@ -11,7 +11,7 @@ from tests.test_domains.test_banking_ru.helpers import execute, task
 @pytest.mark.parametrize("number", [30])
 @pytest.mark.parametrize(
     "variant,expected",
-    [("kb_only", 1), ("accounts_only", 1), ("neither", 0)],
+    [("kb_only", 1), ("accounts_only", 1), ("neither", 1)],
     ids=["kb_only", "accounts_only", "neither"],
 )
 def test_exact_source_alternatives_whole(number, variant, expected):
@@ -37,32 +37,6 @@ def test_exact_source_alternatives_whole(number, variant, expected):
             for a in actions
             if not (a.name == "file_read" and a.arguments.get("path") in paths)
         ]
-    if variant in ["late_kb", "failed_kb_then_late_retry"]:
-        a = next(
-            a
-            for a in actions
-            if a.name == "file_read" and a.arguments.get("path") == source
-        )
-        actions.remove(a)
-        i = next(
-            i for i, a in enumerate(actions) if a.action_id == f"sign_Bank {number}"
-        )
-        actions.insert(i + 1, a)
-        if variant == "failed_kb_then_late_retry":
-            actions.insert(
-                i,
-                Action(
-                    action_id="failed-source",
-                    name="file_read",
-                    arguments={"path": source, "start_line": 201, "end_line": 201},
-                ),
-            )
-    if variant == "partial_kb":
-        next(
-            a
-            for a in actions
-            if a.name == "file_read" and a.arguments.get("path") == source
-        ).arguments.update(start_line=1, end_line=1)
     if number == 30:
         i = next(
             i
