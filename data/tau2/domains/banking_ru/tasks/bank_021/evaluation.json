@@ -3082,7 +3082,8 @@
       "argument_name": "case_id",
       "result_path": [
         "id"
-      ]
+      ],
+      "allow_unknown_resource_error": "ERR_CASE_NOT_FOUND"
     },
     {
       "binding_id": "common_identity_secret_Bank 21",
@@ -3412,13 +3413,9 @@
     {
       "action_id": "notify_card_loss_case_Bank 21",
       "name": "notify_card_loss_case",
-      "arguments": {
-        "case_id": "case_1000"
-      },
+      "arguments": {},
       "required_for_reward": true,
-      "compare_args": [
-        "case_id"
-      ]
+      "compare_args": []
     }
   ],
   "communicate_info": [],
