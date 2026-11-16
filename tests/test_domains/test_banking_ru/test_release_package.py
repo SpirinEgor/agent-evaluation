@@ -10,6 +10,7 @@ import pytest
 from tau2.domains.banking_ru.environment import (
     get_environment,
     get_tasks,
+    prepare_task,
 )
 from tau2.domains.banking_ru.mcp_systems import TOOL_OWNERS
 from tau2.domains.banking_ru.task_store import load_tasks
@@ -20,21 +21,15 @@ from tau2.registry import registry
 def test_shipped_task_set_and_completion_contract(tmp_path):
     index = json.loads((BANKING_RU_DATA_DIR / "tasks.json").read_text())
     assert index == {
-        "task_files": [
-            f"tasks/bank_{n:03d}/scenario.json"
-            if n in (2, 40, 41)
-            else f"tasks/bank_{n:03d}.json"
-            for n in range(1, 62)
-        ]
+        "task_files": [f"tasks/bank_{n:03d}/scenario.json" for n in range(1, 62)]
     }
     # A released snapshot must carry both the index and its relative targets.
     shutil.copyfile(BANKING_RU_DATA_DIR / "tasks.json", tmp_path / "tasks.json")
     shutil.copytree(BANKING_RU_DATA_DIR / "tasks", tmp_path / "tasks")
     raw_tasks = load_tasks(tmp_path / "tasks.json")
     assert raw_tasks == load_tasks(BANKING_RU_DATA_DIR / "tasks.json")
-    assert [t["id"] for t in raw_tasks] == [f"Bank {n}" for n in range(1, 62)]
-    tasks = get_tasks("base")
-    assert {t.id for t in tasks} == {f"Bank {n}" for n in range(1, 62)}
+    tasks = [prepare_task(raw_task) for raw_task in raw_tasks]
+    assert [task.id for task in tasks] == [f"Bank {n}" for n in range(1, 62)]
     for task in tasks:
         criteria = task.evaluation_criteria
         assert criteria.completion_mode == "completion_only"
