@@ -4,11 +4,12 @@ import copy
 
 import pytest
 
-from tau2.data_model.tasks import Action
+from tau2.data_model.tasks import Action, RewardType
 from tests.test_domains.test_banking_ru.helpers import execute, task
 from tests.test_domains.test_banking_ru.tool_contract_support import (
     escalation_arguments,
 )
+from tests.utils.banking_full_grade import grade_full_session
 
 
 def route(number, variant):
@@ -40,15 +41,11 @@ def route(number, variant):
             )
         else:
             actions.pop(i)
-    if variant in ("published_retry", "bad_date"):
+    if variant == "published_retry":
         i = next(i for i, a in enumerate(actions) if a.name == "create_case")
         a = copy.deepcopy(actions[i])
         a.action_id = "first-attempt"
-        a.arguments.update(
-            {"responsible_unit": "Кредитное сопровождение"}
-            if variant == "published_retry"
-            else {"next_contact_date": "2026-10-19"}
-        )
+        a.arguments["responsible_unit"] = "Кредитное сопровождение"
         actions.insert(i, a)
     if variant == "metadata":
         a = next(a for a in actions if a.name == "create_case")
@@ -133,7 +130,6 @@ def route(number, variant):
         (55, "consultation", 1),
         (30, "no_readiness", 0),
         (39, "published_retry", 1),
-        (39, "bad_date", 0),
         (36, "metadata", 1),
         (55, "open_product", 0),
         (55, "without_calculator", 1),
@@ -171,3 +167,61 @@ def test_whole_product_contract(number, variant, expected):
                 payload = payload.replace(a.arguments["credential"], "[MASKED]")
         (p / f"Bank-{number}-{variant}.json").write_text(payload)
     assert half.reward == expected
+
+
+@pytest.mark.parametrize(
+    "contact_date,rejected,expected",
+    [
+        pytest.param("2026-08-27", True, 1, id="past-date-rejected-then-retried"),
+        pytest.param("2026-10-19", False, 0, id="unagreed-date-saved"),
+    ],
+)
+def test_bank39_followup_date(contact_date, rejected, expected):
+    actions = route(39, "reference")
+    index = next(i for i, action in enumerate(actions) if action.name == "create_case")
+    case_action = actions[index]
+    dated_action = copy.deepcopy(case_action)
+    dated_action.arguments.update(
+        responsible_unit="credit_support",
+        next_contact_date=contact_date,
+        notification_channel="bank_app",
+    )
+    if rejected:
+        dated_action.action_id = "rejected-followup"
+        actions.insert(index, dated_action)
+    else:
+        actions[index] = dated_action
+
+    session = execute(39, actions)
+    first, *retries = [
+        result for call, result in session.log if call.name == "create_case"
+    ]
+    assert first.error == rejected
+    if rejected:
+        assert "Дата следующего сообщения не может быть в прошлом." in first.content
+        (retry,) = retries
+        assert not retry.error
+    else:
+        assert not retries
+
+    (case,) = [
+        case
+        for case in session.env.tools.db.cases.values()
+        if case.customer_id == case_action.arguments["customer_id"]
+        and case.category == "restructuring"
+        and case.loan_id == case_action.arguments["loan_id"]
+    ]
+    assert case.status == "documents_requested"
+    assert case.next_contact_date == (None if rejected else contact_date)
+
+    for reward in (session.grade(), grade_full_session(session).reward_info):
+        assert reward.reward_breakdown == {
+            RewardType.DB: expected,
+            RewardType.ACTION: expected,
+        }
+        assert reward.reward == expected
+        if not rejected:
+            assert (
+                "bank39:argument:create_case:next_contact_date"
+                in reward.info["action"]["forbidden_argument_patterns"]
+            )
