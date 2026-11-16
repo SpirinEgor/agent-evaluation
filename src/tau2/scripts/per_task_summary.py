@@ -346,7 +346,7 @@ def main():
     parser.add_argument(
         "--domain",
         type=str,
-        default="retail",
+        default="banking_ru",
         choices=["retail", "telecom", "airline"],
         help="Domain to generate summary for",
     )

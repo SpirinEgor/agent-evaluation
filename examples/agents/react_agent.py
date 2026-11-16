@@ -213,11 +213,11 @@ if __name__ == "__main__":
     # Register the ReAct agent
     registry.register_agent_factory(create_react_agent, "react_agent")
 
-    # Run on a mock task
-    tasks = get_tasks("mock", task_ids=["create_task_1"])
+    # Run on a banking task
+    tasks = get_tasks("banking_ru", task_ids=["Bank 2"])
     result = run_single_task(
         TextRunConfig(
-            domain="mock",
+            domain="banking_ru",
             agent="react_agent",
             llm_agent="openai/gpt-4.1-mini",
         ),

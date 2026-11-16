@@ -39,13 +39,8 @@ from tau2.data_model.simulation import (
     TextRunConfig,
     VoiceRunConfig,
 )
-from tau2.domains.banking_knowledge.retrieval import get_all_variant_names
 from tau2.run import get_options, run_domain
 from tau2.runner.work import parse_provider_limits
-
-
-def get_all_retrieval_config_names():
-    return get_all_variant_names()
 
 
 def add_run_args(parser):
@@ -387,28 +382,6 @@ def add_run_args(parser):
         help="Use plain text system prompt without XML tags (overrides auto-detection).",
     )
 
-    # Knowledge domain arguments
-    parser.add_argument(
-        "--retrieval-config",
-        type=str,
-        default=None,
-        choices=sorted(get_all_retrieval_config_names()),
-        help=(
-            "Knowledge retrieval config name (banking_knowledge domain). "
-            "Offline: no_knowledge, full_kb, golden_retrieval, bm25, bm25_grep, grep_only. "
-            "Requires OPENAI_API_KEY: openai_embeddings*, alltools. "
-            "Requires OPENROUTER_API_KEY: qwen_embeddings*, alltools-qwen. "
-            "Requires sandbox-runtime: terminal_use*, alltools, alltools-qwen. "
-            "Default for banking_knowledge: alltools (BM25 + dense + shell)."
-        ),
-    )
-    parser.add_argument(
-        "--retrieval-config-kwargs",
-        type=json.loads,
-        default=None,
-        help="Arguments to pass to the retrieval config constructor as JSON (e.g., '{\"top_k\": 10}').",
-    )
-
     # Resume mode
     parser.add_argument(
         "--auto-resume",
@@ -513,16 +486,7 @@ def run_intro():
     )
     domain_table.add_column("Domain", style="bold", no_wrap=True)
     domain_table.add_column("Description")
-    domain_table.add_row(
-        "airline", "Flight booking, cancellation, and customer support"
-    )
-    domain_table.add_row("retail", "Order management, returns, and product inquiries")
-    domain_table.add_row("telecom", "Telecom account management and troubleshooting")
-    domain_table.add_row(
-        "banking_knowledge",
-        "Knowledge-retrieval-based customer service with configurable RAG pipelines",
-    )
-    domain_table.add_row("mock", "Lightweight test domain for development")
+    domain_table.add_row("banking_ru", "Banking.ru customer support benchmark")
     console.print(domain_table)
     console.print()
 
@@ -677,8 +641,8 @@ def main():
             review_mode=args.review_mode,
             review_model=args.review_model,
             hallucination_retries=args.hallucination_retries,
-            retrieval_config=args.retrieval_config,
-            retrieval_config_kwargs=args.retrieval_config_kwargs,
+            retrieval_config=None,
+            retrieval_config_kwargs=None,
         )
 
         if audio_native_config is not None:
