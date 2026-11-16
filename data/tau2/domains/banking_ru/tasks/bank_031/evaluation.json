@@ -16,7 +16,7 @@
       "rule_id": "wrong_transfer_between_own_accounts_amount_Bank 31",
       "tool_name": "transfer_between_own_accounts",
       "argument_name": "amount",
-      "pattern": "^(?!2500(?:\\.0+)?$).+"
+      "pattern": "^(?!2537\\.50*$).+"
     },
     {
       "rule_id": "wrong_close_account_account_id_Bank 31",
@@ -3140,12 +3140,12 @@
       "record_id": "acc_8891",
       "expected_fields": {
         "customer_id": "titov_v_8890",
-        "balance": 2500.0,
+        "balance": 2537.5,
         "status": "active",
         "debt": 0.0
       },
       "before_action_id": "transfer_between_own_accounts_Bank 31",
-      "after_action_id": "verify_Bank 31"
+      "after_action_id": "register_statement_Bank 31"
     },
     {
       "evidence_id": "accounts_acc_8892_transfer_between_own_accounts_Bank 31_Bank 31",
@@ -3160,7 +3160,7 @@
         "debt": 0.0
       },
       "before_action_id": "transfer_between_own_accounts_Bank 31",
-      "after_action_id": "verify_Bank 31"
+      "after_action_id": "register_statement_Bank 31"
     },
     {
       "evidence_id": "bank31_application_accounts_acc_8891_transfer_between_own_accounts_Bank 31_Bank 31",
@@ -3235,10 +3235,11 @@
         "payout_account_id": "acc_8892",
         "ready_for_execution": true,
         "customer_id": "titov_v_8890",
-        "active_card_ids": []
+        "active_card_ids": [],
+        "balance": 2537.5
       },
       "before_action_id": "transfer_between_own_accounts_Bank 31",
-      "after_action_id": "verify_Bank 31"
+      "after_action_id": "register_statement_Bank 31"
     },
     {
       "evidence_id": "bank31:signed",
@@ -3421,12 +3422,32 @@
       "required_for_reward": true
     },
     {
+      "action_id": "bank31:refresh-accounts",
+      "name": "get_accounts",
+      "arguments": {
+        "customer_id": "titov_v_8890"
+      },
+      "required_for_reward": false
+    },
+    {
+      "action_id": "bank31:refresh-readiness",
+      "name": "check_account_closure",
+      "arguments": {
+        "account_id": "acc_8891",
+        "payout_account_id": "acc_8892"
+      },
+      "compare_args": [
+        "account_id",
+        "payout_account_id"
+      ]
+    },
+    {
       "action_id": "transfer_between_own_accounts_Bank 31",
       "name": "transfer_between_own_accounts",
       "arguments": {
         "from_account_id": "acc_8891",
         "to_account_id": "acc_8892",
-        "amount": 2500.0
+        "amount": 2537.5
       },
       "required_for_reward": true,
       "compare_args": [

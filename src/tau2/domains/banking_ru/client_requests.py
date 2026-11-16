@@ -1230,7 +1230,11 @@ class StructuredIdentityBankingTools(FileBankingTools):
         Передайте этот ID и submission_channel=bank_app; документ должен совпадать.
         Без канала регистрируется лишь предварительное support_intake обращение,
         которое НЕ подтверждает приём подписанного заявления через приложение.
-        Регистрация не переводит деньги и не закрывает счёт или карту.
+        Регистрация не переводит деньги между счетами и не закрывает счёт или карту.
+        При регистрации может завершиться расчёт процентов по закрываемому
+        счёту. Поле amount отражает остаток на момент регистрации. Если расчёт
+        изменился, получите актуальные сведения об обоих счетах и подтверждение
+        готовности после регистрации, прежде чем исполнить перевод.
 
         Args:
             account_id: Свой действующий счёт для прекращения договора.
@@ -1271,6 +1275,10 @@ class StructuredIdentityBankingTools(FileBankingTools):
         if receipt:
             from copy import deepcopy
 
+            interest = self.db.closure_interest_kopecks.pop(source.id, None)
+            if interest is not None:
+                source.balance = round(source.balance + interest / 100, 2)
+                case.amount = source.balance
             case.submission_channel = submission_channel
             case.closure_document = deepcopy(receipt["document"])
             case.closure_signature = {

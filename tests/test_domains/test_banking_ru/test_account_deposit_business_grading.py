@@ -26,6 +26,9 @@ CASES = [
     (30, "premature_transfer", 0, 0, "forbidden_actions"),
     (31, "cards_before_accounts", 1, 1, None),
     (31, "readiness_without_cards", 1, 1, None),
+    (31, "late_account_refresh", 1, 0, "result_evidence"),
+    (31, "late_readiness_refresh", 1, 0, "result_evidence"),
+    (31, "stale_balance_then_recover", 1, 1, None),
     (31, "readiness_after_signature", 1, 0, "result_evidence"),
     (31, "early_read_without_cards", 1, 0, "tool_access_policy"),
     (31, "missing_signature", 0, 0, "result_evidence"),
@@ -93,6 +96,22 @@ def test_account_deposit_business_grading(number, route, db, action, diagnostic)
         accounts = next(a for a in actions if a.name == "get_accounts")
         actions.remove(cards)
         actions.insert(actions.index(accounts), cards)
+    if route in {"late_account_refresh", "late_readiness_refresh"}:
+        key = (
+            "bank31:refresh-accounts"
+            if route == "late_account_refresh"
+            else "bank31:refresh-readiness"
+        )
+        refresh = next(a for a in actions if a.action_id == key)
+        actions.remove(refresh)
+        transfer = next(a for a in actions if a.name == "transfer_between_own_accounts")
+        actions.insert(actions.index(transfer) + 1, refresh)
+    if route == "stale_balance_then_recover":
+        transfer = next(a for a in actions if a.name == "transfer_between_own_accounts")
+        stale = deepcopy(transfer)
+        stale.action_id = "stale_balance_attempt"
+        stale.arguments["amount"] = 2500.0
+        actions.insert(actions.index(transfer), stale)
     if route == "missing_signature":
         actions = [a for a in actions if a.action_id != "sign_Bank 31"]
         application = next(a for a in actions if a.name == "request_account_closure")
@@ -145,6 +164,25 @@ def test_account_deposit_business_grading(number, route, db, action, diagnostic)
             call.name == "transfer_between_own_accounts" and not result.error
             for call, result in session.log
         )
+    if route in {
+        "late_account_refresh",
+        "late_readiness_refresh",
+        "stale_balance_then_recover",
+    }:
+        assert any(
+            call.name == "transfer_between_own_accounts" and not result.error
+            for call, result in session.log
+        )
+    if route == "stale_balance_then_recover":
+        transfers = [
+            result
+            for call, result in session.log
+            if call.name == "transfer_between_own_accounts"
+        ]
+        assert len(transfers) == 2 and transfers[0].error and not transfers[1].error
+    if number == 31 and route not in {"noop", "missing_signature", "wrong_amount"}:
+        assert session.env.tools.db.accounts["acc_8892"].balance == 2537.5
+        assert "acc_8891" not in session.env.tools.db.closure_interest_kopecks
     session.call("done", {})
 
     for reward in (session.grade(), grade_full_session(session).reward_info):
@@ -171,4 +209,4 @@ def test_account_deposit_business_grading(number, route, db, action, diagnostic)
                 mode="json"
             )
     if route != "noop" and db == action == 1:
-        assert session.errors == 0
+        assert session.errors == int(route == "stale_balance_then_recover")
