@@ -2,6 +2,10 @@
 
 Thank you for your interest in contributing to τ-bench! This document provides guidelines to help you make clean, reviewable contributions that can be easily integrated into the project.
 
+For Banking.ru changes, follow the [Banking.ru development workflow](docs/banking-ru/development.md#git-от-начала-работы-до-слияния)
+and its [targeted offline checks](docs/banking-ru/development.md#как-выбирать-офлайн-проверки).
+The general τ-bench guidelines below cover the rest of the repository.
+
 ## 🚀 Quick Start
 
 1. **Open an Issue First** (recommended): Before starting work, open an issue to discuss your proposed changes
@@ -218,31 +222,8 @@ wip
 ### PR Title and Description
 **Title Format**: `type: brief description`
 
-**Description Template**:
-```markdown
-## Summary
-Brief description of the changes made.
-
-## Changes Made
-- List of specific changes
-- Include any breaking changes
-- Note any new dependencies
-
-## Testing
-- How you tested the changes
-- What test cases were added/modified
-- Any manual testing performed
-
-## Documentation
-- Any documentation updates made
-- Links to relevant docs or issues
-
-## Checklist
-- [ ] Tests pass (`make test`; also run relevant tier targets if changes touch voice/knowledge/gym)
-- [ ] Code follows style guidelines (`make check-all`)
-- [ ] Documentation updated
-- [ ] Breaking changes noted
-```
+Use the [pull request template](.github/PULL_REQUEST_TEMPLATE.md). Include any
+breaking changes, new dependencies, and documentation updates when relevant.
 
 ### PR Review Process
 1. **Automated checks**: CI tests and code quality checks must pass
