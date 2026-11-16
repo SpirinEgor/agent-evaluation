@@ -252,6 +252,14 @@ def main():
 
     specs = [parse_provider(p.strip()) for p in args.providers.split(",")]
     domains = [d.strip() for d in args.domains.split(",")]
+    from tau2.registry import registry
+
+    unavailable = sorted(set(domains) - set(registry.get_domains()))
+    if unavailable:
+        parser.error(
+            f"Unavailable voice experiment domains: {', '.join(unavailable)}. "
+            "Run upstream experiments from a checkout predating domain removal."
+        )
     complexities = [c.strip() for c in args.complexities.split(",")]
 
     base_dir = Path(args.save_to).resolve()

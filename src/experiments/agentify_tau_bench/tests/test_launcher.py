@@ -7,6 +7,12 @@ from agentify_tau_bench.launcher import launch_evaluation
 class TestLaunchEvaluation:
     """Test the launch_evaluation function."""
 
+    @pytest.fixture(autouse=True)
+    def upstream_mock_domain(self, monkeypatch):
+        from tau2.registry import registry
+
+        monkeypatch.setattr(registry, "get_domains", lambda: ["mock"])
+
     @pytest.mark.asyncio
     async def test_launch_evaluation_success(self):
         """Test successful launch of evaluation with both agents."""

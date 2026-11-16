@@ -1,5 +1,11 @@
 # Tau2 Domains
 
+Поддерживаемый домен этого репозитория — Banking.ru (`banking_ru`).
+Домены airline, retail, telecom и τ-Knowledge удалены. Тестовая среда mock
+находится в `tests/fixtures/mock_domain/` и регистрируется только тестами.
+Унаследованные примеры ниже относятся к исходному τ²-Bench.
+
+
 This folder contains the domains for the Tau2 project.
 
 ## Domain Structure

@@ -3,9 +3,9 @@
 Minimal custom agent example.
 
 This example shows how to create the simplest possible tau2 agent,
-register it, and run it against the mock domain -- all in one file.
+register it, and run it against the Banking.ru domain -- all in one file.
 
-No API keys are needed (uses the mock domain with a real LLM).
+No API keys are needed (uses the Banking.ru domain with a real LLM).
 
 Usage:
     python examples/agents/minimal_text_agent.py
@@ -13,7 +13,7 @@ Usage:
 What this does:
     1. Defines a custom agent that wraps an LLM with a system prompt
     2. Registers it with the tau2 registry
-    3. Runs it on a single mock task
+    3. Runs it on a single banking task
     4. Prints the result
 """
 
@@ -133,10 +133,10 @@ if __name__ == "__main__":
     registry.register_agent_factory(create_minimal_agent, "minimal_agent")
 
     # --- Option A: Run a single task programmatically ---
-    tasks = get_tasks("mock", task_ids=["create_task_1"])
+    tasks = get_tasks("banking_ru", task_ids=["Bank 2"])
     result = run_single_task(
         TextRunConfig(
-            domain="mock",
+            domain="banking_ru",
             agent="minimal_agent",
             llm_agent="openai/gpt-4.1-mini",
         ),
@@ -147,12 +147,12 @@ if __name__ == "__main__":
     print(f"Reward: {result.reward_info.reward}")
     print(f"Messages: {len(result.messages)}")
 
-    # --- Option B: Run all mock tasks via run_domain ---
+    # --- Option B: Run all banking tasks via run_domain ---
     # Uncomment to run a full evaluation:
     #
     # results = run_domain(
     #     TextRunConfig(
-    #         domain="mock",
+    #         domain="banking_ru",
     #         agent="minimal_agent",
     #         llm_agent="openai/gpt-4.1-mini",
     #         num_trials=1,

@@ -6,7 +6,7 @@ Runnable examples showing how to create and evaluate custom tau2 agents.
 
 ### `minimal_text_agent.py` -- Start here
 
-A single-file example that creates a minimal agent, registers it, and runs it against the mock domain. Shows:
+A single-file example that creates a minimal agent, registers it, and runs it against the Banking.ru domain. Shows:
 
 - Implementing `HalfDuplexAgent` (the two required methods)
 - Writing a factory function
@@ -62,3 +62,5 @@ class MyAgent(HalfDuplexAgent[MyState]):
 The agent receives `tools: list[Tool]` and `domain_policy: str` in `__init__`.
 
 See `src/tau2/agent/README.md` for the full developer guide.
+
+Banking.ru examples require the local BANKING_PAYLOAD_STORE configuration described in docs/banking-ru/development.md. Running these examples invokes a model.

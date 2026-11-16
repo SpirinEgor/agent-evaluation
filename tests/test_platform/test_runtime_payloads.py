@@ -73,8 +73,8 @@ def test_no_recursive_expansion_and_no_execution(tmp_path):
 
 def test_full_platform_observation_and_trace_receive_same_text(tmp_path, monkeypatch):
     from tau2.data_model.message import ToolMessage
-    from tau2.domains.mock.environment import get_environment, get_tasks
     from tau2.platform.session import PlatformSession
+    from tests.fixtures.mock_domain.environment import get_environment, get_tasks
 
     store = PayloadStore(tmp_path / "store")
     text = "NEUTRAL_RUNTIME_CANARY"

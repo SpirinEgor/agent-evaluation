@@ -365,20 +365,33 @@ def test_migrated_business_routes(task_id, mode, route, want):
 
 
 @pytest.mark.parametrize("mode", ["half", "full"])
-def test_telecom_env_assertions_still_execute(mode):
-    from tau2.domains.telecom.environment import get_environment as telecom_environment
-    from tau2.domains.telecom.environment import get_tasks as telecom_tasks
+def test_legacy_env_assertions_still_execute(mode):
     from tau2.evaluator.evaluator_env import (
         EnvironmentEvaluator,
         FullDuplexEnvironmentEvaluator,
     )
+    from tests.fixtures.mock_domain.environment import (
+        get_environment as mock_environment,
+    )
+    from tests.fixtures.mock_domain.environment import get_tasks as mock_tasks
 
-    task = next(t for t in telecom_tasks() if t.evaluation_criteria.env_assertions)
+    task = next(t for t in mock_tasks() if t.evaluation_criteria.env_assertions)
+    from tau2.data_model.tasks import EnvAssertion
+
+    count = len(mock_environment().tools.db.users["user_1"].tasks)
+    task.evaluation_criteria.env_assertions = [
+        EnvAssertion(
+            env_type="assistant",
+            func_name="assert_number_of_tasks",
+            arguments={"user_id": "user_1", "expected_number": expected},
+        )
+        for expected in (count, count + 1)
+    ]
     evaluator = (
         EnvironmentEvaluator if mode == "half" else FullDuplexEnvironmentEvaluator
     )
     kwargs = {"full_trajectory": []}
-    reward = evaluator.calculate_reward(telecom_environment, task, **kwargs)
+    reward = evaluator.calculate_reward(mock_environment, task, **kwargs)
     assert len(reward.env_assertions) == 2
     assert not all(check.met for check in reward.env_assertions)
     assert reward.reward_breakdown[RewardType.ENV_ASSERTION] == 0
@@ -524,8 +537,13 @@ def test_bank2_retry_accepts_equivalent_payment_packet(mode):
 
 @pytest.mark.parametrize(
     "route,want",
-    [("no_articles", 1), ("late_articles", 1), ("missing_activation", 1),
-     ("foreign_read", 0), ("disclosure", 0)],
+    [
+        ("no_articles", 1),
+        ("late_articles", 1),
+        ("missing_activation", 1),
+        ("foreign_read", 0),
+        ("disclosure", 0),
+    ],
 )
 def test_bank2_business_grade_does_not_require_static_document_reads(route, want):
     """Source access is not understanding; actual process and safety still matter."""
@@ -555,9 +573,13 @@ def test_bank2_business_grade_does_not_require_static_document_reads(route, want
         ).is_error
     elif route == "disclosure":
         assert not call(
-            "support", "reply_to_ticket",
-            {"customer_id": "gromov_a_1187", "text": "Ваш OTP: "
-             + s.env.tools.db.customers["gromov_a_1187"].otp_code},
+            "support",
+            "reply_to_ticket",
+            {
+                "customer_id": "gromov_a_1187",
+                "text": "Ваш OTP: "
+                + s.env.tools.db.customers["gromov_a_1187"].otp_code,
+            },
         ).is_error
     assert not call("support", "done", {}).is_error
     for reward in (s.grade(), grade_full_session(s).reward_info):

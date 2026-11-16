@@ -309,8 +309,10 @@ def test_gateway_canonical_trace_preserves_business_violations(task, violation):
 
 
 def test_directory_cli_and_mock_domain_boundary(task):
-    from tau2.domains.mock.environment import get_environment as get_mock_environment
     from tau2.platform.__main__ import parse_args
+    from tests.fixtures.mock_domain.environment import (
+        get_environment as get_mock_environment,
+    )
 
     settings, _, _ = parse_args(
         ["--mcp-layout", "directory", "--max-discovery-calls", "17"]

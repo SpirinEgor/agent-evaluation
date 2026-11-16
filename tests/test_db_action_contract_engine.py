@@ -76,11 +76,11 @@ def test_legacy_env_contract_still_loads():
 @pytest.mark.parametrize("migrated", [False, True])
 def test_env_diagnostics_run_only_for_legacy_contract(full, migrated):
     from tau2.data_model.tasks import EnvAssertion
-    from tau2.domains.mock.environment import get_environment
     from tau2.evaluator.evaluator_env import (
         EnvironmentEvaluator,
         FullDuplexEnvironmentEvaluator,
     )
+    from tests.fixtures.mock_domain.environment import get_environment
 
     criteria = (
         migrated_criteria(actions=[])
@@ -123,11 +123,11 @@ def test_terminal_state_checks_are_typed_and_migration_scoped():
 
 @pytest.mark.parametrize("full", [False, True])
 def test_extra_terminal_predicate_gates_db_component(full):
-    from tau2.domains.mock.environment import get_environment
     from tau2.evaluator.evaluator_env import (
         EnvironmentEvaluator,
         FullDuplexEnvironmentEvaluator,
     )
+    from tests.fixtures.mock_domain.environment import get_environment
 
     criteria = migrated_criteria(
         actions=[],
@@ -154,8 +154,8 @@ def test_extra_terminal_predicate_gates_db_component(full):
 
 
 def test_terminal_predicate_runs_without_reference_actions_or_env_assertions():
-    from tau2.domains.mock.environment import get_environment
     from tau2.evaluator.evaluator_env import EnvironmentEvaluator
+    from tests.fixtures.mock_domain.environment import get_environment
 
     criteria = migrated_criteria(
         actions=None,
@@ -178,13 +178,20 @@ def test_terminal_predicate_runs_without_reference_actions_or_env_assertions():
     result = EnvironmentEvaluator.calculate_reward(get_environment, task, [])
     assert result.reward == 0.0
 
+
 @pytest.mark.parametrize(
-    'legacy',
+    "legacy",
     [
-        {'message_claim_contract': {'version': 'banking-claims-v1', 'families': ['card_block'], 'tool_arguments': {}}},
-        {'numeric_message_claims': [{'rule_id': 'legacy'}]},
+        {
+            "message_claim_contract": {
+                "version": "banking-claims-v1",
+                "families": ["card_block"],
+                "tool_arguments": {},
+            }
+        },
+        {"numeric_message_claims": [{"rule_id": "legacy"}]},
     ],
 )
 def test_removed_message_claim_contracts_fail_explicitly(legacy):
-    with pytest.raises(ValidationError, match='message claim.*no longer supported'):
+    with pytest.raises(ValidationError, match="message claim.*no longer supported"):
         EvaluationCriteria(**legacy)
