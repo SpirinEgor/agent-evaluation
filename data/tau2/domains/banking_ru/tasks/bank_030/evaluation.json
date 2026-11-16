@@ -3228,6 +3228,70 @@
         "full_name": "Егоров Павел Андреевич"
       },
       "before_action_id": "ask_identity_Bank 30"
+    },
+    {
+      "evidence_id": "bank30:unsettled:sign_Bank 30",
+      "tool_names": [
+        "get_transactions",
+        "get_transaction_details"
+      ],
+      "record_id": "txn_903426",
+      "expected_fields": {
+        "customer_id": "egorov_p_7215",
+        "account_id": "acc_9034",
+        "date": "2026-08-26",
+        "status": "hold"
+      },
+      "after_action_id": "verify_Bank 30",
+      "before_action_id": "sign_Bank 30",
+      "alternatives": [
+        {
+          "tool_names": [
+            "check_account_closure"
+          ],
+          "record_id": "acc_9034",
+          "expected_fields": {
+            "account_id": "acc_9034",
+            "payout_account_id": "acc_1180",
+            "unsettled_transaction_ids": [
+              "txn_903426"
+            ],
+            "ready_for_execution": false
+          }
+        }
+      ]
+    },
+    {
+      "evidence_id": "bank30:unsettled:register_statement_Bank 30",
+      "tool_names": [
+        "get_transactions",
+        "get_transaction_details"
+      ],
+      "record_id": "txn_903426",
+      "expected_fields": {
+        "customer_id": "egorov_p_7215",
+        "account_id": "acc_9034",
+        "date": "2026-08-26",
+        "status": "hold"
+      },
+      "after_action_id": "verify_Bank 30",
+      "before_action_id": "register_statement_Bank 30",
+      "alternatives": [
+        {
+          "tool_names": [
+            "check_account_closure"
+          ],
+          "record_id": "acc_9034",
+          "expected_fields": {
+            "account_id": "acc_9034",
+            "payout_account_id": "acc_1180",
+            "unsettled_transaction_ids": [
+              "txn_903426"
+            ],
+            "ready_for_execution": false
+          }
+        }
+      ]
     }
   ],
   "numeric_message_claims": [],
@@ -3348,35 +3412,7 @@
       },
       "compare_args": [],
       "result_contains": [],
-      "alternative_tool_names": [
-        "check_account_closure"
-      ],
-      "result_patterns": [
-        "(?:\"items\": \\[\\].*\"total\": \"0\"|\"total\": \"0\".*\"items\": \\[\\]|\"account_id\": \"acc_9034\".*\"payout_account_id\": \"acc_1180\")"
-      ],
-      "argument_options": {
-        "customer_id": [
-          null,
-          "egorov_p_7215"
-        ],
-        "account_id": [
-          null,
-          "acc_9034"
-        ],
-        "payout_account_id": [
-          null,
-          "acc_1180"
-        ],
-        "card_id": [
-          null
-        ],
-        "date_from": [
-          null
-        ],
-        "date_to": [
-          null
-        ]
-      }
+      "required_for_reward": false
     },
     {
       "action_id": "sign_Bank 30",
@@ -3420,11 +3456,6 @@
     {
       "before_action_id": "ask_identity_Bank 30",
       "after_action_id": "verify_Bank 30",
-      "require_result_before_target": true
-    },
-    {
-      "before_action_id": "closure_operations_Bank 30",
-      "after_action_id": "register_statement_Bank 30",
       "require_result_before_target": true
     },
     {

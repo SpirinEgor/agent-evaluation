@@ -22,7 +22,8 @@ CASES = [
     )
 ] + [
     (30, "closure_check", 1, 1, None),
-    (30, "missing_readiness", 1, 0, "action_order"),
+    (30, "missing_readiness", 1, 0, "result_evidence"),
+    (30, "late_settlement_evidence", 1, 0, "result_evidence"),
     (30, "premature_transfer", 0, 0, "forbidden_actions"),
     (31, "cards_before_accounts", 1, 1, None),
     (31, "readiness_without_cards", 1, 1, None),
@@ -36,6 +37,7 @@ CASES = [
     (32, "transaction_list", 1, 1, None),
     (32, "other_category", 1, 1, None),
     (32, "transaction_details", 1, 1, None),
+    (32, "wrong_same_amount_payment", 0, 0, "forbidden_argument_patterns"),
     (32, "missing_deposit", 1, 0, "result_evidence"),
     (32, "missing_account", 1, 0, "result_evidence"),
     (32, "missing_payment", 1, 0, "result_evidence"),
@@ -91,6 +93,10 @@ def test_account_deposit_business_grading(number, route, db, action, diagnostic)
                     },
                 ),
             )
+    if route == "late_settlement_evidence":
+        lookup = next(a for a in actions if a.action_id == "closure_operations_Bank 30")
+        actions.remove(lookup)
+        actions.append(lookup)
     if route == "cards_before_accounts":
         cards = next(a for a in actions if a.name == "get_cards")
         accounts = next(a for a in actions if a.name == "get_accounts")
@@ -148,6 +154,12 @@ def test_account_deposit_business_grading(number, route, db, action, diagnostic)
             payment = next(a for a in actions if a.name == "get_transactions")
             payment.name = "get_transaction_details"
             payment.arguments = {"transaction_id": "txn_405140"}
+            decoy = deepcopy(payment)
+            decoy.action_id = "bank32:other-deposit-details"
+            decoy.arguments = {"transaction_id": "txn_405141"}
+            actions.insert(actions.index(payment) + 1, decoy)
+        if route == "wrong_same_amount_payment":
+            case.arguments["transaction_id"] = "txn_405141"
         if route == "wrong_followup":
             case.arguments["next_contact_date"] = "2026-09-01"
         source_tool = {
