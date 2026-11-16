@@ -101,7 +101,10 @@ def route(number, variant):
         )
     if variant == "unsigned":
         actions = [a for a in actions if a.action_id != "sign_Bank 31"]
-        next(a for a in actions if a.name == "request_account_closure").arguments = {
+        application = next(a for a in actions if a.name == "request_account_closure")
+        # The unsigned control has no signature receipt to bind during replay.
+        application.action_id = "unsigned_application"
+        application.arguments = {
             "account_id": "acc_8891",
             "payout_account_id": "acc_8892",
         }
