@@ -34,7 +34,7 @@
       "rule_id": "wrong_create_case_transaction_id_Bank 32",
       "tool_name": "create_case",
       "argument_name": "transaction_id",
-      "pattern": "^(?:txn_405201|txn_405202|txn_405203|txn_405204|txn_405205|txn_405206|txn_405207|txn_405208|txn_405209|txn_405210|txn_405211|txn_405212|txn_405213|txn_405214|txn_405215|txn_405216|txn_405217|txn_405218|txn_405219|txn_405220|txn_405221|txn_405222|txn_405223|txn_405224|txn_405225|txn_405226|txn_405227|txn_405228|txn_405229|txn_405230|txn_405231|txn_405232|txn_405233|txn_405234|txn_405235|txn_405236|txn_405237|txn_405238|txn_405239|txn_405240|txn_405241|txn_405242|txn_405243|txn_405244|txn_405245|txn_405246|txn_405247|txn_405248|txn_405249|txn_405120|txn_405100|txn_405130)$"
+      "pattern": "^(?:txn_405201|txn_405202|txn_405203|txn_405204|txn_405205|txn_405206|txn_405207|txn_405208|txn_405209|txn_405210|txn_405211|txn_405212|txn_405213|txn_405214|txn_405215|txn_405216|txn_405217|txn_405218|txn_405219|txn_405220|txn_405221|txn_405222|txn_405223|txn_405224|txn_405225|txn_405226|txn_405227|txn_405228|txn_405229|txn_405230|txn_405231|txn_405232|txn_405233|txn_405234|txn_405235|txn_405236|txn_405237|txn_405238|txn_405239|txn_405240|txn_405241|txn_405242|txn_405243|txn_405244|txn_405245|txn_405246|txn_405247|txn_405248|txn_405249|txn_405120|txn_405100|txn_405130|txn_405141)$"
     },
     {
       "rule_id": "wrong_create_case_amount_Bank 32",
@@ -3567,6 +3567,25 @@
         "full_name": "Белов Игорь Валентинович"
       },
       "before_action_id": "ask_identity_Bank 32"
+    },
+    {
+      "evidence_id": "bank32:posted-other-deposit",
+      "tool_names": [
+        "get_transactions",
+        "get_transaction_details"
+      ],
+      "record_id": "txn_405141",
+      "expected_fields": {
+        "customer_id": "belov_i_2266",
+        "account_id": "acc_8843",
+        "date": "2026-08-27",
+        "status": "posted",
+        "kind": "deposit_payout",
+        "merchant": "Проценты по вкладу «Накопительный»",
+        "amount": 3200.0
+      },
+      "after_action_id": "verify_Bank 32",
+      "before_action_id": "create_case_Bank 32"
     }
   ],
   "communicate_info": [],
