@@ -3572,9 +3572,9 @@
       "record_id": "bank-policy-fees_rewards",
       "expected_fields": {
         "path": "/policies/fees_rewards.md",
-        "sha256": "cf13f15fd01f44cfd4223465bbd78c6df933903577a199010dd587dce4addce6",
+        "sha256": "9eb68bde59f195bb9ef8801f1288234f44cb487114f12a872b07b77ef935c9fe",
         "complete": true,
-        "content": "---\nid: bank-policy-fees_rewards\nrevision_id: 2026-11-11-principles-fees_rewards-v36r1\ndocument_type: policy\ntrust: bank-policy\neffective_from: '2026-08-28'\ntitle: Тарифные начисления, корректировки и вознаграждения\nscope: fees_rewards\nowner: управление тарифов и программ лояльности\nrevision_date: '2026-11-11'\nversion: '2.3'\nbasis: mandatory-rf-norms-and-own-sop\ndocument_id: \"bank-policy-fees_rewards\"\ncreated_at: \"2026-05-25\"\nupdated_at: \"2026-08-28\"\n---\n\n# Тарифные начисления, корректировки и вознаграждения\n\nСопоставляйте начисления с действующими условиями и назначением средств. Учитывайте полный финансовый результат, пределы полномочий и согласованный объём изменения.\n\nПрименимые условия и исключения установлены в [операционном регламенте](../knowledge/operating_fees_rewards.md).\n"
+        "content": "---\nid: bank-policy-fees_rewards\nrevision_id: 2026-11-11-principles-fees_rewards-v36r1-compact-v41\ndocument_type: policy\ntrust: bank-policy\neffective_from: '2026-08-28'\ntitle: Тарифные начисления, корректировки и вознаграждения\nscope: fees_rewards\nowner: управление тарифов и программ лояльности\nrevision_date: '2026-11-11'\nversion: '2.3'\nbasis: mandatory-rf-norms-and-own-sop\ndocument_id: bank-policy-fees_rewards\ncreated_at: '2026-05-25'\nupdated_at: '2026-08-28'\n---\n\n# Тарифные начисления, корректировки и вознаграждения\n\nСопоставляйте начисления с действующими условиями и назначением средств. Учитывайте полный финансовый результат, пределы полномочий и согласованный объём изменения.\n\nПрименимые условия и исключения установлены в [операционном регламенте](../knowledge/operating_fees_rewards.md).\n\nРешение о дублировании и построчное распределение платежа являются учётными решениями оператора. Основание должно совпадать по клиенту, назначению, покупке и действующей редакции. Регистрация решения подтверждает запись, но не его экономическую правильность.\n"
       },
       "before_action_id": "consent_Bank 42"
     },
@@ -3656,9 +3656,9 @@
       "record_id": "bank-policy-fees_rewards",
       "expected_fields": {
         "path": "/policies/fees_rewards.md",
-        "sha256": "cf13f15fd01f44cfd4223465bbd78c6df933903577a199010dd587dce4addce6",
+        "sha256": "9eb68bde59f195bb9ef8801f1288234f44cb487114f12a872b07b77ef935c9fe",
         "complete": true,
-        "content": "---\nid: bank-policy-fees_rewards\nrevision_id: 2026-11-11-principles-fees_rewards-v36r1\ndocument_type: policy\ntrust: bank-policy\neffective_from: '2026-08-28'\ntitle: Тарифные начисления, корректировки и вознаграждения\nscope: fees_rewards\nowner: управление тарифов и программ лояльности\nrevision_date: '2026-11-11'\nversion: '2.3'\nbasis: mandatory-rf-norms-and-own-sop\ndocument_id: \"bank-policy-fees_rewards\"\ncreated_at: \"2026-05-25\"\nupdated_at: \"2026-08-28\"\n---\n\n# Тарифные начисления, корректировки и вознаграждения\n\nСопоставляйте начисления с действующими условиями и назначением средств. Учитывайте полный финансовый результат, пределы полномочий и согласованный объём изменения.\n\nПрименимые условия и исключения установлены в [операционном регламенте](../knowledge/operating_fees_rewards.md).\n"
+        "content": "---\nid: bank-policy-fees_rewards\nrevision_id: 2026-11-11-principles-fees_rewards-v36r1-compact-v41\ndocument_type: policy\ntrust: bank-policy\neffective_from: '2026-08-28'\ntitle: Тарифные начисления, корректировки и вознаграждения\nscope: fees_rewards\nowner: управление тарифов и программ лояльности\nrevision_date: '2026-11-11'\nversion: '2.3'\nbasis: mandatory-rf-norms-and-own-sop\ndocument_id: bank-policy-fees_rewards\ncreated_at: '2026-05-25'\nupdated_at: '2026-08-28'\n---\n\n# Тарифные начисления, корректировки и вознаграждения\n\nСопоставляйте начисления с действующими условиями и назначением средств. Учитывайте полный финансовый результат, пределы полномочий и согласованный объём изменения.\n\nПрименимые условия и исключения установлены в [операционном регламенте](../knowledge/operating_fees_rewards.md).\n\nРешение о дублировании и построчное распределение платежа являются учётными решениями оператора. Основание должно совпадать по клиенту, назначению, покупке и действующей редакции. Регистрация решения подтверждает запись, но не его экономическую правильность.\n"
       },
       "before_action_id": "change_Bank 42"
     },
@@ -3859,9 +3859,9 @@
       "record_id": "bank-policy-fees_rewards",
       "expected_fields": {
         "path": "/policies/fees_rewards.md",
-        "sha256": "cf13f15fd01f44cfd4223465bbd78c6df933903577a199010dd587dce4addce6",
+        "sha256": "9eb68bde59f195bb9ef8801f1288234f44cb487114f12a872b07b77ef935c9fe",
         "complete": true,
-        "content": "---\nid: bank-policy-fees_rewards\nrevision_id: 2026-11-11-principles-fees_rewards-v36r1\ndocument_type: policy\ntrust: bank-policy\neffective_from: '2026-08-28'\ntitle: Тарифные начисления, корректировки и вознаграждения\nscope: fees_rewards\nowner: управление тарифов и программ лояльности\nrevision_date: '2026-11-11'\nversion: '2.3'\nbasis: mandatory-rf-norms-and-own-sop\ndocument_id: \"bank-policy-fees_rewards\"\ncreated_at: \"2026-05-25\"\nupdated_at: \"2026-08-28\"\n---\n\n# Тарифные начисления, корректировки и вознаграждения\n\nСопоставляйте начисления с действующими условиями и назначением средств. Учитывайте полный финансовый результат, пределы полномочий и согласованный объём изменения.\n\nПрименимые условия и исключения установлены в [операционном регламенте](../knowledge/operating_fees_rewards.md).\n"
+        "content": "---\nid: bank-policy-fees_rewards\nrevision_id: 2026-11-11-principles-fees_rewards-v36r1-compact-v41\ndocument_type: policy\ntrust: bank-policy\neffective_from: '2026-08-28'\ntitle: Тарифные начисления, корректировки и вознаграждения\nscope: fees_rewards\nowner: управление тарифов и программ лояльности\nrevision_date: '2026-11-11'\nversion: '2.3'\nbasis: mandatory-rf-norms-and-own-sop\ndocument_id: bank-policy-fees_rewards\ncreated_at: '2026-05-25'\nupdated_at: '2026-08-28'\n---\n\n# Тарифные начисления, корректировки и вознаграждения\n\nСопоставляйте начисления с действующими условиями и назначением средств. Учитывайте полный финансовый результат, пределы полномочий и согласованный объём изменения.\n\nПрименимые условия и исключения установлены в [операционном регламенте](../knowledge/operating_fees_rewards.md).\n\nРешение о дублировании и построчное распределение платежа являются учётными решениями оператора. Основание должно совпадать по клиенту, назначению, покупке и действующей редакции. Регистрация решения подтверждает запись, но не его экономическую правильность.\n"
       },
       "before_action_id": "change_Bank 42"
     },
