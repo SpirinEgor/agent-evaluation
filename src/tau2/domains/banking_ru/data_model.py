@@ -1165,6 +1165,10 @@ class BankingDB(DB):
     )
     customers: dict[str, Customer] = Field(default_factory=dict)
     accounts: dict[str, Account] = Field(default_factory=dict)
+    closure_interest_kopecks: dict[str, Annotated[int, Field(gt=0)]] = Field(
+        default_factory=dict,
+        description="One-time interest settlement on acceptance of a signed closure",
+    )
     cards: dict[str, Card] = Field(default_factory=dict)
     card_limits: dict[str, CardLimits] = Field(default_factory=dict)
     transactions: dict[str, Transaction] = Field(default_factory=dict)
