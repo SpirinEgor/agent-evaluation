@@ -3461,7 +3461,7 @@
       "result_patterns": [
         "\"status\"\\s*:\\s*\"delivered\"",
         "\"case_id\"\\s*:\\s*\"case-n40-current\"",
-        "\"version\"\\s*:\\s*\"2\""
+        "\"version\"\\s*:\\s*\"3\""
       ]
     }
   ],
@@ -3785,19 +3785,6 @@
             "mcc_codes": []
           }
         ]
-      },
-      "after_action_id": "verify_Bank 41",
-      "before_action_id": "bank41:investigation"
-    },
-    {
-      "evidence_id": "tariffs_tariff_classic_reply_Bank 41_Bank 41",
-      "tool_names": [
-        "get_tariff",
-        "list_tariffs"
-      ],
-      "record_id": "tariff_classic",
-      "expected_fields": {
-        "name": "Классический"
       },
       "after_action_id": "verify_Bank 41",
       "before_action_id": "bank41:investigation"
@@ -4163,7 +4150,8 @@
             "transaction_id": "txn_077031",
             "amount": 70
           }
-        ]
+        ],
+        "version": 2
       },
       "before_action_id": "bank41:investigation"
     },
@@ -4178,7 +4166,7 @@
       "expected_fields": {
         "customer_id": "egorova_n_3358",
         "case_id": "case-n40-current",
-        "version": "2",
+        "version": "3",
         "purpose": "registration_confirmation",
         "audience": "customer",
         "transmissible": true,
@@ -4188,7 +4176,8 @@
           "verified_email"
         ]
       },
-      "before_action_id": "bank41:document-delivery"
+      "before_action_id": "bank41:document-delivery",
+      "after_action_id": "bank41:investigation"
     },
     {
       "evidence_id": "bank41:verified-contact",
