@@ -275,6 +275,17 @@ class BankingTools(RewardWorkflowMixin, DocumentServiceMixin, ToolKitBase):
         # Disclosures are irreversible trace checks, independent of this projection.
         snapshot.pop("case_working_notes", None)
         snapshot.pop("case_outbound_messages", None)
+        # A completed optional exchange adds no review obligation. Keep required,
+        # unknown and malformed receipts; disclosure/authority remain trace checks.
+        for exchange_id, receipt in list(snapshot["case_exchange_receipts"].items()):
+            request = snapshot["case_exchange_requests"].get(exchange_id, {})
+            if request.get("required_for_review") is False and receipt == {
+                "id": exchange_id,
+                "case_id": request.get("case_id"),
+                "customer_id": request.get("customer_id"),
+                "status": "matched",
+            }:
+                del snapshot["case_exchange_receipts"][exchange_id]
         snapshot.pop("support_messages", None)
         snapshot.pop("client_receipt_declarations", None)
         snapshot.pop("cashback_state_revisions", None)

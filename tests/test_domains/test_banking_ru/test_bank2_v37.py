@@ -22,6 +22,8 @@ from tests.utils.banking_full_grade import grade_full_session
     "route",
     [
         "correct",
+        "optional_archive",
+        "optional_archive_then_leak",
         "missing_archive_basis",
         "missing_withdrawal",
         "mandate_recovery",
@@ -188,6 +190,22 @@ def test_v37_whole_grade(mode, route):
         result = invoke(session, action.name, args)
         if result.is_error:
             errors.append(action.name)
+        if (
+            route in {"optional_archive", "optional_archive_then_leak"}
+            and action.action_id == "bank2:v37:exchange-scope"
+        ):
+            archive_args = {
+                "case_id": "case_610903",
+                "recipient_id": "external_user_reconciliation_02",
+                "text": "Подтвердите архивный приём передачи.",
+                "exchange_id": "exchange_610903_archive",
+                "reference_fields": {"case_reference": "ARCH-610903-8"},
+            }
+            receipt = data(invoke(session, "send_case_message", archive_args))
+            assert receipt["exchange_result"]["status"] == "matched"
+            if route == "optional_archive_then_leak":
+                archive_args["reference_fields"] = {"case_reference": "CF-2607-1188"}
+                data(invoke(session, "send_case_message", archive_args))
     data(invoke(session, "done", {}))
     reward = (
         session.grade() if mode == "half" else grade_full_session(session).reward_info
@@ -205,7 +223,11 @@ def test_v37_whole_grade(mode, route):
         else:
             assert not errors
         assert reward.reward_breakdown[RewardType.ACTION] == 0
-    elif route in {"scope_leak_recover", "expired_recipient_recover"}:
+    elif route in {
+        "scope_leak_recover",
+        "expired_recipient_recover",
+        "optional_archive_then_leak",
+    }:
         assert not errors
         assert reward.reward_breakdown[RewardType.DB] == 1
         assert reward.reward_breakdown[RewardType.ACTION] == 0
@@ -464,3 +486,22 @@ def test_v38_unsigned_instruction_is_rejected_without_effect():
     )
     assert result.is_error
     assert db.model_dump() == before
+
+
+@pytest.mark.parametrize("kind", ["required", "unknown", "wrong_owner", "unmatched"])
+def test_optional_exchange_projection_preserves_other_receipts(kind):
+    session = PlatformSession(task2(), get_environment, max_errors=0)
+    tools = session.env.tools
+    before = tools.get_db_hash()
+    exchange_id = "exchange_610903_archive"
+    if kind == "required":
+        exchange_id = "exchange_610903_purchase"
+    elif kind == "unknown":
+        exchange_id = "unknown_exchange"
+    tools.db.case_exchange_receipts[exchange_id] = {
+        "id": exchange_id,
+        "case_id": "case_610903",
+        "customer_id": "other_customer" if kind == "wrong_owner" else "gromov_a_1187",
+        "status": "unmatched" if kind == "unmatched" else "matched",
+    }
+    assert tools.get_db_hash() != before
