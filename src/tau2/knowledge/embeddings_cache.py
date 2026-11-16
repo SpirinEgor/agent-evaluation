@@ -511,58 +511,6 @@ def get_embeddings_cache() -> EmbeddingsCache:
     return _global_cache
 
 
-def warm_kb_cache(
-    embedder_configs: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
-) -> List[Dict[str, Any]]:
-    """Pre-warm the knowledge base cache with documents and embeddings.
-
-    This function should be called once before running tasks to:
-    1. Load and cache documents (shared across all retrieval configs)
-    2. Compute and cache embeddings for each unique embedder config
-
-    Args:
-        embedder_configs: List of (embedder_type, embedder_params) tuples to pre-compute.
-                         If None, only loads documents without computing embeddings.
-
-    Returns:
-        List of documents (for use in pipelines)
-    """
-    from tau2.domains.banking_knowledge.environment import get_knowledge_base
-
-    cache = get_embeddings_cache()
-
-    cached_docs = get_cached_docs()
-    if cached_docs is not None:
-        print(f"✅ Using in-memory cached documents ({len(cached_docs)} docs)")
-        docs = cached_docs
-    else:
-        print("🔄 Loading documents...")
-        knowledge_base = get_knowledge_base()
-        docs = [
-            {"id": doc.id, "text": doc.content, "title": doc.title}
-            for doc in knowledge_base.documents.values()
-        ]
-        set_cached_docs(docs)
-        print(f"✅ Loaded {len(docs)} documents")
-
-    if embedder_configs:
-        for embedder_type, embedder_params in embedder_configs:
-            cached = cache.get(docs, embedder_type, embedder_params)
-            if cached is not None:
-                print(
-                    f"✅ Embeddings already cached for {embedder_type}:{embedder_params.get('model', 'default')}"
-                )
-            else:
-                print(
-                    f"🔄 Computing embeddings for {embedder_type}:{embedder_params.get('model', 'default')}..."
-                )
-                _compute_and_cache_embeddings(
-                    docs, embedder_type, embedder_params, cache
-                )
-
-    return docs
-
-
 def _compute_and_cache_embeddings(
     docs: List[Dict[str, Any]],
     embedder_type: str,

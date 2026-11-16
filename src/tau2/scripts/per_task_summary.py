@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate per-task reward summary table for different domains.
+Generate per-task reward summaries from archived upstream experiment results.
 
 Usage:
     python src/tau2/scripts/per_task_summary.py --domain retail

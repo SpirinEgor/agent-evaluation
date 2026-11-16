@@ -95,8 +95,10 @@ def test_banking_default_allows_six_errors_and_done_at_100_calls():
 
 
 def test_other_domain_keeps_default_error_stop_and_explicit_override():
-    from tau2.domains.mock.environment import get_environment as mock_environment
-    from tau2.domains.mock.environment import get_tasks as mock_tasks
+    from tests.fixtures.mock_domain.environment import (
+        get_environment as mock_environment,
+    )
+    from tests.fixtures.mock_domain.environment import get_tasks as mock_tasks
 
     task = mock_tasks()[0]
     s = PlatformSession(task, mock_environment)

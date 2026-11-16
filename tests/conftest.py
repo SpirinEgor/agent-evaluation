@@ -12,6 +12,13 @@ from tau2.data_model.tasks import Task  # noqa: E402
 from tau2.environment.environment import Environment  # noqa: E402
 from tau2.registry import registry  # noqa: E402
 from tau2.run import get_tasks  # noqa: E402
+from tests.fixtures.mock_domain.environment import (  # noqa: E402
+    get_environment as mock_environment,  # noqa: E402
+)
+from tests.fixtures.mock_domain.environment import get_tasks as mock_tasks  # noqa: E402
+
+registry.register_domain(mock_environment, "mock")
+registry.register_tasks(mock_tasks, "mock")
 
 
 @pytest.fixture

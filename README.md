@@ -1,5 +1,11 @@
 # $\tau$-Bench: A Benchmark for Tool-Agent-User Interaction in Real-World Domains
 
+Поддерживаемый домен этого репозитория — Banking.ru (`banking_ru`).
+Домены airline, retail, telecom и τ-Knowledge удалены. Тестовая среда mock
+находится в `tests/fixtures/mock_domain/` и регистрируется только тестами.
+Унаследованные примеры ниже относятся к исходному τ²-Bench.
+
+
 [![python](https://img.shields.io/badge/Python-3.12%2B-blue.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![arXiv](https://img.shields.io/badge/cs.AI-arXiv%3A2506.07982-B31B1B.svg?logo=arxiv&logoColor=red)](https://arxiv.org/abs/2506.07982)

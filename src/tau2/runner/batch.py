@@ -761,37 +761,11 @@ def prepare_batch(
     # Create run-level voice settings and persona config for voice mode
     user_voice_settings, user_persona_config = make_voice_run_settings(config)
 
-    # Warm knowledge base cache for banking_knowledge domain
-    policy_override = None
-    if config.domain == "banking_knowledge":
-        from tau2.domains.banking_knowledge.environment import get_knowledge_base
-        from tau2.domains.banking_knowledge.retrieval import get_info_policy_override
-        from tau2.knowledge.embeddings_cache import (
-            get_unique_embedder_configs_for_retrieval_configs,
-            warm_kb_cache,
-        )
-
-        retrieval_config = getattr(config, "retrieval_config", None)
-        retrieval_config_kwargs = getattr(config, "retrieval_config_kwargs", None)
-        kwargs = retrieval_config_kwargs or {}
-        embedder_configs = None
-        if retrieval_config:
-            embedder_configs = get_unique_embedder_configs_for_retrieval_configs(
-                [retrieval_config],
-                kwargs,
-            )
-        warm_kb_cache(embedder_configs)
-        knowledge_base = get_knowledge_base()
-        policy_override = get_info_policy_override(
-            retrieval_config, knowledge_base, **kwargs
-        )
-
     # Build Info and initial Results
     info = get_info(
         config,
         user_persona_config=user_persona_config,
         user_voice_settings=user_voice_settings,
-        policy_override=policy_override,
     )
     simulation_results = Results(
         info=info,
