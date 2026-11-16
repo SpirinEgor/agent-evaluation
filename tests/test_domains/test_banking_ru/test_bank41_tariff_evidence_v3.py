@@ -1,4 +1,4 @@
-"""Customer binding AND tariff details, received in the authorized interval."""
+"""Proof of the active customer tariff in the authorized interval."""
 
 from copy import deepcopy
 
@@ -44,7 +44,10 @@ def test_bank41_tariff_evidence(route):
         other_tariff = next(
             t for t in session.env.tools.db.tariffs if t != "tariff_classic"
         )
-        session.env.tools.db.customers[customer].tariff_id = other_tariff
+        customer_state = session.env.tools.db.customers[customer]
+        customer_state.tariff_id = other_tariff
+        customer_state.pending_tariff_id = "tariff_classic"
+        customer_state.pending_tariff_from = "2026-09-15"
 
     def read_pair():
         for name, args in pair:
@@ -61,7 +64,9 @@ def test_bank41_tariff_evidence(route):
         if action.name == "amend_cashback_investigation" and route == "after_write":
             read_pair()
     session.call("done", {})
-    expected = int(route in {"direct", "profile_catalog", "catalog_profile"})
+    expected = int(
+        route in {"direct", "profile_catalog", "catalog_profile", "profile_only"}
+    )
     for grade in [session.grade(), grade_full_session(session).reward_info]:
         assert grade.reward == expected, grade.info
         if not expected:

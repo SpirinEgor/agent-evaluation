@@ -3759,7 +3759,7 @@
         "account_id": "acc_7734",
         "card_id": "card_7735",
         "date": "2026-08-28",
-        "amount": 80.0,
+        "amount": 50.0,
         "status": "posted",
         "kind": "fee_refund",
         "original_transaction_id": "txn_088219"
@@ -3925,7 +3925,7 @@
         "account_id": "acc_7734",
         "card_id": "card_7735",
         "date": "2026-08-28",
-        "amount": 80.0,
+        "amount": 50.0,
         "status": "posted",
         "kind": "fee_refund",
         "original_transaction_id": "txn_088219"
@@ -4189,6 +4189,42 @@
         "tariff_revision": null
       },
       "before_action_id": "bank40:refund-C"
+    },
+    {
+      "evidence_id": "bank40:posted-second-part-before-consent",
+      "tool_names": [
+        "get_transactions",
+        "get_transaction_details"
+      ],
+      "record_id": "txn_088222",
+      "expected_fields": {
+        "customer_id": "solovyova_a_7734",
+        "account_id": "acc_7734",
+        "card_id": "card_7735",
+        "date": "2026-08-28",
+        "amount": 30.0,
+        "status": "posted",
+        "kind": "fee_refund",
+        "original_transaction_id": "txn_088219"
+      },
+      "before_action_id": "bank40:consent",
+      "after_action_id": "verify_Bank 40",
+      "alternatives": [
+        {
+          "tool_names": [
+            "get_fee_refund_state"
+          ],
+          "record_id": "txn_088219",
+          "expected_fields": {
+            "customer_id": "solovyova_a_7734",
+            "account_id": "acc_7734",
+            "card_id": "card_7735",
+            "posted_refunds": 80.0,
+            "processing_refunds": 30.0,
+            "remaining": 169.0
+          }
+        }
+      ]
     },
     {
       "evidence_id": "common_discovery_Bank 40",
