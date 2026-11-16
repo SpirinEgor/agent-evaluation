@@ -3219,17 +3219,6 @@
       }
     },
     {
-      "evidence_id": "common_discovery_Bank 30",
-      "tool_names": [
-        "find_customer"
-      ],
-      "record_id": "egorov_p_7215",
-      "expected_fields": {
-        "full_name": "Егоров Павел Андреевич"
-      },
-      "before_action_id": "ask_identity_Bank 30"
-    },
-    {
       "evidence_id": "bank30:unsettled:sign_Bank 30",
       "tool_names": [
         "get_transactions",
@@ -3292,6 +3281,17 @@
           }
         }
       ]
+    },
+    {
+      "evidence_id": "common_discovery_Bank 30",
+      "tool_names": [
+        "find_customer"
+      ],
+      "record_id": "egorov_p_7215",
+      "expected_fields": {
+        "full_name": "Егоров Павел Андреевич"
+      },
+      "before_action_id": "ask_identity_Bank 30"
     }
   ],
   "numeric_message_claims": [],

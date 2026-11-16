@@ -3558,17 +3558,6 @@
       }
     },
     {
-      "evidence_id": "common_discovery_Bank 32",
-      "tool_names": [
-        "find_customer"
-      ],
-      "record_id": "belov_i_2266",
-      "expected_fields": {
-        "full_name": "Белов Игорь Валентинович"
-      },
-      "before_action_id": "ask_identity_Bank 32"
-    },
-    {
       "evidence_id": "bank32:posted-other-deposit",
       "tool_names": [
         "get_transactions",
@@ -3586,6 +3575,17 @@
       },
       "after_action_id": "verify_Bank 32",
       "before_action_id": "create_case_Bank 32"
+    },
+    {
+      "evidence_id": "common_discovery_Bank 32",
+      "tool_names": [
+        "find_customer"
+      ],
+      "record_id": "belov_i_2266",
+      "expected_fields": {
+        "full_name": "Белов Игорь Валентинович"
+      },
+      "before_action_id": "ask_identity_Bank 32"
     }
   ],
   "communicate_info": [],
