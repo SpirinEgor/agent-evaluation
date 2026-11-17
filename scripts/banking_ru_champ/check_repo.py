@@ -38,6 +38,7 @@ DOC_ENTRY_POINTS = (
     "docs/domain/banking-ru.md",
     "docs/architecture/architecture.md",
     "docs/development/development.md",
+    "docs/development/documentation.md",
     "docs/experiments/results.md",
     "docs/research/references.md",
 )
