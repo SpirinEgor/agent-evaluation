@@ -1,5 +1,8 @@
 # CLI Reference
 
+This reference includes upstream τ-bench examples for legacy domains. For the
+supported banking.ru чемп workflow, see the [repository quick start](../../README.md#быстрый-старт).
+
 The `tau2` command provides a unified interface for all τ-bench functionality. Use `tau2 <command> --help` to see full details for any command.
 
 Run `tau2 intro` (or just `tau2`) to see an overview of available domains, commands, and a quick-start guide directly in the terminal.

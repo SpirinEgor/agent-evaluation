@@ -1,4 +1,4 @@
-# Вклад в Banking.ru
+# Вклад в banking.ru чемп
 
 Начните с [офлайн-проверки в README](README.md#быстрый-старт), затем выберите
 [маршрут разработки](docs/development/development.md#выбери-маршрут) для задачи,
@@ -8,7 +8,8 @@
    задания укажите ID, версию и ожидаемые компоненты DB и ACTION.
 2. Работайте в ветке задачи по [Git-процессу](docs/development/development.md#git-от-начала-работы-до-слияния).
 3. Выберите [адресную офлайн-проверку](docs/development/development.md#как-выбирать-офлайн-проверки).
-   Для правок документации запустите `make check-banking-repo` и `git diff --check`.
+   При создании или изменении документации следуйте [правилам её ведения](docs/development/documentation.md)
+   и запустите `make check-banking-repo` и `git diff --check`.
 4. Обновите связанные руководства. Для закреплённых зависимостей следуйте
    [порядку фиксации релиза](docs/development/releases.md#рабочий-цикл).
 5. Укажите в [шаблоне PR](.github/PULL_REQUEST_TEMPLATE.md) цель, проверки,

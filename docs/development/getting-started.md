@@ -1,5 +1,8 @@
 # Getting Started
 
+This guide describes upstream τ-bench. For banking.ru чемп, start with the
+[repository quick start](../../README.md#быстрый-старт).
+
 This guide walks you through installing τ-bench, configuring API keys, and running your first evaluation.
 
 ## Prerequisites

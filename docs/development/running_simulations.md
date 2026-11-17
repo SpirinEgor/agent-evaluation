@@ -1,12 +1,14 @@
 # Running Simulations
 
+This runner reference includes examples for domains from upstream τ-bench.
+
 This guide covers the `tau2.runner` API for running simulations at different levels of control. Whether you want a one-liner CLI command or full programmatic control over every component, the runner framework has you covered.
 
 Local simulations with a model playing the customer require a compatible set of
 prompt templates under `$TAU2_DATA_DIR/tau2/user_simulator/`. Voice simulations
 using background noise also need WAV assets under
 `$TAU2_DATA_DIR/voice/background_noise_audio_pcm_mono_verified/`. Supply these
-assets alongside the domain data when using the local runner. For Banking.ru
+assets alongside the domain data when using the local runner. For banking.ru чемп
 sessions over A2A/MCP, follow the [repository quick start](../../README.md#быстрый-старт).
 
 ## Architecture Overview
