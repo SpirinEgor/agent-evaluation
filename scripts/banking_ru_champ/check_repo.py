@@ -31,16 +31,15 @@ DOC_DIRS = (
     "docs/domain",
     "docs/development",
     "docs/experiments",
-    "docs/research",
 )
+RUNS_DIR = Path("docs/experiments/runs")
 DOC_INDEX = Path("docs/README.md")
 DOC_ENTRY_POINTS = (
     "docs/domain/banking-ru.md",
     "docs/architecture/architecture.md",
     "docs/development/development.md",
     "docs/development/documentation.md",
-    "docs/experiments/results.md",
-    "docs/research/references.md",
+    "docs/experiments/README.md",
 )
 LINK = re.compile(r"!?\[[^\]\n]*\]\(")
 
@@ -307,7 +306,12 @@ def check_test_inputs(paths):
 def main(root=ROOT):
     documents = [root / p for p in DOC_FILES]
     documents.extend(
-        sorted(path for folder in DOC_DIRS for path in (root / folder).rglob("*.md"))
+        sorted(
+            path
+            for folder in DOC_DIRS
+            for path in (root / folder).rglob("*.md")
+            if not path.is_relative_to(root / RUNS_DIR)
+        )
     )
     errors = check_documents(root, documents)
     errors.extend(check_document_index(root))

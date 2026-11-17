@@ -12,7 +12,7 @@
 | Исправить оценщик | [Банковский контракт оценки](docs/architecture/evaluation.md), [правила для оценщика](src/tau2/evaluator/AGENTS.md) |
 | Изменить платформу или MCP | [Архитектура](docs/architecture/architecture.md), [маршрут инфраструктуры](docs/development/development.md#маршрут-2-исправить-инфраструктуру-или-оценщик) |
 | Работать с данными или корпусом | [README домена](data/tau2/domains/banking_ru_champ/README.md), [правила для домена](src/tau2/domains/AGENTS.md) |
-| Разобрать прогон | [Маршрут эксперимента](docs/development/development.md#маршрут-3-модельный-эксперимент), [реестр результатов](docs/experiments/results.md) |
+| Спланировать эксперимент или разобрать прогон | [Порядок экспериментов](docs/development/experiments.md), [исследования и результаты](docs/experiments/README.md) |
 | Проверить правку | [Выбор офлайн-проверок](docs/development/development.md#как-выбирать-офлайн-проверки), [правила для тестов](tests/AGENTS.md) |
 
 ## Рабочий порядок

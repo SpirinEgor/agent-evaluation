@@ -118,7 +118,7 @@ make test-banking-package
 | Поля текущих JSON и целевое разделение тикета, сценария и оценки | [Формат задачи](../../../../docs/architecture/task-format.md) |
 | DB, ACTION, реальные профили и расхождения с концептом | [Оценка](../../../../docs/architecture/evaluation.md) |
 | Git, skills, проверки, модельные эксперименты и Langfuse | [Разработка](../../../../docs/development/development.md) |
-| Внешние задания и проверки | [Референсы](../../../../docs/research/references.md) |
+| Внешние задания и проверки | [Референсы](../../../../docs/experiments/research/references.md) |
 
 Целевой контракт — DB × ACTION. Формула текущей задачи задаётся её критериями;
 статус миграции поддерживается в руководстве оценки. Общий ENV для других
