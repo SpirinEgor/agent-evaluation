@@ -1,4 +1,0 @@
-# Trajectory files are hosted on S3, not in the repo.
-# See the upstream submission workflow at
-# https://github.com/sierra-research/tau2-bench/blob/main/docs/leaderboard-submission.md
-*/trajectories/*.json

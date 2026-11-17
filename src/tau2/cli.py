@@ -507,7 +507,9 @@ def run_intro():
         "tau2 play", "Interactive manual mode \u2014 play the agent yourself"
     )
     cmd_table.add_row("tau2 domain <name>", "Show detailed documentation for a domain")
-    cmd_table.add_row("tau2 leaderboard", "Display the current leaderboard")
+    cmd_table.add_row(
+        "tau2 leaderboard --submissions-dir <path>", "Display local τ-bench submissions"
+    )
     cmd_table.add_row(
         "tau2 review <path>", "Run LLM-based conversation review on results"
     )
@@ -534,10 +536,7 @@ def run_intro():
         "--num-trials 1 --num-tasks 5\n"
         "\n"
         "# 3. Browse results\n"
-        "tau2 view\n"
-        "\n"
-        "# 4. Check the archived leaderboard\n"
-        "tau2 leaderboard"
+        "tau2 view"
     )
     console.print(
         Panel(
@@ -862,6 +861,11 @@ def main():
         "leaderboard", help="Show the tau-bench leaderboard"
     )
     leaderboard_parser.add_argument(
+        "--submissions-dir",
+        required=True,
+        help="Directory containing local τ-bench submissions",
+    )
+    leaderboard_parser.add_argument(
         "--domain",
         "-d",
         type=str,
@@ -1156,6 +1160,7 @@ def run_leaderboard(args):
     from tau2.scripts.leaderboard.leaderboard import show_leaderboard
 
     show_leaderboard(
+        submissions_path=args.submissions_dir,
         domain=args.domain,
         metric=args.metric,
         limit=args.limit,

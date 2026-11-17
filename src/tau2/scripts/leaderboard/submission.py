@@ -1,7 +1,7 @@
 """Pydantic models for tau-bench leaderboard submissions.
 
 Single source of truth for all submission-related data models.
-The JSON schema at web/leaderboard/public/submissions/schema.json
+The accompanying schema.json
 is auto-generated from these models.
 """
 

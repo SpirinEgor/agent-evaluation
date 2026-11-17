@@ -3,7 +3,7 @@
 Usage:
     python -m tau2.scripts.leaderboard.generate_schema [--check]
 
-Without --check, writes the schema to web/leaderboard/public/submissions/schema.json.
+Without --check, writes schema.json next to this script by default.
 With --check, verifies the file is up-to-date and exits non-zero if it differs.
 """
 
@@ -14,14 +14,7 @@ from pathlib import Path
 
 from tau2.scripts.leaderboard.submission import Submission
 
-SCHEMA_PATH = (
-    Path(__file__).parent.parent.parent.parent.parent
-    / "web"
-    / "leaderboard"
-    / "public"
-    / "submissions"
-    / "schema.json"
-)
+SCHEMA_PATH = Path(__file__).with_name("schema.json")
 
 
 def generate_schema() -> str:
@@ -50,7 +43,7 @@ def main():
         "--output",
         type=str,
         default=None,
-        help="Output path (default: web/leaderboard/public/submissions/schema.json)",
+        help=f"Output path (default: {SCHEMA_PATH})",
     )
     args = parser.parse_args()
 

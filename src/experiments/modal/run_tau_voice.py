@@ -96,7 +96,6 @@ image = (
             ".ruff_cache/**",
             "**/__pycache__/**",
             "data/simulations/**",
-            "web/leaderboard/node_modules/**",
         ],
     )
 )

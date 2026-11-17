@@ -463,7 +463,7 @@ def prepare_submission(
 
     The full directory (including trajectories/) is uploaded to external
     storage (S3, Google Drive, etc.).  Only ``submission.json`` is copied
-    into ``web/leaderboard/public/submissions/`` in the repo.
+    into the submissions directory of the upstream τ-bench leaderboard.
     """
     console = Console()
     # Step 0: Collect trajectory files
@@ -920,7 +920,6 @@ def prepare_submission(
         if voice_config.user_tts_provider:
             console.print(f"  User TTS: {voice_config.user_tts_provider}")
 
-    manifest_array = "voice_submissions" if is_voice else "submissions"
     console.print(f"\n💡 Next steps:", style="bold blue")
     console.print(f"  1. Review {submission_dir_name}/{SUBMISSION_FILE_NAME}")
     console.print(
@@ -929,11 +928,6 @@ def prepare_submission(
         f"and share the link with the maintainers"
     )
     console.print(
-        f"  3. Copy [bold]only[/bold] {submission_dir_name}/{SUBMISSION_FILE_NAME} "
-        f"to web/leaderboard/public/submissions/{submission_dir_name}/"
+        "  3. Follow the upstream τ-bench submission guide: "
+        "https://github.com/sierra-research/tau2-bench/blob/main/docs/leaderboard-submission.md"
     )
-    console.print(
-        f"  4. Add [bold]{submission_dir_name}[/bold] to the "
-        f"[bold]{manifest_array}[/bold] array in manifest.json"
-    )
-    console.print("  5. Submit a pull request")

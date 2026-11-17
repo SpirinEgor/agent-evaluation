@@ -242,10 +242,10 @@ Text runs default to monolithic JSON; voice runs default to directory-based form
 
 ## `tau2 leaderboard` — View Leaderboard
 
-Show the τ-bench leaderboard in the terminal.
+Display local submissions from the upstream τ-bench leaderboard.
 
 ```bash
-tau2 leaderboard
+tau2 leaderboard --submissions-dir /path/to/submissions
 ```
 
 | Option | Description |
