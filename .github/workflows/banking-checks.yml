@@ -1,4 +1,4 @@
-name: Banking frozen releases
+name: Banking repository checks
 on:
   pull_request:
   push:
@@ -6,7 +6,7 @@ on:
 permissions:
   contents: read
 jobs:
-  freeze-check:
+  repository-check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,12 +14,10 @@ jobs:
           fetch-depth: 0
       - name: Check banking documentation and repository structure
         run: make check-banking-repo
-      - name: Check dependencies and immutable evidence
+      - name: Check historical run records
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           if [ -n "$BASE_SHA" ] && [ "$BASE_SHA" != "0000000000000000000000000000000000000000" ]; then
-            python3 scripts/banking_ru_champ/check_frozen_bank2.py --base "$BASE_SHA"
-          else
-            python3 scripts/banking_ru_champ/check_frozen_bank2.py
+            python3 scripts/banking_ru_champ/check_run_history.py --base "$BASE_SHA"
           fi
