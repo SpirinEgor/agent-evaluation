@@ -47,7 +47,7 @@ tau2 run --domain retail --audio-native --speech-complexity regular
 | `--max-steps-seconds` | `600` | Maximum conversation duration |
 | `--verbose-logs` | — | Save audio files, LLM logs, and tick data |
 
-See `tau2 run --help` or the [CLI Reference](../../../docs/experiments/cli-reference.md) for the full list including turn-taking thresholds and debugging options.
+See `tau2 run --help` or the [CLI Reference](../../../docs/development/cli-reference.md) for the full list including turn-taking thresholds and debugging options.
 
 ## Programmatic Usage
 
@@ -69,7 +69,7 @@ config = VoiceRunConfig(
 results = run_domain(config)
 ```
 
-See [Running Simulations](../../../docs/experiments/running_simulations.md) for more examples and instance-level control.
+See [Running Simulations](../../../docs/development/running_simulations.md) for more examples and instance-level control.
 
 ## Output Structure
 

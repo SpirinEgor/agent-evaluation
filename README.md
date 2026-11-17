@@ -84,7 +84,7 @@ uv sync --extra dev            # + pytest, ruff, pre-commit (required for contri
 uv sync --all-extras           # everything
 ```
 
-This requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Voice features also need system dependencies (`brew install portaudio ffmpeg` on macOS). See the [full installation guide](docs/experiments/getting-started.md) for details.
+This requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Voice features also need system dependencies (`brew install portaudio ffmpeg` on macOS). See the [full installation guide](docs/development/getting-started.md) for details.
 
 ### 2. Set up API keys
 
@@ -110,8 +110,8 @@ Results are saved to `data/simulations/`. Use `tau2 view` to browse them.
 
 | Document | Description |
 |----------|-------------|
-| [Getting Started](docs/experiments/getting-started.md) | Installation, API keys, first run, output structure, configuration |
-| [CLI Reference](docs/experiments/cli-reference.md) | All `tau2` commands and options |
+| [Getting Started](docs/development/getting-started.md) | Installation, API keys, first run, output structure, configuration |
+| [CLI Reference](docs/development/cli-reference.md) | All `tau2` commands and options |
 
 ### Core Concepts
 
