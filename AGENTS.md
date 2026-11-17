@@ -39,7 +39,7 @@
 | Поля задач и критериев | [Формат задачи](docs/domain/task-format.md), [исполняемая схема](src/tau2/data_model/tasks.py) |
 | Реализация DB и ACTION, диагностика и пробелы миграции | [Банковская оценка](docs/domain/evaluation.md) |
 | Трассы попыток и MCP Langfuse для разработчика | [Трассировка](docs/development/development.md#langfuse-трассы-завершённых-попыток) |
-| Внешние задачи, проверки и идеи сложности | [Каталог референсов](docs/development/references.md) |
+| Внешние задачи, проверки и идеи сложности | [Каталог референсов](docs/research/references.md) |
 | Работа с доменами, оценщиком и тестами | [Домены](src/tau2/domains/AGENTS.md), [оценщик](src/tau2/evaluator/AGENTS.md), [тесты](tests/AGENTS.md) |
 | Самостоятельные тестовые данные | [README fixtures](tests/fixtures/banking_ru/README.md) |
 | Общая установка и вклад в τ-bench | [README](README.md), [CONTRIBUTING](CONTRIBUTING.md) |

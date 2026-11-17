@@ -236,7 +236,7 @@ and [banking concept](docs/domain/banking-ru.md).
 - [Architecture](docs/domain/architecture.md) and [task format](docs/domain/task-format.md)
 - [Evaluation and actual migration status](docs/domain/evaluation.md)
 - [Development, Git workflow, targeted checks and Langfuse](docs/development/development.md)
-- [External task references](docs/development/references.md)
+- [External task references](docs/research/references.md)
 
 The target banking score is DB × ACTION. Current task criteria remain authoritative
 for the implemented profile; new catalog and storage designs are not yet implemented.

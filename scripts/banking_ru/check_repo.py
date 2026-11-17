@@ -24,7 +24,7 @@ DOC_FILES = (
     "tests/AGENTS.md",
     "tests/fixtures/banking_ru/README.md",
 )
-DOC_DIRS = ("docs/domain", "docs/development", "docs/experiments")
+DOC_DIRS = ("docs/domain", "docs/development", "docs/experiments", "docs/research")
 LINK = re.compile(r"!?\[[^\]\n]*\]\(")
 
 
