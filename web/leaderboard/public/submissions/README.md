@@ -31,4 +31,4 @@ The production website at [taubench.com](https://taubench.com) fetches all data 
 
 ## Full Submission Guide
 
-For complete instructions on how to run evaluations, prepare submissions, and submit a pull request, see the **[Leaderboard Submission Guide](../../../../docs/leaderboard-submission.md)**.
+For complete instructions on how to run evaluations, prepare submissions, and submit a pull request, see the **[Leaderboard Submission Guide](https://github.com/sierra-research/tau2-bench/blob/main/docs/leaderboard-submission.md)**.

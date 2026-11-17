@@ -30,7 +30,8 @@ paper (``src/experiments/tau_voice/exp/voice_analysis.py`` on the
 computation core (no plotting / CSV / LaTeX output). Event definitions,
 detection windows, and aggregation semantics are kept identical so that
 numbers match the paper pipeline; see ``tests/test_voice_interaction_metrics.py``
-for the parity test. Full definitions live in ``docs/interaction-metrics.md``.
+for the parity test. See the upstream metric definitions at
+https://github.com/sierra-research/tau2-bench/blob/main/docs/interaction-metrics.md.
 """
 
 from dataclasses import asdict, dataclass, field

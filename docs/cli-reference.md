@@ -258,7 +258,7 @@ tau2 leaderboard
 
 ## `tau2 submit` — Leaderboard Submission
 
-See the full [Leaderboard Submission Guide](leaderboard-submission.md).
+See the full [Leaderboard Submission Guide](https://github.com/sierra-research/tau2-bench/blob/main/docs/leaderboard-submission.md).
 
 ```bash
 # Prepare a submission

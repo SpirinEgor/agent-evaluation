@@ -85,7 +85,7 @@ TAU2_VOICE_ID_LISA_BRENNER=your_voice_id_here
 # ... (one per persona)
 ```
 
-See the [Voice Persona Setup Guide](voice-personas.md) for step-by-step instructions on creating matching voices using ElevenLabs Voice Design.
+See the [Voice Persona Setup Guide](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md) for step-by-step instructions on creating matching voices using ElevenLabs Voice Design.
 
 ## Running Your First Evaluation
 
@@ -100,7 +100,7 @@ Results are saved in `data/simulations/`.
 
 ### Audio native mode (voice full-duplex)
 
-> **Prerequisite:** Voice mode requires custom ElevenLabs voices for the user simulator. You must set these up before running voice evaluations. See the [Voice Persona Setup Guide](voice-personas.md) — the automated script takes care of everything in one command.
+> **Prerequisite:** Voice mode requires custom ElevenLabs voices for the user simulator. You must set these up before running voice evaluations. See the [Voice Persona Setup Guide](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md) — the automated script takes care of everything in one command.
 
 ```bash
 tau2 run --domain retail --audio-native --num-tasks 1 --verbose-logs
@@ -211,5 +211,5 @@ make clean
 - [Task Schema & Evaluation](evaluation.md) — how a task is scored, what `actions`/`communicate_info`/`reward_basis` actually do
 - [Knowledge Retrieval](../src/tau2/knowledge/README.md) — retrieval pipeline setup and configuration for banking_knowledge domain
 - [Voice (Full-Duplex)](../src/tau2/voice/README.md) — providers, speech complexity, and CLI options for voice evaluation
-- [Voice Persona Setup](voice-personas.md) — create custom ElevenLabs voices for the user simulator
+- [Voice Persona Setup](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md) — create custom ElevenLabs voices for the user simulator
 - [Gym/RL Interface](../src/tau2/gym/README.md) — Gymnasium-compatible environment for RL training

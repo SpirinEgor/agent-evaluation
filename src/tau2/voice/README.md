@@ -124,7 +124,7 @@ TAU2_VOICE_ID_LISA_BRENNER=your_voice_id_here
 
 For a minimal setup, create just the two control personas and use `--speech-complexity control`.
 
-See the [Voice Persona Setup Guide](../../docs/voice-personas.md) for step-by-step instructions on creating matching voices with ElevenLabs Voice Design.
+See the [Voice Persona Setup Guide](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md) for step-by-step instructions on creating matching voices with ElevenLabs Voice Design.
 
 ## Environment Variables
 
@@ -135,4 +135,4 @@ See the [Voice Persona Setup Guide](../../docs/voice-personas.md) for step-by-st
 | `XAI_API_KEY` | xAI Grok Voice provider |
 | `ELEVENLABS_API_KEY` | User simulator TTS (synthesis) |
 | `DEEPGRAM_API_KEY` | Transcription (Deepgram nova-2, nova-3) |
-| `TAU2_VOICE_ID_*` | Custom voice ID overrides (see [Voice Persona Setup](../../docs/voice-personas.md)) |
+| `TAU2_VOICE_ID_*` | Custom voice ID overrides (see [Voice Persona Setup](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md)) |

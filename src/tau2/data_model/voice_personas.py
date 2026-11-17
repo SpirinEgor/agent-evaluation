@@ -15,8 +15,7 @@ runtime (no code changes needed)::
     export TAU2_VOICE_ID_MATT_DELANEY=your_voice_id_here
     export TAU2_VOICE_ID_LISA_BRENNER=your_voice_id_here
 
-See ``docs/voice-personas.md`` for a step-by-step guide to creating
-matching voices with the ElevenLabs Voice Design tool.
+Use ``python -m tau2.voice.scripts.setup_voices`` to create matching voices.
 """
 
 import logging

@@ -2,7 +2,6 @@
 # Copyright Sierra
 """Create ElevenLabs voices for all τ-bench personas via the Voice Design API.
 
-This script automates the voice setup described in docs/voice-personas.md.
 It generates a voice for each persona using the ElevenLabs Voice Design API,
 saves it to your ElevenLabs account, and prints the environment variables
 you need to add to your .env file.
@@ -45,7 +44,7 @@ SAMPLE_TEXT = (
     "Could you help me figure this out?"
 )
 
-# Voice Design parameters matching the docs/voice-personas.md recommendations.
+# Voice Design parameters for the benchmark personas.
 # UI percentage → API value mapping:
 #   loudness: UI 0–100% maps to API -1.0–1.0  (75% → 0.5)
 #   guidance_scale: UI 0–100% maps to API 0–100  (38% → 38)
@@ -315,7 +314,8 @@ Examples:
   # Preview each voice before saving
   python -m tau2.voice.scripts.setup_voices --preview
 
-See docs/voice-personas.md for the full setup guide.
+See the upstream setup guide at
+https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md
 """,
     )
     parser.add_argument(

@@ -40,7 +40,7 @@
 
 We welcome community submissions! The leaderboard accepts model evaluation results through pull requests for both **text** (standard) and **voice** (audio-native) modalities.
 
-See the **[Leaderboard Submission Guide](../../docs/leaderboard-submission.md)** for complete instructions on running evaluations, preparing submissions, and submitting a pull request.
+See the **[Leaderboard Submission Guide](https://github.com/sierra-research/tau2-bench/blob/main/docs/leaderboard-submission.md)** for complete instructions on running evaluations, preparing submissions, and submitting a pull request.
 
 ## 🔧 Development
 
