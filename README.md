@@ -23,6 +23,17 @@ make check-banking-repo
 
 ### Проверка транспорта A2A
 
+Запускаемый [пример интеграции A2A](examples/agents/banking_a2a.py) показывает
+обе стороны обмена. Координатор отправляет инструкцию, тикет и схемы инструментов.
+Агент-заглушка открывает схему `support.done` и запрашивает вызов.
+Координатор возвращает квитанцию и завершает прогон через `run_end`.
+Пример использует синтетическую сессию и работает без модели, API-ключей,
+Codex и `BANKING_PAYLOAD_STORE`.
+
+```sh
+uv run --frozen --extra platform python examples/agents/banking_a2a.py
+```
+
 Для тестов нужны Python 3.12 или 3.13, `uv` и `ripgrep` (`rg` в PATH).
 Следующая команда проверяет обмен с агентом-заглушкой, включая доставку тикета,
 вызов инструмента и получение результата.
@@ -32,7 +43,7 @@ uv sync --frozen --extra dev --extra platform
 uv run pytest tests/test_platform/test_codex_a2a.py::test_setup_results_final_receipt_and_no_direct_mcp -q
 ```
 
-Обе проверки работают без модели, API-ключей и установки Codex.
+Структурная проверка и тест транспорта также работают без модели, API-ключей и установки Codex.
 
 ## Документация
 

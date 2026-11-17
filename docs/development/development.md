@@ -112,6 +112,9 @@ bank_directory/bank_call в OpenAI function-формате. Ответы дей�
 В текущем адаптере банковское общение выполняется через tools/ask_client, отдельные
 TextPart-уточнения после старта не поддерживаются.
 
+Последовательность `run_setup` → `tool_calls` → `tool_results` → `run_end`
+можно воспроизвести в [примере интеграции A2A](../../README.md#проверка-транспорта-a2a).
+
 Офлайн: `uv run pytest tests/test_platform/test_codex_a2a.py -q` проверяет реальный
 HTTP/SSE обмен с заглушкой решателя. Физическая проверка без модели: задать
 BANKING_CODEX_TEST_IMAGE и выполнить test_codex_container.py с `-k 'a2a_v1 or physical_network'`.
