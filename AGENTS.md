@@ -1,6 +1,6 @@
 # banking.ru чемп — карта для агента-разработчика
 
-В этом репозитории один рабочий домен, banking.ru чемп, с идентификатором `banking_ru`.
+В этом репозитории один рабочий домен, banking.ru чемп, с идентификатором `banking_ru_champ`.
 Цель — сложные соревновательные задачи по реалистичным русскоязычным обращениям в банк. Начни с нужного маршрута.
 Общий указатель — [карта документации](docs/README.md).
 
@@ -10,7 +10,7 @@
 | Создать или изменить задачу | [Маршрут автора задачи](docs/development/development.md#маршрут-1-создать-или-улучшить-задачу), [формат задачи](docs/architecture/task-format.md) |
 | Исправить оценщик | [Банковский контракт оценки](docs/architecture/evaluation.md), [правила для оценщика](src/tau2/evaluator/AGENTS.md) |
 | Изменить платформу или MCP | [Архитектура](docs/architecture/architecture.md), [маршрут инфраструктуры](docs/development/development.md#маршрут-2-исправить-инфраструктуру-или-оценщик) |
-| Работать с данными или корпусом | [README домена](data/tau2/domains/banking_ru/README.md), [правила для домена](src/tau2/domains/AGENTS.md) |
+| Работать с данными или корпусом | [README домена](data/tau2/domains/banking_ru_champ/README.md), [правила для домена](src/tau2/domains/AGENTS.md) |
 | Разобрать прогон | [Маршрут эксперимента](docs/development/development.md#маршрут-3-модельный-эксперимент), [реестр результатов](docs/experiments/results.md) |
 | Проверить правку | [Выбор офлайн-проверок](docs/development/development.md#как-выбирать-офлайн-проверки), [правила для тестов](tests/AGENTS.md) |
 

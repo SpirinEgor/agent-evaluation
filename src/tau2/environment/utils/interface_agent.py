@@ -128,7 +128,7 @@ def main():
 
     # Get available domains
     available_domains = registry.get_domains()
-    default_domain = "banking_ru"
+    default_domain = "banking_ru_champ"
 
     if default_domain not in available_domains:
         console.print(f"[error]Error:[/] Default domain '{default_domain}' not found!")

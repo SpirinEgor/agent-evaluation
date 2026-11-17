@@ -56,7 +56,7 @@ def _grade(
     )
     before = simulation.model_dump(mode="json")
     result = evaluate_simulation(
-        simulation, task, evaluation_type, True, "banking_ru", mode=mode
+        simulation, task, evaluation_type, True, "banking_ru_champ", mode=mode
     )
     assert simulation.model_dump(mode="json") == before
     return result

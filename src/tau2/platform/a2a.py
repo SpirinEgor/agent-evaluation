@@ -114,7 +114,8 @@ class Exchange:
 
 def load_harness():
     path = (
-        Path(__file__).resolve().parents[3] / "scripts/banking_ru/run_codex_harness.py"
+        Path(__file__).resolve().parents[3]
+        / "scripts/banking_ru_champ/run_codex_harness.py"
     )
     spec = importlib.util.spec_from_file_location("banking_a2a_runtime", path)
     module = importlib.util.module_from_spec(spec)

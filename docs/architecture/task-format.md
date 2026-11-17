@@ -46,14 +46,14 @@
 
 ## Как задачи хранятся сейчас
 
-[Индекс tasks.json](../../data/tau2/domains/banking_ru/tasks.json) содержит
+[Индекс tasks.json](../../data/tau2/domains/banking_ru_champ/tasks.json) содержит
 упорядоченный список `task_files`. Его элементы указывают на `tasks/bank_NNN/scenario.json`. Номер файла или каталога должен соответствовать
 ID: `bank_002/scenario.json` → `Bank 2`. Порядок набора определяется индексом.
 
 Во всех 61 заданиях эти части разделены на три файла.
-[task_store.py](../../src/tau2/domains/banking_ru/task_store.py) проверяет пути,
+[task_store.py](../../src/tau2/domains/banking_ru_champ/task_store.py) проверяет пути,
 уникальность ID и соответствие имени файла; затем
-[environment.py](../../src/tau2/domains/banking_ru/environment.py) валидирует
+[environment.py](../../src/tau2/domains/banking_ru_champ/environment.py) валидирует
 объекты общей моделью `Task`. Загрузчик также читает старый массив задач
 для сохранённых снимков. Банковских splits сейчас нет.
 
@@ -98,7 +98,7 @@ ID: `bank_002/scenario.json` → `Bank 2`. Порядок набора опре�
 `intake_answers.json`, знания и политики — в `corpus/`. Manifest фиксирует
 хеши этих входов. Сценарные ответы могут иметь область `task_id`, но не меняют
 общую доступность систем, инструментов и документов. Подробности — в
-[README набора](../../data/tau2/domains/banking_ru/README.md).
+[README набора](../../data/tau2/domains/banking_ru_champ/README.md).
 
 ## Критерии и эталон в текущем формате
 
@@ -284,7 +284,7 @@ reward_resolution_minimum_change перед новым согласием на �
 ### Лимит банковских вызовов сценария
 
 Необязательное поле `max_bank_calls` в scenario.json — положительное целое
-(строки, дроби и bool запрещены). Для banking_ru платформа берёт минимум этого
+(строки, дроби и bool запрещены). Для banking_ru_champ платформа берёт минимум этого
 предела и настроек запуска; отсутствие поля сохраняет прежние defaults.
 Лимит не меняет набор инструментов или доступный корпус. SessionInfo и prompt
 harness показывают эффективное значение. Discovery и локальные инструменты

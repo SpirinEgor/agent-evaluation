@@ -1,5 +1,11 @@
 # Версии и фиксация банковских задач
 
+## Bank 2 v59 — идентификатор домена
+
+Снимок фиксирует `banking_ru_champ` в CLI, API, пакете Python и каталоге данных.
+В 61 сценарии обновлён идентификатор в `user_scenario.instructions.domain`.
+Тикеты, политики, корпус и критерии оценки сохранили исходные байты.
+
 ## Bank 2 v58 — цель бенчмарка
 
 Снимок фиксирует формулировку цели Banking.ru и принципы предметной сложности.
@@ -117,13 +123,13 @@ commit. Новый tag задаёт воспроизводимую базу дл
 
 ## Проверка снимка
 
-`uv run python scripts/banking_ru/check_frozen_bank2.py` сверяет текущую базу с
+`uv run python scripts/banking_ru_champ/check_frozen_bank2.py` сверяет текущую базу с
 активным manifest, включая добавления и удаления файлов в закреплённых областях.
 Проверка без модели включена в CI. Для нового снимка после адресной валидации:
 
 ```sh
-uv run python scripts/banking_ru/check_frozen_bank2.py --create v43
-uv run python scripts/banking_ru/check_frozen_bank2.py
+uv run python scripts/banking_ru_champ/check_frozen_bank2.py --create v43
+uv run python scripts/banking_ru_champ/check_frozen_bank2.py
 ```
 
 Команда создания не перезаписывает существующие версии. В diff должны быть

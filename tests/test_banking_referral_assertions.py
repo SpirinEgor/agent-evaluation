@@ -4,7 +4,7 @@ from copy import deepcopy
 
 import pytest
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession
 from tests.utils.banking_full_grade import grade_full_session
 

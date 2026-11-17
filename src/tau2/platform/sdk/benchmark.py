@@ -16,7 +16,7 @@ from platform_sdk import (
 from platform_sdk.tools import ToolSpec
 
 from tau2.data_model.tasks import Task
-from tau2.domains.banking_ru.environment import get_environment
+from tau2.domains.banking_ru_champ.environment import get_environment
 from tau2.platform.bank_directory import directory_tools
 from tau2.platform.session import PlatformSession, SessionStatus
 

@@ -27,8 +27,8 @@ pytest.importorskip("platform_harness")
 from platform_harness.context import build_context
 from platform_harness.server import WireService, build_server
 
-from tau2.domains.banking_ru.environment import get_tasks
-from tau2.domains.banking_ru.mcp_systems import TOOL_OWNERS
+from tau2.domains.banking_ru_champ.environment import get_tasks
+from tau2.domains.banking_ru_champ.mcp_systems import TOOL_OWNERS
 from tau2.environment.reference_bindings import reference_arguments
 from tau2.platform.a2a import build_app
 from tau2.platform.sdk.benchmark import BankingBenchmark
@@ -332,7 +332,9 @@ def test_generated_bundle_excludes_gold_and_runs(task, tmp_path):
     if not source:
         pytest.skip("Set EVAL_PLATFORM_REPO to verify the packaged execution boundary")
     root = Path(__file__).resolve().parents[2]
-    builder = runpy.run_path(str(root / "scripts/banking_ru/build_platform_bundle.py"))
+    builder = runpy.run_path(
+        str(root / "scripts/banking_ru_champ/build_platform_bundle.py")
+    )
     bundle = tmp_path / "bundle"
     private_store = os.environ.get("BANKING_PAYLOAD_STORE")
     builder["build_bundle"](
@@ -340,8 +342,8 @@ def test_generated_bundle_excludes_gold_and_runs(task, tmp_path):
     )
     assert not (bundle / "execute/src/tau2/evaluator").exists()
     assert not (bundle / "execute/src/tau2/platform/sdk/tasks.py").exists()
-    assert not (bundle / "execute/data/tau2/domains/banking_ru/tasks").exists()
-    assert (bundle / "evaluate/data/tau2/domains/banking_ru/tasks").exists()
+    assert not (bundle / "execute/data/tau2/domains/banking_ru_champ/tasks").exists()
+    assert (bundle / "evaluate/data/tau2/domains/banking_ru_champ/tasks").exists()
     with pytest.raises(ValueError, match="existing artifacts"):
         builder["build_bundle"](Path(source), bundle)
     task_path = tmp_path / "input.json"

@@ -76,7 +76,7 @@ The `banking_knowledge` domain extends the standard domain pattern significantly
 
 ## Banking.ru development
 
-For `banking_ru`, start with the [concept](../../../docs/domain/banking-ru.md),
+For `banking_ru_champ`, start with the [concept](../../../docs/domain/banking-ru.md),
 [task format](../../../docs/architecture/task-format.md) and
 [development workflow](../../../docs/development/development.md).
 The common environment, tools, startup and corpus remain identical across tasks.

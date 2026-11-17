@@ -13,7 +13,7 @@ from tau2.platform.service import PlatformSettings, build_app  # noqa: E402
 @pytest.fixture
 def settings(tmp_path: Path) -> PlatformSettings:
     return PlatformSettings(
-        domain="banking_ru",
+        domain="banking_ru_champ",
         split="base",
         reveal_checks=True,
         results_dir=tmp_path,

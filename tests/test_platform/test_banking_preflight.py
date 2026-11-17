@@ -9,7 +9,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
-    "banking_preflight", ROOT / "scripts/banking_ru/banking_preflight.py"
+    "banking_preflight", ROOT / "scripts/banking_ru_champ/banking_preflight.py"
 )
 
 
@@ -322,7 +322,7 @@ def test_live_surface_must_match_checked_prompt_tools_and_limits():
         "schemas": tools,
         "configuration": config,
     }
-    schemas = {"banking_ru_pilot": {"tools": tools}}
+    schemas = {"banking_ru_champ_pilot": {"tools": tools}}
     m.verify_live_surface(
         expected, "policy", "checked", schemas, [], configuration=config
     )
@@ -333,7 +333,7 @@ def test_live_surface_must_match_checked_prompt_tools_and_limits():
         if changed == "prompt":
             prompt = "different"
         elif changed == "tools":
-            actual["banking_ru_pilot"]["tools"].append({"name": "file_read"})
+            actual["banking_ru_champ_pilot"]["tools"].append({"name": "file_read"})
         elif changed == "layout":
             effective["mcp_layout"] = "systems"
         elif changed == "discovery":
@@ -341,7 +341,7 @@ def test_live_surface_must_match_checked_prompt_tools_and_limits():
         elif changed == "old_packet":
             packet.pop("configuration")
         else:
-            actual["crm"] = actual.pop("banking_ru_pilot")
+            actual["crm"] = actual.pop("banking_ru_champ_pilot")
         with pytest.raises(ValueError, match="surface"):
             m.verify_live_surface(
                 packet, "policy", prompt, actual, [], configuration=effective
@@ -355,10 +355,10 @@ def test_boundary_rejects_new_runtime_file(tmp_path, monkeypatch):
     monkeypatch.setattr(m, "ROOT", tmp_path)
     files = [
         "src/tau2/runtime.py",
-        "scripts/banking_ru/run_codex_harness.py",
-        "scripts/banking_ru/codex_container.py",
-        "scripts/banking_ru/codex_broker.py",
-        "scripts/banking_ru/banking_preflight.py",
+        "scripts/banking_ru_champ/run_codex_harness.py",
+        "scripts/banking_ru_champ/codex_container.py",
+        "scripts/banking_ru_champ/codex_broker.py",
+        "scripts/banking_ru_champ/banking_preflight.py",
     ]
     anchor = {}
     for name in files:
@@ -551,8 +551,8 @@ def test_control_filename_cannot_escape_run_directory():
 def test_real_control_report_matches_task_contract(tmp_path, task_id, route, expected):
     from copy import deepcopy
 
-    from tau2.domains.banking_ru.environment import get_environment, get_tasks
-    from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
+    from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
+    from tau2.domains.banking_ru_champ.utils import BANKING_RU_CHAMP_DATA_DIR
     from tau2.platform.session import PlatformSession
     from tests.utils.banking_preflight_control import write_control_report
 
@@ -565,7 +565,7 @@ def test_real_control_report_matches_task_contract(tmp_path, task_id, route, exp
     path = tmp_path / "control.json.gz"
     write_control_report(session, path)
     m = module()
-    spec = {"task_id": task_id, "data_dir": str(BANKING_RU_DATA_DIR)}
+    spec = {"task_id": task_id, "data_dir": str(BANKING_RU_CHAMP_DATA_DIR)}
     m.check_control(
         path,
         expected,
@@ -578,10 +578,10 @@ def test_real_control_report_matches_task_contract(tmp_path, task_id, route, exp
 def test_real_directory_schemas_match_checked_surface():
     import sys
 
-    from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
     from tau2.platform.session import PlatformSession
 
-    sys.path.insert(0, str(ROOT / "scripts/banking_ru"))
+    sys.path.insert(0, str(ROOT / "scripts/banking_ru_champ"))
     try:
         from run_codex_harness import build_prompt
     finally:
@@ -605,7 +605,7 @@ def test_real_directory_schemas_match_checked_surface():
         "schemas": [tool.model_dump(mode="json") for tool in session.mcp_tools],
     }
     systems = {
-        "banking_ru_pilot": {
+        "banking_ru_champ_pilot": {
             "tools": [t.model_dump(mode="json") for t in session.mcp_tools]
         }
     }
@@ -645,7 +645,7 @@ def test_validation_runs_against_isolated_copy_of_sealed_data(tmp_path, monkeypa
     def fake_run(command, **kwargs):
         env = kwargs["env"]
         root = Path(env["TAU2_DATA_DIR"])
-        data = root / "tau2/domains/banking_ru"
+        data = root / "tau2/domains/banking_ru_champ"
         assert data != original and (data / "db.json").read_text() == "sealed db"
         assert env["BANKING_PROTOTYPE_DATA_DIR"] == str(data)
         assert env["PYTHONPATH"] == str(m.ROOT / "src")
@@ -713,7 +713,7 @@ def test_validation_rejects_changed_copied_database(tmp_path, monkeypatch):
 
 
 def test_validation_runs_real_grades_on_copied_dataset(tmp_path, monkeypatch):
-    from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
+    from tau2.domains.banking_ru_champ.utils import BANKING_RU_CHAMP_DATA_DIR
 
     m = module()
     monkeypatch.setattr(m, "current", lambda *_: "test-fingerprint")
@@ -725,7 +725,7 @@ def test_validation_runs_real_grades_on_copied_dataset(tmp_path, monkeypatch):
             "from copy import deepcopy",
             "from pathlib import Path",
             "sys.path.insert(0, os.getcwd())",
-            "from tau2.domains.banking_ru.environment import get_environment, get_tasks",
+            "from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks",
             "from tau2.platform.session import PlatformSession",
             "from tests.utils.banking_preflight_control import write_control_report",
             "task = next(t for t in get_tasks() if t.id == 'Bank 2')",
@@ -740,7 +740,7 @@ def test_validation_runs_real_grades_on_copied_dataset(tmp_path, monkeypatch):
     )
     spec = {
         "task_id": "Bank 2",
-        "data_dir": str(BANKING_RU_DATA_DIR),
+        "data_dir": str(BANKING_RU_CHAMP_DATA_DIR),
         "validation_command": ["{python}", "-c", code],
         "evidence_env": "BANK_CONTROL_OUTPUT",
         "controls": [
@@ -770,7 +770,7 @@ def test_control_rejects_extra_reward_component(tmp_path):
 def test_surface_child_uses_directory_and_probes_gateway_without_solution_file(
     tmp_path, monkeypatch
 ):
-    monkeypatch.syspath_prepend(str(ROOT / "scripts/banking_ru"))
+    monkeypatch.syspath_prepend(str(ROOT / "scripts/banking_ru_champ"))
     m = module()
     (tmp_path / "AUTHOR_ONLY_canary.txt").write_text("AUTHOR_ONLY_surface_fixture")
     m.surface_child(

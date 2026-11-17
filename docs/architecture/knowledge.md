@@ -331,7 +331,7 @@ cat/read_document — одинаковый полный текст с метад
 а не технический промах агента (`tool_call_errors`).
 
 Прежние file_list/file_find/file_search/file_read сохраняются для совместимости.
-В режимах `single` и `systems` [старый corpus_command](../../src/tau2/domains/banking_ru/discovery_workflow.py)
+В режимах `single` и `systems` [старый corpus_command](../../src/tau2/domains/banking_ru_champ/discovery_workflow.py)
 не меняется и для grep по-прежнему прикладывает статьи. В `directory` имя
 corpus_command обслуживается новым API без вложения полных статей.
 

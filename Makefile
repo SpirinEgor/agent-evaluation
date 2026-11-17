@@ -93,13 +93,13 @@ help:
 .PHONY: test-banking-basic test-banking-package test-banking-tools
 
 test-banking-basic:
-	uv run pytest tests/test_domains/test_banking_ru/test_whole_full_catalog_cases.py -q
+	uv run pytest tests/test_domains/test_banking_ru_champ/test_whole_full_catalog_cases.py -q
 
 test-banking-package:
-	uv run pytest tests/test_domains/test_banking_ru/test_release_package.py tests/test_platform/test_main.py -q
+	uv run pytest tests/test_domains/test_banking_ru_champ/test_release_package.py tests/test_platform/test_main.py -q
 
 test-banking-tools:
-	uv run pytest tests/test_domains/test_banking_ru/test_tool_contract_catalog.py -q
+	uv run pytest tests/test_domains/test_banking_ru_champ/test_tool_contract_catalog.py -q
 
 # Maintained compact banking suite; all offline, no model runs.
 BANKING_WORKERS ?= 4
@@ -107,29 +107,29 @@ BANKING_WORKERS ?= 4
 
 ## Run the complete compact banking suite once
 test-banking:
-	uv run python scripts/banking_ru/run_basic_tests.py -n $(BANKING_WORKERS) $(PYTEST_ARGS)
+	uv run python scripts/banking_ru_champ/run_basic_tests.py -n $(BANKING_WORKERS) $(PYTEST_ARGS)
 
 ## Run synthetic evaluator/trace contracts
 test-banking-evaluator:
-	uv run python scripts/banking_ru/run_basic_tests.py --group evaluator $(PYTEST_ARGS)
+	uv run python scripts/banking_ru_champ/run_basic_tests.py --group evaluator $(PYTEST_ARGS)
 
 ## Run MCP, isolation, corpus and release checks
 test-banking-infra:
-	uv run python scripts/banking_ru/run_basic_tests.py --group infra $(PYTEST_ARGS)
+	uv run python scripts/banking_ru_champ/run_basic_tests.py --group infra $(PYTEST_ARGS)
 
 ## Run minimal domain regressions and allowed alternatives
 test-banking-regressions:
-	uv run python scripts/banking_ru/run_basic_tests.py --group regressions $(PYTEST_ARGS)
+	uv run python scripts/banking_ru_champ/run_basic_tests.py --group regressions $(PYTEST_ARGS)
 
 ## Run exactly reference + noop for one task: TASK=11
 test-banking-task:
-	uv run python scripts/banking_ru/run_basic_tests.py --task $(TASK) $(PYTEST_ARGS)
+	uv run python scripts/banking_ru_champ/run_basic_tests.py --task $(TASK) $(PYTEST_ARGS)
 
 ## Check mandatory shared contract generators without mutating data
 check-banking-contracts:
-	uv run python scripts/banking_ru/check_basic_contracts.py
+	uv run python scripts/banking_ru_champ/check_basic_contracts.py
 
 ## Check banking docs, task storage, profiles and maintained test inputs (read-only)
 .PHONY: check-banking-repo
 check-banking-repo:
-	python3 scripts/banking_ru/check_repo.py
+	python3 scripts/banking_ru_champ/check_repo.py

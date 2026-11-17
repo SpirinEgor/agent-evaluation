@@ -5,7 +5,7 @@ from copy import deepcopy
 
 import pytest
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
 from tau2.platform.session import PlatformSession, SessionStatus
 
 
@@ -121,7 +121,7 @@ def test_bank2_directory_reference_and_noop_use_real_grader(task, route, want):
 
 
 def test_gateway_over_real_mcp_and_saved_canonical_journal(task, tmp_path):
-    from tau2.domains.banking_ru.mcp_systems import SINGLE_SERVER
+    from tau2.domains.banking_ru_champ.mcp_systems import SINGLE_SERVER
     from tau2.platform.client import PlatformClient
     from tau2.platform.service import PlatformSettings, build_app
     from test_platform.conftest import run_with_app

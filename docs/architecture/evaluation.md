@@ -63,7 +63,7 @@ COMMUNICATE и NL_ASSERTION для других применений. Налич
    Их провал также даёт DB=0.
 
 Банковская нормализация находится в
-[BankingTools.get_db_hash](../../src/tau2/domains/banking_ru/tools.py).
+[BankingTools.get_db_hash](../../src/tau2/domains/banking_ru_champ/tools.py).
 Это не побайтовое сравнение всех полей: часть служебной информации исключается
 или нормализуется. Бизнес-поля вне хеша требуют явного покрытия.
 [db_state_checks.py](../../src/tau2/evaluator/db_state_checks.py) проверяет
@@ -181,9 +181,9 @@ ID и requestor: платформа или типизированный ToolExec
 режима траектории. Воспроизведение старых результатов на новой логике не заменяет
 исходную оценку: исторические баллы и версии не переписываются.
 
-Точки проверки: [тесты домена](../../tests/test_domains/test_banking_ru/),
-[поддерживаемые группы](../../scripts/banking_ru/run_basic_tests.py),
-[общие контракты](../../scripts/banking_ru/check_basic_contracts.py).
+Точки проверки: [тесты домена](../../tests/test_domains/test_banking_ru_champ/),
+[поддерживаемые группы](../../scripts/banking_ru_champ/run_basic_tests.py),
+[общие контракты](../../scripts/banking_ru_champ/check_basic_contracts.py).
 Выбор команд и разрешённый объём — в [процессе разработки](../development/development.md).
 Полная регрессия и модельные попытки из создания этого документа не следуют.
 

@@ -123,6 +123,6 @@ Do not relabel existing results or silently disable checks to match the target.
 Banking completion does not require final prose; as of 2 November 2026 missing agent done zeros DB and ACTION.
 
 Fixtures must be self-contained; maintained tests cannot read ignored artifacts.
-The explicit inventory is [run_basic_tests.py](../scripts/banking_ru/run_basic_tests.py).
+The explicit inventory is [run_basic_tests.py](../scripts/banking_ru_champ/run_basic_tests.py).
 Full regression and model runs require a separately allowed scope. A docs-only
 change needs link and consistency checks, not a full suite.

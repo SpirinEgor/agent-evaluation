@@ -186,7 +186,7 @@ def test_invalid_metadata_is_explicit_never_invented(defect):
 
 
 def _session_with_corpus(data, **kwargs):
-    from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
     from tau2.platform.session import PlatformSession
 
     data.manifest = {}
@@ -259,9 +259,9 @@ def test_missing_metadata_is_an_environment_error():
 def test_published_corpus_has_unambiguous_metadata_and_exact_reads():
     from pathlib import Path
 
-    from tau2.domains.banking_ru.file_corpus import FileCorpus
+    from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
 
-    root = Path(__file__).resolve().parents[2] / "data/tau2/domains/banking_ru"
+    root = Path(__file__).resolve().parents[2] / "data/tau2/domains/banking_ru_champ"
     source = FileCorpus(root)
     k = KnowledgeMCP(source, token="published-metadata")
     cards = []
@@ -327,8 +327,8 @@ def test_grep_treats_nul_in_document_as_text():
 def test_actual_file_corpus_preserves_full_utf8_bytes(tmp_path):
     import json
 
-    from tau2.domains.banking_ru.corpus_manifest import corpus_hash
-    from tau2.domains.banking_ru.file_corpus import FileCorpus
+    from tau2.domains.banking_ru_champ.corpus_manifest import corpus_hash
+    from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
 
     raw = (
         "---\r\nid: sample-v1\r\ndocument_id: policy.sample\r\nrevision_id: v1\r\n"
@@ -461,7 +461,7 @@ def test_knowledge_over_real_mcp_transport():
     ],
 )
 def test_current_tasks_grade_real_knowledge_reads(task_id, read_tool, violation, want):
-    from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
     from tau2.platform.session import PlatformSession
     from tests.utils.banking_full_grade import grade_full_session
 

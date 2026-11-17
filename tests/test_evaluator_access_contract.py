@@ -17,10 +17,10 @@ from tau2.data_model.tasks import (
     ToolAccessPolicy,
     UserScenario,
 )
-from tau2.domains.banking_ru.component_eligibility import prepare_access_policy
-from tau2.domains.banking_ru.data_model import BankingDB
-from tau2.domains.banking_ru.environment import get_environment
-from tau2.domains.banking_ru.file_corpus import FileCorpus
+from tau2.domains.banking_ru_champ.component_eligibility import prepare_access_policy
+from tau2.domains.banking_ru_champ.data_model import BankingDB
+from tau2.domains.banking_ru_champ.environment import get_environment
+from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
 from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
 from tau2.evaluator.evaluator_action import _tool_access_failures
 from tau2.evaluator.trace_evidence import evidence_from_messages, evidence_from_ticks
@@ -98,7 +98,7 @@ def test_initial_scenario_ownership_in_whole_action_grader(
     monkeypatch, mode, variant, want_reason
 ):
     """Initial DB is authoritative; observed/final ownership cannot authorize a read."""
-    fixture = Path(__file__).parent / "fixtures/banking_ru/settlement_api"
+    fixture = Path(__file__).parent / "fixtures/banking_ru_champ/settlement_api"
     base = BankingDB.load(fixture / "db.json")
     corpus = FileCorpus(fixture)
     original = next(iter(base.documents.values()))
@@ -226,7 +226,7 @@ def test_initial_scenario_ownership_in_whole_action_grader(
     )
     before_task = task.model_dump(mode="json")
     before_db = base.model_dump(mode="json")
-    domain = "banking_ru"
+    domain = "banking_ru_champ"
     if variant == "other_domain_static":
         domain = "mock"
         monkeypatch.setattr(

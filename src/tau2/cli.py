@@ -486,7 +486,7 @@ def run_intro():
     )
     domain_table.add_column("Domain", style="bold", no_wrap=True)
     domain_table.add_column("Description")
-    domain_table.add_row("banking_ru", "Banking.ru customer support benchmark")
+    domain_table.add_row("banking_ru_champ", "Banking.ru customer support benchmark")
     console.print(domain_table)
     console.print()
 
@@ -532,7 +532,7 @@ def run_intro():
         "tau2 check-data\n"
         "\n"
         "# 2. Run a text (half-duplex) evaluation\n"
-        "tau2 run --domain banking_ru --agent-llm gpt-4.1 --user-llm gpt-4.1 "
+        "tau2 run --domain banking_ru_champ --agent-llm gpt-4.1 --user-llm gpt-4.1 "
         "--num-trials 1 --num-tasks 5\n"
         "\n"
         "# 3. Browse results\n"
@@ -715,7 +715,7 @@ def main():
     domain_parser.add_argument(
         "domain",
         type=str,
-        help="Name of the domain to show documentation for (e.g., 'banking_ru')",
+        help="Name of the domain to show documentation for (e.g., 'banking_ru_champ')",
     )
     domain_parser.set_defaults(func=lambda args: run_show_domain(args))
 

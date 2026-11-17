@@ -277,7 +277,7 @@ class BaseRunConfig(BaseModel):
         str,
         Field(
             description="The domain to run the simulation on",
-            default="banking_ru",
+            default="banking_ru_champ",
         ),
     ]
     task_set_name: Annotated[

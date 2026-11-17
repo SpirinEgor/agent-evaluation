@@ -15,11 +15,11 @@ from tau2.agent.llm_agent import (
     create_llm_solo_agent,
 )
 from tau2.data_model.tasks import Task
-from tau2.domains.banking_ru.environment import (
-    get_environment as banking_ru_domain_get_environment,
+from tau2.domains.banking_ru_champ.environment import (
+    get_environment as banking_ru_champ_domain_get_environment,
 )
-from tau2.domains.banking_ru.environment import (
-    get_tasks as banking_ru_domain_get_tasks,
+from tau2.domains.banking_ru_champ.environment import (
+    get_tasks as banking_ru_champ_domain_get_tasks,
 )
 from tau2.environment.environment import Environment
 from tau2.user.user_simulator import DummyUser, UserSimulator
@@ -279,10 +279,12 @@ try:
         "discrete_time_audio_native_agent",
     )
 
-    registry.register_domain(banking_ru_domain_get_environment, "banking_ru")
+    registry.register_domain(
+        banking_ru_champ_domain_get_environment, "banking_ru_champ"
+    )
     registry.register_tasks(
-        banking_ru_domain_get_tasks,
-        "banking_ru",
+        banking_ru_champ_domain_get_tasks,
+        "banking_ru_champ",
     )
 
     logger.debug(

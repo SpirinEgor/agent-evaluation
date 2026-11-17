@@ -1,0 +1,149 @@
+"""Bank47 permits scoped protection referrals, never premature recovery."""
+
+import json
+import os
+from copy import deepcopy
+from pathlib import Path
+
+import pytest
+
+from tau2.domains.banking_ru_champ.environment import get_environment
+from tau2.domains.banking_ru_champ.task_store import load_tasks
+from tau2.platform.session import PlatformSession
+from tests.test_domains.test_banking_ru_champ.helpers import task
+
+ARGS = {"customer_id": "titova_a_7729", "request": {"type": "access_protection"}}
+
+
+@pytest.mark.parametrize(
+    "route,expected",
+    [
+        ("before_case", 1),
+        ("wrong_type_retry", 0),
+        ("early_recognition", 0),
+        ("unblock_unknown", 0),
+        ("unblock_pending", 0),
+    ],
+)
+def test_bank47_routes(route, expected):
+    s = PlatformSession(task(47), get_environment, max_calls=250, max_errors=100)
+    actions = deepcopy(task(47).evaluation_criteria.actions)
+    if route == "noop":
+        actions = []
+    if route == "missing_identity":
+        actions = [a for a in actions if a.name != "verify_identity"]
+    if route == "missing_case":
+        actions = [a for a in actions if a.name != "create_case"]
+    if route == "early_identity":
+        s.call("escalate_to_human", deepcopy(ARGS))
+    deferred = []
+    for a in actions:
+        if (
+            route == "early_source"
+            and a.name == "file_read"
+            and a.arguments["path"] == "/knowledge/kb_184.md"
+        ):
+            deferred.append(a)
+            continue
+        if (
+            (route == "early_devices" and a.name == "get_devices")
+            or (
+                route == "early_recognition"
+                and a.name == "ask_client"
+                and a.arguments["request"]["type"] == "device_recognition"
+            )
+            or (route == "before_case" and a.name == "create_case")
+        ):
+            s.call("escalate_to_human", deepcopy(ARGS))
+        s.call(a.name, deepcopy(a.arguments))
+    if route not in {
+        "reference",
+        "reference_repeat",
+        "noop",
+        "before_case",
+        "foreign_read",
+        "unblock_unknown",
+        "unblock_pending",
+    }:
+        args = deepcopy(ARGS)
+        if route == "explicit_unit":
+            args["responsible_unit"] = "support"
+        if route in {"wrong_type", "wrong_type_retry"}:
+            args["request"]["type"] = "app_access_support"
+        if route == "wrong_unit":
+            args["responsible_unit"] = "investment_products"
+        if route == "missing_request":
+            args.pop("request")
+        if route == "string_request":
+            args["request"] = '{"type": "access_protection"}'
+        if route == "malformed_request":
+            args["request"] = {}
+        if route.startswith("empty_"):
+            args[route.removeprefix("empty_")] = ""
+        if route == "legacy_reason":
+            args["reason"] = "Защита доступа"
+        if route == "foreign_owner":
+            args["customer_id"] = "egorov_m_1145"
+        s.call("escalate_to_human", args)
+        if route in {"duplicate", "wrong_type_retry"}:
+            s.call("escalate_to_human", deepcopy(ARGS))
+    for a in deferred:
+        s.call(a.name, deepcopy(a.arguments))
+    if route == "foreign_read":
+        s.call("get_devices", {"customer_id": "volkova_s_6674"})
+    if route.startswith("unblock_"):
+        s.call(
+            "unblock_device",
+            {"device_id": "dev_8822" if route == "unblock_unknown" else "dev_8821"},
+        )
+    s.call("done", {})
+    half = s.grade()
+    if folder := os.environ.get("BANK47_EVIDENCE_DIR"):
+        dest = Path(folder)
+        dest.mkdir(parents=True, exist_ok=True)
+        (dest / f"{route}.json").write_text(
+            json.dumps(
+                {
+                    "half": half.model_dump(mode="json"),
+                    "db": s.env.tools.db.model_dump(mode="json"),
+                    "calls": [
+                        {
+                            "call": c.model_dump(mode="json"),
+                            "result": r.model_dump(mode="json"),
+                        }
+                        for c, r in s.log
+                    ],
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+            + "\n"
+        )
+    assert half.final_reward == expected
+
+
+def test_bank47_common_builders_preserve_access_protection(monkeypatch):
+    root = Path(__file__).resolve().parents[3]
+    monkeypatch.syspath_prepend(str(root / "scripts/banking_ru_champ"))
+    from build_confidentiality_contract import with_contract as confidentiality
+    from build_discovery_contract import with_contract as discovery
+
+    original = load_tasks(root / "data/tau2/domains/banking_ru_champ/tasks.json")
+    db = json.loads((root / "data/tau2/domains/banking_ru_champ/db.json").read_text())
+    for builder in (confidentiality, discovery):
+        refreshed = deepcopy(original)
+        builder(refreshed, db)
+        assert refreshed == original
+
+
+def test_bank47_invalid_db_insertion_is_rejected():
+    from pydantic import ValidationError
+
+    from tau2.data_model.tasks import Task
+
+    raw = task(47).model_dump(mode="json")
+    raw["evaluation_criteria"]["db_alternative_action_additions"][1][0][
+        "db_reference_before_action_id"
+    ] = "missing-reference"
+    with pytest.raises(ValidationError, match="insertion must name a reference action"):
+        Task.model_validate(raw)

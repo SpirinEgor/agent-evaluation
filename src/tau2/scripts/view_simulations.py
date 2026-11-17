@@ -693,6 +693,8 @@ def save_task_issue(
     1. Optionally save the simulation run to the task_issues directory
     2. Update the tasks.json file with the new issue
     """
+    if domain == "banking_ru":
+        domain = "banking_ru_champ"
     domain_data_dir = Path(DATA_DIR) / "tau2" / "domains" / domain
     tasks_file = domain_data_dir / "tasks.json"
 
@@ -719,8 +721,8 @@ def save_task_issue(
 
     # Load existing tasks
     try:
-        if domain == "banking_ru":
-            from tau2.domains.banking_ru.task_store import load_tasks
+        if domain == "banking_ru_champ":
+            from tau2.domains.banking_ru_champ.task_store import load_tasks
 
             tasks_data = load_tasks(tasks_file)
         else:
@@ -748,8 +750,8 @@ def save_task_issue(
 
     # Save updated tasks
     try:
-        if domain == "banking_ru":
-            from tau2.domains.banking_ru.task_store import write_tasks
+        if domain == "banking_ru_champ":
+            from tau2.domains.banking_ru_champ.task_store import write_tasks
 
             write_tasks(tasks_file, tasks_data)
         else:

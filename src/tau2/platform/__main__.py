@@ -11,7 +11,7 @@ from tau2.platform.service import PlatformSettings, build_app
 
 def parse_args(argv: list[str]) -> tuple[PlatformSettings, str, int]:
     parser = argparse.ArgumentParser(prog="tau2.platform")
-    parser.add_argument("--domain", default="banking_ru")
+    parser.add_argument("--domain", default="banking_ru_champ")
     parser.add_argument("--split", default="base")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=PLATFORM_PORT)

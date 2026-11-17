@@ -121,13 +121,13 @@ def evaluate_simulation(
         RewardInfo with the evaluation results.
     """
     business_only = bool(
-        domain == "banking_ru"
+        domain == "banking_ru_champ"
         and task.evaluation_criteria
         and task.evaluation_criteria.business_process_only
     )
     # Completion-only does not require customer prose. Keep the original text:
     # outgoing disclosures are safety evidence even in a diagnostic message.
-    if domain == "banking_ru":
+    if domain == "banking_ru_champ":
         if simulation.termination_reason != TerminationReason.AGENT_STOP:
             return RewardInfo(
                 reward=0.0,
@@ -232,14 +232,14 @@ def evaluate_simulation(
 
     confidentiality_db = None
     resolve_access = (
-        domain == "banking_ru"
+        domain == "banking_ru_champ"
         and task.evaluation_criteria.tool_access_policy is not None
     )
     if (
         task.evaluation_criteria.banking_confidentiality_contract is not None
         or resolve_access
     ):
-        if domain != "banking_ru" or env is None or env.tools is None:
+        if domain != "banking_ru_champ" or env is None or env.tools is None:
             raise ValueError("Banking contracts require initial database context")
         initial = task.initial_state
         if initial is not None:
@@ -259,7 +259,11 @@ def evaluate_simulation(
 
     source_corpus = None
     if task.evaluation_criteria.banking_source_read_contract is not None:
-        if domain != "banking_ru" or env is None or not hasattr(env.tools, "corpus"):
+        if (
+            domain != "banking_ru_champ"
+            or env is None
+            or not hasattr(env.tools, "corpus")
+        ):
             raise ValueError(
                 "Knowledge read equivalence requires banking corpus context"
             )

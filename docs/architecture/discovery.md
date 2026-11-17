@@ -27,7 +27,7 @@
 ## Включение режима
 
 ```bash
-uv run python -m tau2.platform --domain banking_ru --mcp-layout directory
+uv run python -m tau2.platform --domain banking_ru_champ --mcp-layout directory
 ```
 
 Либо передай `mcp_layout="directory"` в `PlatformSettings`, `PlatformSession`
@@ -109,7 +109,7 @@ uv run python -m tau2.platform --domain banking_ru --mcp-layout directory
 
 Примеры показывают предлагаемые запросы и ответы каталога, а не эталон
 банковской задачи. Имена систем и инструментов взяты из текущей
-[карты MCP](../../src/tau2/domains/banking_ru/mcp_systems.py); краткие описания
+[карты MCP](../../src/tau2/domains/banking_ru_champ/mcp_systems.py); краткие описания
 показывают форму карточек. В рабочем каталоге краткое описание берётся
 из первой строки описания операции; пример схемы ниже опускает служебные
 заголовки полей, но сохраняет их типы и обязательность.

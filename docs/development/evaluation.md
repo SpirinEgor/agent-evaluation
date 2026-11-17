@@ -7,7 +7,7 @@ required of the agent, this page is for you.
 
 ## Banking.ru contract
 
-For development of our `banking_ru` domain, the accepted scoring contract is
+For development of our `banking_ru_champ` domain, the accepted scoring contract is
 `DB × ACTION`: final bank state and valid business execution. See
 [the banking evaluation contract](../architecture/evaluation.md) for the normative rules. COMMUNICATE and NL_ASSERTION
 are not part of the banking score.
@@ -21,7 +21,7 @@ require migration. Terminal obligations outside semantic DB hashing belong to DB
 Removing legacy ENV guards requires transfer and coverage evidence.
 ENV_ASSERTION remains supported by the shared framework for other domains.
 The descriptions below cover general upstream mechanisms, not a requirement
-to enable every component for banking_ru. reward_basis is task-specific.
+to enable every component for banking_ru_champ. reward_basis is task-specific.
 
 ## TL;DR
 

@@ -5,8 +5,11 @@ import json
 
 import pytest
 
-from tau2.domains.banking_ru.corpus_manifest import load_manifest, manifest_outputs
-from tau2.domains.banking_ru.file_corpus import FileCorpus
+from tau2.domains.banking_ru_champ.corpus_manifest import (
+    load_manifest,
+    manifest_outputs,
+)
+from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
 
 
 def dataset(tmp_path):
@@ -91,7 +94,7 @@ def test_legacy_manifest_remains_unchanged_and_metadata_edit_moves_to_document(
 
 
 def test_ordinary_variant_manifest_is_not_a_corpus_manifest(tmp_path):
-    from tau2.domains.banking_ru.task_store import read_json, write_json
+    from tau2.domains.banking_ru_champ.task_store import read_json, write_json
 
     path = tmp_path / "manifest.json"
     report = {"version": "variants-v1", "variants": [{"name": "example"}]}
@@ -100,7 +103,7 @@ def test_ordinary_variant_manifest_is_not_a_corpus_manifest(tmp_path):
 
 
 def test_frontmatter_delimiters_must_occupy_an_entire_line():
-    from tau2.domains.banking_ru.corpus_manifest import (
+    from tau2.domains.banking_ru_champ.corpus_manifest import (
         document_body,
         document_metadata,
         with_metadata,

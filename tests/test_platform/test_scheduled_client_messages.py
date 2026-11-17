@@ -6,9 +6,12 @@ import pytest
 from pydantic import ValidationError
 
 from tau2.data_model.tasks import ScheduledClientMessage, Task
-from tau2.domains.banking_ru.environment import get_environment
+from tau2.domains.banking_ru_champ.environment import get_environment
 from tau2.platform.session import PlatformSession
-from tests.test_domains.test_banking_ru.test_bank2_linked_goals import invoke, task2
+from tests.test_domains.test_banking_ru_champ.test_bank2_linked_goals import (
+    invoke,
+    task2,
+)
 
 
 def messages(result):

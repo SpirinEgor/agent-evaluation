@@ -369,7 +369,7 @@ class RewardType(str, Enum):
     - ACTION: every action with `required_for_reward=True` is matched
       by a distinct agent tool call (per `Action.compare_with_tool_call`).
       Optional reference steps remain part of the DB replay. Used by
-      `banking_ru` and a few `banking_knowledge` tasks; not used in
+      `banking_ru_champ` and a few `banking_knowledge` tasks; not used in
       airline/retail/telecom.
 
     See `docs/development/evaluation.md`.

@@ -176,7 +176,7 @@ def test_equivalent_source_requires_verified_full_text_and_received_result(
 ):
     import json
 
-    from tau2.domains.banking_ru.environment import get_environment
+    from tau2.domains.banking_ru_champ.environment import get_environment
     from tau2.platform.knowledge import KnowledgeMCP
 
     corpus = get_environment(task_id="Bank 2").tools.corpus
@@ -287,7 +287,7 @@ def test_mixed_full_reads_preserve_compound_source_credit_without_mutating_corpu
     import json
     from types import SimpleNamespace
 
-    from tau2.domains.banking_ru.environment import get_environment
+    from tau2.domains.banking_ru_champ.environment import get_environment
     from tau2.evaluator.source_reads import equivalent_source_reads
     from tau2.evaluator.trace_evidence import evidence_from_messages
     from tau2.platform.knowledge import KnowledgeMCP

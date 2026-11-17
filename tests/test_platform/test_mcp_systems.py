@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
 from tau2.platform.client import PlatformClient
 from tau2.platform.service import PlatformSettings, build_app
 from tau2.platform.session import PlatformSession, SessionStatus
@@ -151,7 +151,7 @@ def test_wrong_system_forbidden_attempt_still_fails_whole_grade():
 
 
 def test_catalog_rejects_unmapped_tools_and_duplicate_names():
-    from tau2.domains.banking_ru.mcp_systems import partition_tools
+    from tau2.domains.banking_ru_champ.mcp_systems import partition_tools
 
     s = PlatformSession(get_tasks()[0], get_environment)
     with pytest.raises(ValueError, match="duplicates"):
@@ -322,5 +322,5 @@ def test_bank1_reference_and_noop_keep_grades_over_mcp(tmp_path, layout):
     assert events[-1]["canonical_name"] == "done"
     assert all(e["role"] == "assistant" and e["response"] for e in events)
     assert events[-1]["system"] == (
-        "support" if layout == "systems" else "banking_ru_pilot"
+        "support" if layout == "systems" else "banking_ru_champ_pilot"
     )

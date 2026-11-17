@@ -1,6 +1,6 @@
 """Completion-only banking keeps business checks without legacy prose graders."""
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
 
 
 def test_completion_only_toolkit_has_no_legacy_reply_assertions():

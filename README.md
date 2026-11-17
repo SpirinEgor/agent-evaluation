@@ -48,7 +48,7 @@ uv run pytest tests/test_platform/test_codex_a2a.py::test_setup_results_final_re
 ## Документация
 
 - [Карта документации](docs/README.md) — концепт, архитектура, разработка, эксперименты и исследования.
-- [Набор banking.ru чемп](data/tau2/domains/banking_ru/README.md) — задачи, корпус и подключение MCP.
+- [Набор banking.ru чемп](data/tau2/domains/banking_ru_champ/README.md) — задачи, корпус и подключение MCP.
 - [AGENTS.md](AGENTS.md) — маршруты и ограничения для агента-разработчика.
 - [CONTRIBUTING.md](CONTRIBUTING.md) — подготовка изменения и выбор проверок.
 

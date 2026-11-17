@@ -4,13 +4,13 @@ import json
 
 import pytest
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
-from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.utils import BANKING_RU_CHAMP_DATA_DIR
 from tau2.platform.session import PlatformSession
 
 
 def test_canonical_client_answers_have_one_authoritative_source():
-    root = BANKING_RU_DATA_DIR
+    root = BANKING_RU_CHAMP_DATA_DIR
     db = json.loads((root / "db.json").read_bytes())
     answers = json.loads((root / "intake_answers.json").read_bytes())
     assert "client_answers" not in db
@@ -53,7 +53,7 @@ def test_scenario_answers_are_available_without_initial_state_overlay(task_id, f
 
 @pytest.mark.parametrize("method", ["code_word", "birth_date"])
 def test_identity_request_uses_stored_answer_without_keywords(method):
-    root = BANKING_RU_DATA_DIR
+    root = BANKING_RU_CHAMP_DATA_DIR
     answers = json.loads((root / "intake_answers.json").read_bytes())
     customer = next(iter(answers))
     expected = next(

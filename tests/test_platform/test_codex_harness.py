@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 SCRIPT_PATH = (
-    Path(__file__).parents[2] / "scripts" / "banking_ru" / "run_codex_harness.py"
+    Path(__file__).parents[2] / "scripts" / "banking_ru_champ" / "run_codex_harness.py"
 )
 
 
@@ -84,7 +84,7 @@ def test_build_command_exposes_only_the_opened_session_server():
     assert (
         'mcp_servers.support.url="http://127.0.0.1:8017/s/token/support/mcp"' in configs
     )
-    assert not any("banking_ru_pilot" in c for c in configs)
+    assert not any("banking_ru_champ_pilot" in c for c in configs)
 
 
 def test_build_prompt_keeps_ticket_without_duplicating_startup():
@@ -139,9 +139,11 @@ def test_solution_contract_host_channels_are_disabled():
 
 def test_full_access_environment_corpus_still_denies_author_files():
     """Corpus paths stay confined even when Codex has no local sandbox."""
-    from tau2.domains.banking_ru.file_corpus import FileCorpus
+    from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
 
-    corpus = FileCorpus(Path(__file__).parents[2] / "data/tau2/domains/banking_ru")
+    corpus = FileCorpus(
+        Path(__file__).parents[2] / "data/tau2/domains/banking_ru_champ"
+    )
     with pytest.raises(ValueError, match="canonical absolute corpus path"):
         corpus.read("/../tasks.json")
     for path in ["/etc/passwd", "/Solution Contract.md"]:
@@ -442,7 +444,7 @@ def test_approval_denial_keeps_attempt_zero_after_done_and_banking_one(
         policy="common policy",
         ticket="ticket",
         token="test-token",
-        mcp_urls={"banking_ru_pilot": "http://test/mcp"},
+        mcp_urls={"banking_ru_champ_pilot": "http://test/mcp"},
         max_calls=100,
         max_errors=0,
         max_discovery_calls=None,
@@ -729,7 +731,7 @@ def test_directory_harness_round_trip_with_real_mcp_and_no_model(
     h = load_harness()
     observed = {}
     monkeypatch.syspath_prepend(
-        str(Path(__file__).resolve().parents[2] / "scripts/banking_ru")
+        str(Path(__file__).resolve().parents[2] / "scripts/banking_ru_champ")
     )
     gates = h.load_preflight()
     surface_dir = tmp_path / "checked-surface"
@@ -769,7 +771,7 @@ def test_directory_harness_round_trip_with_real_mcp_and_no_model(
                             expected,
                             opened.policy,
                             prompt,
-                            {"banking_ru_pilot": actual},
+                            {"banking_ru_champ_pilot": actual},
                             [],
                             configuration=gates.session_configuration(opened),
                         )
@@ -938,7 +940,7 @@ def test_attempt_keeps_runtime_evidence_after_errors(
     opened = SimpleNamespace(
         token="fixture",
         mcp_layout="directory",
-        mcp_urls={"banking_ru_pilot": "http://fixture/mcp"},
+        mcp_urls={"banking_ru_champ_pilot": "http://fixture/mcp"},
         policy="BANK STARTUP",
         ticket="BANK TICKET",
         max_calls=100,

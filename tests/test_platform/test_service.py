@@ -7,7 +7,7 @@ pytest.importorskip("mcp")
 from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
 from test_platform.conftest import run_with_app
 
 

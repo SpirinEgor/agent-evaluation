@@ -7,7 +7,7 @@ from copy import deepcopy
 import mcp.types as t
 from jsonschema import Draft202012Validator
 
-from tau2.domains.banking_ru.mcp_systems import (
+from tau2.domains.banking_ru_champ.mcp_systems import (
     SYSTEM_PUBLISHER_ANNOTATIONS,
     SYSTEMS,
     TOOL_PUBLISHER_ANNOTATIONS,

@@ -122,7 +122,7 @@ def test_plain_tasks_need_no_store(monkeypatch):
 def test_manifest_refresh_hashes_logical_inputs_but_preserves_templates(
     tmp_path, monkeypatch
 ):
-    from tau2.domains.banking_ru.corpus_manifest import (
+    from tau2.domains.banking_ru_champ.corpus_manifest import (
         corpus_files,
         corpus_hash,
         load_manifest,
@@ -169,7 +169,7 @@ def test_developer_export_excludes_history_and_blocks_known_text(tmp_path, monke
     from pathlib import Path
 
     source = Path(__file__).resolve().parents[2]
-    module = runpy.run_path(str(source / "scripts/banking_ru/manage_payloads.py"))
+    module = runpy.run_path(str(source / "scripts/banking_ru_champ/manage_payloads.py"))
     function = module["export_developer"]
     root = tmp_path / "repo"
     root.mkdir()
@@ -208,7 +208,9 @@ def test_sdk_bundle_provisions_private_store_outside_developer_repo(
     from types import SimpleNamespace
 
     source = Path(__file__).resolve().parents[2]
-    module = runpy.run_path(str(source / "scripts/banking_ru/build_platform_bundle.py"))
+    module = runpy.run_path(
+        str(source / "scripts/banking_ru_champ/build_platform_bundle.py")
+    )
     build = module["build_bundle"]
     root = tmp_path / "repo"
     integration = root / "integrations/eval_platform"
@@ -227,7 +229,7 @@ def test_sdk_bundle_provisions_private_store_outside_developer_repo(
     (runtime / "platform/sdk").mkdir(parents=True)
     for name in ("tasks.py", "evaluator.py"):
         (runtime / "platform/sdk" / name).write_text("neutral")
-    data = root / "data/tau2/domains/banking_ru"
+    data = root / "data/tau2/domains/banking_ru_champ"
     (data / "corpus").mkdir(parents=True)
     (data / "tasks").mkdir()
     store = PayloadStore(tmp_path / "private")
@@ -255,5 +257,8 @@ def test_sdk_bundle_provisions_private_store_outside_developer_repo(
     build(tmp_path, output, store.root)
     key = ref[len(PREFIX) : -2]
     assert (output / "private_payloads" / key).read_text() == "NEUTRAL_BUNDLE_CANARY"
-    assert ref in (output / "execute/data/tau2/domains/banking_ru/db.json").read_text()
+    assert (
+        ref
+        in (output / "execute/data/tau2/domains/banking_ru_champ/db.json").read_text()
+    )
     assert not (output / "execute/src/tau2/evaluator").exists()

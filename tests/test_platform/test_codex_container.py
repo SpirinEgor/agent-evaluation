@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).parents[2] / "scripts/banking_ru/codex_container.py"
+SCRIPT = Path(__file__).parents[2] / "scripts/banking_ru_champ/codex_container.py"
 
 
 def request_contract():

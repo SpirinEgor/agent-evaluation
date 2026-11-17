@@ -143,7 +143,7 @@ SDK-адаптер банковского бенчмарка описан ниж
 | [evaluator.py](../../src/tau2/platform/sdk/evaluator.py) | Сверка журнала/состояния, общий оценщик и агрегация |
 | [benchmark.yaml](../../integrations/eval_platform/benchmark.yaml) | Объявление инструментального режима и бюджета ходов |
 | [runtime.yaml](../../integrations/eval_platform/runtime.yaml) | Провод v2 и два образа execute/evaluate |
-| [build_platform_bundle.py](../../scripts/banking_ru/build_platform_bundle.py) | Самостоятельный контекст сборки с закреплённым SDK и разделением файлов |
+| [build_platform_bundle.py](../../scripts/banking_ru_champ/build_platform_bundle.py) | Самостоятельный контекст сборки с закреплённым SDK и разделением файлов |
 
 SDK требует метку набора: `all` означает все существующие 61 задачи, без изменения
 их состава или восстановления старой логики split. YAML не является разрешением
@@ -172,7 +172,7 @@ Banking.ru 0.1.1 от 4 ноября 2026 `on_start` добавлял к общ�
 Подготовить автономный bundle в новой игнорируемой папке:
 
 ```sh
-python3 scripts/banking_ru/build_platform_bundle.py \
+python3 scripts/banking_ru_champ/build_platform_bundle.py \
   --platform-repo /path/to/eval-platform \
   --payload-store "$HOME/.local/share/banking-ru-private/payloads" \
   --output "$HOME/.local/share/banking-ru-private/bundles/banking-sdk"
@@ -574,7 +574,7 @@ worktree отдельно сохрани нужные игнорируемые �
 полную регрессию запускай только в отдельно разрешённом объёме.
 
 Выбор поддерживаемых файлов находится в
-[run_basic_tests.py](../../scripts/banking_ru/run_basic_tests.py). Новый файл
+[run_basic_tests.py](../../scripts/banking_ru_champ/run_basic_tests.py). Новый файл
 не включается в группу автоматически: изменение состава набора должно быть явным.
 Не расширяй или повторяй проверки после успеха без новой причины.
 
@@ -600,13 +600,13 @@ worktree отдельно сохрани нужные игнорируемые �
    `evidence_env`, `controls`, `boundary`, модель и `max_attempts`.
    Контроли задают ожидаемый 0/1 и привязаны к версии; `boundary` содержит
    подтверждения границы и неизменяемого image ID. Схему и проверки сверяй с
-   [banking_preflight.py](../../scripts/banking_ru/banking_preflight.py).
+   [banking_preflight.py](../../scripts/banking_ru_champ/banking_preflight.py).
 3. До обращения к модели выполни этапы поддерживаемого harness:
 
    ```sh
-   uv run python scripts/banking_ru/run_codex_harness.py preflight seal --spec <spec.json> --out <output-dir>
-   uv run python scripts/banking_ru/run_codex_harness.py preflight validate --out <output-dir>
-   uv run python scripts/banking_ru/run_codex_harness.py preflight surface --out <output-dir>
+   uv run python scripts/banking_ru_champ/run_codex_harness.py preflight seal --spec <spec.json> --out <output-dir>
+   uv run python scripts/banking_ru_champ/run_codex_harness.py preflight validate --out <output-dir>
+   uv run python scripts/banking_ru_champ/run_codex_harness.py preflight surface --out <output-dir>
    ```
 
    Это этапы без модели, но `validate` исполняет заданную команду проверки:
@@ -642,7 +642,7 @@ worktree отдельно сохрани нужные игнорируемые �
 
    Внутри контейнера работает только loopback HTTP relay; его обмен с хостом
    идёт по stdio `docker exec`, без host socket/volume и без сетевого маршрута.
-   [codex_broker.py](../../scripts/banking_ru/codex_broker.py) разрешает только
+   [codex_broker.py](../../scripts/banking_ru_champ/codex_broker.py) разрешает только
    фиксированный inference endpoint, модель и effort текущего прогона.
    Account/history API, redirects, proxy из окружения и fallback на API key
    запрещены. Авторский MCP-брокер работает на хосте отдельно от контейнера.
@@ -745,7 +745,7 @@ worktree отдельно сохрани нужные игнорируемые �
 5. Только после успешных ворот и разрешения на конкретный объём запусти:
 
    ```sh
-   uv run python scripts/banking_ru/run_codex_harness.py --preflight-dir <output-dir>
+   uv run python scripts/banking_ru_champ/run_codex_harness.py --preflight-dir <output-dir>
    ```
 
 6. Сохрани исходный журнал, оценки, технический исход, версии, эффективную команду,
@@ -785,7 +785,7 @@ set -a
 source ~/.config/agent-evaluation/langfuse.env
 set +a
 export BANKING_LANGFUSE_ENABLED=true
-uv run python scripts/banking_ru/run_codex_harness.py --preflight-dir <output-dir>
+uv run python scripts/banking_ru_champ/run_codex_harness.py --preflight-dir <output-dir>
 ```
 
 Это команда модельного запуска: по-прежнему нужны preflight и разрешённый объём.
@@ -886,8 +886,8 @@ SDK считается от первого `agent.turn` до последнег�
 После изменения корпуса используйте существующую команду:
 
 ```sh
-uv run python scripts/banking_ru/sync_hardening_sources.py --data-dir data/tau2/domains/banking_ru
-uv run python scripts/banking_ru/sync_hardening_sources.py --data-dir data/tau2/domains/banking_ru --check
+uv run python scripts/banking_ru_champ/sync_hardening_sources.py --data-dir data/tau2/domains/banking_ru_champ
+uv run python scripts/banking_ru_champ/sync_hardening_sources.py --data-dir data/tau2/domains/banking_ru_champ --check
 ```
 
 Она поддерживает компактный manifest и раздельные файлы задач. Обновляются
@@ -940,7 +940,7 @@ Python не сохраняются, JSON можно перенести чере�
 
 ```sh
 mkdir -p /tmp/banking-v1-build
-DOCKER_BUILDKIT=0 docker build -f "$PWD/scripts/banking_ru/Dockerfile.workbench-v1" -t banking-codex-workbench:v1 /tmp/banking-v1-build
+DOCKER_BUILDKIT=0 docker build -f "$PWD/scripts/banking_ru_champ/Dockerfile.workbench-v1" -t banking-codex-workbench:v1 /tmp/banking-v1-build
 ```
 
 Перед сборкой сверить ID базового образа с комментарием Dockerfile. При сборке
@@ -1047,7 +1047,7 @@ HTTP 403 и слово safety в свободном сообщении сами 
 явному указанию пользователя; отдельного внешнего содержательного ревью не было.
 V1 и модельные рецензенты не вызывались. Реестр 28 + 50 пунктов и три явные
 API-адаптации: `artifacts/bank2-v37-plan/coverage.json`; отчёт и хеши рядом.
-Контрольный файл: `tests/test_domains/test_banking_ru/test_bank2_v37.py`.
+Контрольный файл: `tests/test_domains/test_banking_ru_champ/test_bank2_v37.py`.
 Закрытые тексты сохранены в private store, чтение/редактирование разработчиком
 не изменяет изоляцию проверяемого агента. Запуск модели остаётся отдельным действием.
 

@@ -3,16 +3,16 @@
 import json
 from pathlib import Path
 
-from scripts.banking_ru.run_codex_harness import build_prompt
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
-from tau2.domains.banking_ru.file_corpus import FileCorpus
+from scripts.banking_ru_champ.run_codex_harness import build_prompt
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
 from tau2.platform.session import PlatformSession
 
 
 def test_bank32_solution_is_excluded_from_visible_context_and_corpus():
     task = next(t for t in get_tasks() if t.id == "Bank 32")
     session = PlatformSession(task, get_environment, mcp_layout="systems")
-    data = Path(__file__).resolve().parents[2] / "data/tau2/domains/banking_ru"
+    data = Path(__file__).resolve().parents[2] / "data/tau2/domains/banking_ru_champ"
     corpus = FileCorpus(data)
     visible = build_prompt(policy=session.policy, ticket=task.ticket)
     visible += json.dumps([t.model_dump(mode="json") for t in session.mcp_tools])

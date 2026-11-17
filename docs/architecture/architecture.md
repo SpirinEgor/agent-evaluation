@@ -129,14 +129,14 @@ SDK публикует только `tools` и отклоняет пакеты: 
 
 | Компонент | Документация | Где смотреть текущую реализацию |
 |---|---|---|
-| Управление банковским прогоном | [Разработка и модельные эксперименты](../development/development.md) | [run_codex_harness.py](../../scripts/banking_ru/run_codex_harness.py), [banking_preflight.py](../../scripts/banking_ru/banking_preflight.py) |
-| Проверяемый агент: вход, контекст и ограничения | [Порядок одной попытки](#порядок-одной-попытки) | [Запуск в контейнере](../../scripts/banking_ru/codex_container.py) |
+| Управление банковским прогоном | [Разработка и модельные эксперименты](../development/development.md) | [run_codex_harness.py](../../scripts/banking_ru_champ/run_codex_harness.py), [banking_preflight.py](../../scripts/banking_ru_champ/banking_preflight.py) |
+| Проверяемый агент: вход, контекст и ограничения | [Порядок одной попытки](#порядок-одной-попытки) | [Запуск в контейнере](../../scripts/banking_ru_champ/codex_container.py) |
 | Агенты, встроенные в τ-bench | [Устройство агентов](../../src/tau2/agent/README.md), [базовые интерфейсы](../../src/tau2/agent/base/README.md) | [src/tau2/agent/](../../src/tau2/agent/) |
 | Общий runner τ-bench | [Запуск симуляций](../development/running_simulations.md), [слои runner](../../src/tau2/runner/README.md) | [src/tau2/runner/](../../src/tau2/runner/) |
-| Тикет, сценарий и контракт оценки | [Формат задачи](task-format.md), [раздельные файлы задания](#раздельные-файлы-задания) | [task_store.py](../../src/tau2/domains/banking_ru/task_store.py), [схема Task](../../src/tau2/data_model/tasks.py) |
-| Environment и банковские системы | [Общая среда](#общая-среда), [данные домена](../../data/tau2/domains/banking_ru/README.md) | [environment.py](../../src/tau2/domains/banking_ru/environment.py), [mcp_systems.py](../../src/tau2/domains/banking_ru/mcp_systems.py) |
+| Тикет, сценарий и контракт оценки | [Формат задачи](task-format.md), [раздельные файлы задания](#раздельные-файлы-задания) | [task_store.py](../../src/tau2/domains/banking_ru_champ/task_store.py), [схема Task](../../src/tau2/data_model/tasks.py) |
+| Environment и банковские системы | [Общая среда](#общая-среда), [данные домена](../../data/tau2/domains/banking_ru_champ/README.md) | [environment.py](../../src/tau2/domains/banking_ru_champ/environment.py), [mcp_systems.py](../../src/tau2/domains/banking_ru_champ/mcp_systems.py) |
 | Каталог MCP и вызовы | [Контракт bank_directory и bank_call](discovery.md) | [Каталог и валидация](../../src/tau2/platform/bank_directory.py), [MCP-сессия](../../src/tau2/platform/session.py) |
-| Знания и политики | [Контракт knowledge MCP](knowledge.md), [правила источников](../domain/banking-ru.md#как-читать-банковские-правила) | [file_corpus.py](../../src/tau2/domains/banking_ru/file_corpus.py), [corpus_manifest.py](../../src/tau2/domains/banking_ru/corpus_manifest.py) |
+| Знания и политики | [Контракт knowledge MCP](knowledge.md), [правила источников](../domain/banking-ru.md#как-читать-банковские-правила) | [file_corpus.py](../../src/tau2/domains/banking_ru_champ/file_corpus.py), [corpus_manifest.py](../../src/tau2/domains/banking_ru_champ/corpus_manifest.py) |
 | Состояние, журнал и завершение | [Порядок попытки](#порядок-одной-попытки), [завершение и технический исход](evaluation.md#завершение-и-технический-исход) | [session.py](../../src/tau2/platform/session.py), [mcp_transport.py](../../src/tau2/platform/mcp_transport.py) |
 | Оценщики и результат | [Банковская оценка](evaluation.md), [общие механизмы τ-bench](../development/evaluation.md) | [evaluator.py](../../src/tau2/evaluator/evaluator.py), [сохранение результатов платформы](../../src/tau2/platform/service.py) |
 
@@ -259,7 +259,7 @@ Codex через `app-server` в контейнере: отдельный epheme
 эти вызовы в единственный MCP-эндпоинт сессии; остальные запросы отклоняет.
 С 1 ноября 2026 контейнер не имеет внешней сети (`network=none`) и credentials.
 Loopback relay передаёт inference по stdio в
-[хостовый шлюз](../../scripts/banking_ru/codex_broker.py), который добавляет
+[хостовый шлюз](../../scripts/banking_ru_champ/codex_broker.py), который добавляет
 подписочную авторизацию только для фиксированного модельного endpoint.
 Многошаговые запросы и MCP RPC связываются с собственными ответами модели и
 результатами инструментов в доверенном журнале хоста; чужие продолжения
@@ -303,7 +303,7 @@ API реализован в режиме `directory` в [knowledge.py](../../src
 
 ### Сообщения процесса — 3 ноября 2026
 
-`src/tau2/domains/banking_ru/processing_notes.py` — общая модель сообщений с
+`src/tau2/domains/banking_ru_champ/processing_notes.py` — общая модель сообщений с
 автором и источником. Записи сценария возвращаются вместе с разрешёнными чтениями
 дела, распределения платежа, инцидента, предложения и статуса исполнения.
 Идентификация и владение проверяются существующими инструментами; сообщения

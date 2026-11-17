@@ -8,7 +8,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 MODULE = importlib.util.spec_from_file_location(
-    "authoring_pipeline", ROOT / "scripts/banking_ru/authoring_pipeline.py"
+    "authoring_pipeline", ROOT / "scripts/banking_ru_champ/authoring_pipeline.py"
 )
 p = importlib.util.module_from_spec(MODULE)
 MODULE.loader.exec_module(p)
@@ -358,7 +358,7 @@ def test_real_cli_subprocesses_recover_at_both_commit_boundaries(tmp_path, monke
     output = tmp_path / "run"
     base = [
         sys.executable,
-        str(ROOT / "scripts/banking_ru/authoring_pipeline.py"),
+        str(ROOT / "scripts/banking_ru_champ/authoring_pipeline.py"),
         "--spec",
         str(ROOT / "tests/fixtures/authoring/neutral.json"),
         "--output",
@@ -394,7 +394,7 @@ def test_sigterm_to_coordinator_saves_interrupted_receipt(tmp_path):
 
     script = (
         "import importlib.util,sys; "
-        f"spec=importlib.util.spec_from_file_location('p',{str(ROOT / 'scripts/banking_ru/authoring_pipeline.py')!r}); "
+        f"spec=importlib.util.spec_from_file_location('p',{str(ROOT / 'scripts/banking_ru_champ/authoring_pipeline.py')!r}); "
         "p=importlib.util.module_from_spec(spec); spec.loader.exec_module(p); "
         "p.provider_command=lambda *a:([sys.executable,'-c',\"import time; print('ready',flush=True); time.sleep(30)\"],{}); "
         f"p.execute('generate',p.WRITERS[0],'test',p.Path({str(tmp_path)!r}),30)"

@@ -138,6 +138,9 @@ def recombine_results(experiment_dir: str, domain: str | None = None) -> None:
             print(f"  Warning: Could not determine domain, skipping")
             continue
 
+        if domain_name == "banking_ru":
+            domain_name = "banking_ru_champ"
+
         if domain and domain_name != domain:
             print(f"  Skipping domain {domain_name}")
             continue
@@ -148,8 +151,8 @@ def recombine_results(experiment_dir: str, domain: str | None = None) -> None:
             print(f"  Warning: Tasks file not found: {tasks_file}, skipping")
             continue
 
-        if domain_name == "banking_ru":
-            from tau2.domains.banking_ru.task_store import load_tasks
+        if domain_name == "banking_ru_champ":
+            from tau2.domains.banking_ru_champ.task_store import load_tasks
 
             tasks_data = load_tasks(tasks_file)
         else:
