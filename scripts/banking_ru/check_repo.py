@@ -24,7 +24,13 @@ DOC_FILES = (
     "tests/AGENTS.md",
     "tests/fixtures/banking_ru/README.md",
 )
-DOC_DIRS = ("docs/domain", "docs/development", "docs/experiments", "docs/research")
+DOC_DIRS = (
+    "docs/architecture",
+    "docs/domain",
+    "docs/development",
+    "docs/experiments",
+    "docs/research",
+)
 LINK = re.compile(r"!?\[[^\]\n]*\]\(")
 
 
@@ -275,7 +281,7 @@ def main(root=ROOT):
     errors = check_documents(root, documents)
     tasks, issues = check_task_index(root)
     errors.extend(issues)
-    evaluation = root / "docs/domain/evaluation.md"
+    evaluation = root / "docs/architecture/evaluation.md"
     if evaluation.is_file() and tasks:
         errors.extend(check_profiles(tasks, evaluation))
     # Loading this inventory defines groups only; its subprocess entry point is not run.

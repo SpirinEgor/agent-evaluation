@@ -233,8 +233,8 @@ separate from upstream `banking_knowledge`. Start with the [developer map](AGENT
 and [banking concept](docs/domain/banking-ru.md).
 
 - [Dataset, installation and current MCP usage](data/tau2/domains/banking_ru/README.md)
-- [Architecture](docs/domain/architecture.md) and [task format](docs/domain/task-format.md)
-- [Evaluation and actual migration status](docs/domain/evaluation.md)
+- [Architecture](docs/architecture/architecture.md) and [task format](docs/architecture/task-format.md)
+- [Evaluation and actual migration status](docs/architecture/evaluation.md)
 - [Development, Git workflow, targeted checks and Langfuse](docs/development/development.md)
 - [External task references](docs/research/references.md)
 

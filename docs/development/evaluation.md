@@ -12,7 +12,7 @@ For development of our `banking_ru` domain, the accepted scoring contract is
 [the banking development guide](../domain/banking-ru.md) for the normative rules and concrete task examples. COMMUNICATE and NL_ASSERTION
 are not part of the banking score.
 
-The [banking evaluation guide](../domain/evaluation.md) records actual task profiles,
+The [banking evaluation guide](../architecture/evaluation.md) records actual task profiles,
 migration status and known differences from the agreed concept. Required current
 sources must be received before dependent actions in the target contract; no
 specific search path is required. Rejected calls with no disclosure or forbidden

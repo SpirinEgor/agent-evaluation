@@ -30,14 +30,14 @@
 | Что нужно понять | Где читать |
 |---|---|
 | Цели, вход агента, MCP, знания и оценка | [Концепт Banking.ru](docs/domain/banking-ru.md) |
-| Компоненты, загрузка данных, сессия и путь до оценки | [Архитектура Banking.ru](docs/domain/architecture.md) |
-| Каталог систем, схемы инструментов и общий вызов | [Контракт bank_directory и bank_call](docs/domain/discovery.md) |
-| Каталог документов, редакции и команды корпуса | [Контракт knowledge MCP](docs/domain/knowledge.md) |
+| Компоненты, загрузка данных, сессия и путь до оценки | [Архитектура Banking.ru](docs/architecture/architecture.md) |
+| Каталог систем, схемы инструментов и общий вызов | [Контракт bank_directory и bank_call](docs/architecture/discovery.md) |
+| Каталог документов, редакции и команды корпуса | [Контракт knowledge MCP](docs/architecture/knowledge.md) |
 | Изменение задач, инфраструктуры и модельные эксперименты | [Процесс разработки и проверки](docs/development/development.md) |
 | Подготовка и проверка сценариев | [Порядок работы](docs/development/development.md#подготовка-и-проверка-сценариев) |
 | Установка, набор данных, manifest и клиентские ответы | [README домена](data/tau2/domains/banking_ru/README.md) |
-| Поля задач и критериев | [Формат задачи](docs/domain/task-format.md), [исполняемая схема](src/tau2/data_model/tasks.py) |
-| Реализация DB и ACTION, диагностика и пробелы миграции | [Банковская оценка](docs/domain/evaluation.md) |
+| Поля задач и критериев | [Формат задачи](docs/architecture/task-format.md), [исполняемая схема](src/tau2/data_model/tasks.py) |
+| Реализация DB и ACTION, диагностика и пробелы миграции | [Банковская оценка](docs/architecture/evaluation.md) |
 | Трассы попыток и MCP Langfuse для разработчика | [Трассировка](docs/development/development.md#langfuse-трассы-завершённых-попыток) |
 | Внешние задачи, проверки и идеи сложности | [Каталог референсов](docs/research/references.md) |
 | Работа с доменами, оценщиком и тестами | [Домены](src/tau2/domains/AGENTS.md), [оценщик](src/tau2/evaluator/AGENTS.md), [тесты](tests/AGENTS.md) |
@@ -91,7 +91,7 @@ runtime или оценщика требует новой версии; пров
 
 Среда всех банковских задач общая; не добавляй исключения доступности по ID.
 Целевой контракт — DB × ACTION. Текущий статус миграции смотри в
-[банковской оценке](docs/domain/evaluation.md#какие-профили-сейчас-исполняются)
+[банковской оценке](docs/architecture/evaluation.md#какие-профили-сейчас-исполняются)
 и сверяй с критериями задач. Не отключай существующие защиты автоматически.
 Новые правила обязательного чтения и учёта отклонённых запросов описаны в концепте;
 сверяй фактическую реализацию перед выводами об оценке.
