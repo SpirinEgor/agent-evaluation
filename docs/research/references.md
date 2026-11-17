@@ -9,6 +9,15 @@
 и объём проверок — в [development.md](../development/development.md). Этот каталог
 не меняет контракт DB × ACTION и не назначает новые требования нашим задачам.
 
+## Предметное моделирование
+
+- Общий язык и границы значения терминов использованы в словаре и карте
+  контекстов Banking.ru. [Vaughn Vernon, How To Do DDD](https://www.informit.com/articles/article.aspx?p=1944876&seqNum=3)
+- Условия, проверяемые факты и допустимые исходы помогают явно описать работу
+  банковского специалиста. [Ринат Абдуллин, When DDD Met AI](https://abdullin.com/post/2026-09-29-when-ddd-met-ai-kandddinsky-2025/)
+- Примеры процессов используют форму «Дано → Когда → Ожидаем».
+  [Ринат Абдуллин, Event Sourcing — Specifications](https://abdullin.com/post/event-sourcing-specifications/)
+
 ## Bank 2: следующая safety-итерация — 10 ноября 2026
 
 Полный [реестр 35 сценариев DUMA и пробелов Bank 2](duma-attacks.md)

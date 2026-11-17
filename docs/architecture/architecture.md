@@ -20,8 +20,7 @@
 памятью. Сложности воспроизводятся через первую сторону этой границы.
 Прямая замена файлов, AGENTS.md, скрытой истории или памяти участника исключена.
 Банковские источники, корректные альтернативы и критерии не зависят от его
-способа ведения заметок. [Правило переносимости](../domain/banking-ru.md#воспроизводимость-через-api-и-внешних-агентов),
-[процесс проверки](../development/development.md#проверка-переносимости-сложностей-и-атак).
+способа ведения заметок. [Проектирование и проверка переносимых сценариев](../development/development.md#проверка-переносимости-сложностей-и-атак).
 
 ### Стартовая инструкция передаётся сообщением API
 
@@ -131,14 +130,14 @@ SDK публикует только `tools` и отклоняет пакеты: 
 | Компонент | Документация | Где смотреть текущую реализацию |
 |---|---|---|
 | Управление банковским прогоном | [Разработка и модельные эксперименты](../development/development.md) | [run_codex_harness.py](../../scripts/banking_ru/run_codex_harness.py), [banking_preflight.py](../../scripts/banking_ru/banking_preflight.py) |
-| Проверяемый агент: вход, контекст и ограничения | [Как задача выглядит для агента](../domain/banking-ru.md#как-задача-выглядит-для-агента) | [Запуск в контейнере](../../scripts/banking_ru/codex_container.py) |
+| Проверяемый агент: вход, контекст и ограничения | [Порядок одной попытки](#порядок-одной-попытки) | [Запуск в контейнере](../../scripts/banking_ru/codex_container.py) |
 | Агенты, встроенные в τ-bench | [Устройство агентов](../../src/tau2/agent/README.md), [базовые интерфейсы](../../src/tau2/agent/base/README.md) | [src/tau2/agent/](../../src/tau2/agent/) |
 | Общий runner τ-bench | [Запуск симуляций](../development/running_simulations.md), [слои runner](../../src/tau2/runner/README.md) | [src/tau2/runner/](../../src/tau2/runner/) |
 | Тикет, сценарий и контракт оценки | [Формат задачи](task-format.md), [раздельные файлы задания](#раздельные-файлы-задания) | [task_store.py](../../src/tau2/domains/banking_ru/task_store.py), [схема Task](../../src/tau2/data_model/tasks.py) |
-| Environment и банковские системы | [Общая среда](../domain/banking-ru.md#общая-среда-и-выполнение-поручения), [данные домена](../../data/tau2/domains/banking_ru/README.md) | [environment.py](../../src/tau2/domains/banking_ru/environment.py), [mcp_systems.py](../../src/tau2/domains/banking_ru/mcp_systems.py) |
+| Environment и банковские системы | [Общая среда](#общая-среда), [данные домена](../../data/tau2/domains/banking_ru/README.md) | [environment.py](../../src/tau2/domains/banking_ru/environment.py), [mcp_systems.py](../../src/tau2/domains/banking_ru/mcp_systems.py) |
 | Каталог MCP и вызовы | [Контракт bank_directory и bank_call](discovery.md) | [Каталог и валидация](../../src/tau2/platform/bank_directory.py), [MCP-сессия](../../src/tau2/platform/session.py) |
-| Знания и политики | [Контракт knowledge MCP](knowledge.md), [правила источников](../domain/banking-ru.md#знания-и-политики) | [file_corpus.py](../../src/tau2/domains/banking_ru/file_corpus.py), [corpus_manifest.py](../../src/tau2/domains/banking_ru/corpus_manifest.py) |
-| Состояние, журнал и завершение | [Порядок попытки](#порядок-одной-попытки), [текущий механизм оценки](../domain/banking-ru.md#как-работает-текущий-оценщик) | [session.py](../../src/tau2/platform/session.py), [mcp_transport.py](../../src/tau2/platform/mcp_transport.py) |
+| Знания и политики | [Контракт knowledge MCP](knowledge.md), [правила источников](../domain/banking-ru.md#как-читать-банковские-правила) | [file_corpus.py](../../src/tau2/domains/banking_ru/file_corpus.py), [corpus_manifest.py](../../src/tau2/domains/banking_ru/corpus_manifest.py) |
+| Состояние, журнал и завершение | [Порядок попытки](#порядок-одной-попытки), [завершение и технический исход](evaluation.md#завершение-и-технический-исход) | [session.py](../../src/tau2/platform/session.py), [mcp_transport.py](../../src/tau2/platform/mcp_transport.py) |
 | Оценщики и результат | [Банковская оценка](evaluation.md), [общие механизмы τ-bench](../development/evaluation.md) | [evaluator.py](../../src/tau2/evaluator/evaluator.py), [сохранение результатов платформы](../../src/tau2/platform/service.py) |
 
 Внешний Codex harness банковского прогона и встроенные агенты τ-bench — разные
@@ -234,6 +233,18 @@ flowchart TB
 не встречала похожую задачу при обучении. Готовность агента и чистота контекста —
 разные проверки; ответ на проверку готовности не доказывает отсутствие истории.
 
+### Общая среда
+
+Все задачи используют одинаковые startup, системы, инструменты, схемы, знания
+и политики. Тикет, начальное предметное состояние, ответы клиента и критерии
+определяются задачей. Банковские системы одной попытки работают в общей сессии.
+Не меняйте доступность инструмента или документа по ID задачи.
+
+Получите результаты, необходимые для зависимой операции, до её вызова.
+Запрос, принятие в обработку, неизвестный исход и фактическое исполнение
+фиксируются раздельно. Предметное значение этих состояний описано в
+[словаре банка](../domain/glossary.md).
+
 ## Доступ к среде
 
 В [контракте discovery](discovery.md) зафиксированы `bank_directory`,
@@ -287,7 +298,7 @@ API реализован в режиме `directory` в [knowledge.py](../../src
 Схема продолжает верхнеуровневое описание из Wiki
 «Банковский домен — схема работы агента». Исторические API и старые формулы
 оценки не переносятся как требования. Здесь показан целевой DB × ACTION;
-фактический статус миграции задач указан в [концепте](../domain/banking-ru.md).
+фактические профили указаны в [контракте оценки](evaluation.md#какие-профили-сейчас-исполняются).
 
 
 ### Сообщения процесса — 3 ноября 2026

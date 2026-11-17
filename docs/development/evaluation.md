@@ -9,7 +9,7 @@ required of the agent, this page is for you.
 
 For development of our `banking_ru` domain, the accepted scoring contract is
 `DB × ACTION`: final bank state and valid business execution. See
-[the banking development guide](../domain/banking-ru.md) for the normative rules and concrete task examples. COMMUNICATE and NL_ASSERTION
+[the banking evaluation contract](../architecture/evaluation.md) for the normative rules. COMMUNICATE and NL_ASSERTION
 are not part of the banking score.
 
 The [banking evaluation guide](../architecture/evaluation.md) records actual task profiles,
