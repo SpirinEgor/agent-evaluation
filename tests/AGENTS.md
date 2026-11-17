@@ -109,8 +109,8 @@ Retrieval e2e tests use skip markers to gate tests that require external depende
 
 ## Banking.ru tests
 
-Read the [concept](../docs/banking-ru.md), [evaluation guide](../docs/banking-ru/evaluation.md)
-and [development workflow](../docs/banking-ru/development.md) before banking changes.
+Read the [concept](../docs/domain/banking-ru.md), [evaluation guide](../docs/domain/evaluation.md)
+and [development workflow](../docs/development/development.md) before banking changes.
 Use targeted offline controls for changed guarantees: reference, allowed alternatives,
 noop and substantial violations with component-level reasons from the whole grader.
 Preserve both trajectory modes where affected. Existing legacy ENV guards stay

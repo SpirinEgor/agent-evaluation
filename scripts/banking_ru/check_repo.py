@@ -18,13 +18,13 @@ DATA = Path("data/tau2/domains/banking_ru")
 DOC_FILES = (
     "AGENTS.md",
     "README.md",
-    "docs/banking-ru.md",
     "data/tau2/domains/banking_ru/README.md",
     "src/tau2/domains/AGENTS.md",
     "src/tau2/evaluator/AGENTS.md",
     "tests/AGENTS.md",
     "tests/fixtures/banking_ru/README.md",
 )
+DOC_DIRS = ("docs/domain", "docs/development", "docs/experiments")
 LINK = re.compile(r"!?\[[^\]\n]*\]\(")
 
 
@@ -268,13 +268,14 @@ def check_test_inputs(paths):
 
 
 def main(root=ROOT):
-    documents = [root / p for p in DOC_FILES] + sorted(
-        (root / "docs/banking-ru").glob("*.md")
+    documents = [root / p for p in DOC_FILES]
+    documents.extend(
+        sorted(path for folder in DOC_DIRS for path in (root / folder).rglob("*.md"))
     )
     errors = check_documents(root, documents)
     tasks, issues = check_task_index(root)
     errors.extend(issues)
-    evaluation = root / "docs/banking-ru/evaluation.md"
+    evaluation = root / "docs/domain/evaluation.md"
     if evaluation.is_file() and tasks:
         errors.extend(check_profiles(tasks, evaluation))
     # Loading this inventory defines groups only; its subprocess entry point is not run.

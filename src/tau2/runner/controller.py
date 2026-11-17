@@ -4,7 +4,7 @@ The controller owns the queue and the results files; worker processes
 (``tau2 worker`` / ``python -m tau2.runner.worker``) lease units over HTTP,
 execute them, and post results back. One controller can drive many runs at
 once — that is what makes per-provider caps and the global in-flight cap
-actually global. See docs/designs/parallel-runner.md.
+actually global. See docs/experiments/parallel-runner.md.
 
 Locally, ``tau2 run --workers N`` binds 127.0.0.1 on an ephemeral port and
 spawns its own workers. Remote workers are the same binary pointed at a

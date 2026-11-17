@@ -28,7 +28,7 @@ Voice full-duplex · Knowledge retrieval · 75+ task fixes<br>
 > **How do you say $\tau^3$-bench?** We just say "tau three," but you do you!
 
 > **Banking.ru development:** start with [AGENTS.md](AGENTS.md) and the
-> [banking documentation](docs/banking-ru.md). The upstream overview below also
+> [banking documentation](docs/domain/banking-ru.md). The upstream overview below also
 > covers other domains; `banking_ru` is our separate banking benchmark.
 > Quick offline documentation/structure check: `make check-banking-repo` (Python 3.10+, read-only).
 
@@ -84,7 +84,7 @@ uv sync --extra dev            # + pytest, ruff, pre-commit (required for contri
 uv sync --all-extras           # everything
 ```
 
-This requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Voice features also need system dependencies (`brew install portaudio ffmpeg` on macOS). See the [full installation guide](docs/getting-started.md) for details.
+This requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Voice features also need system dependencies (`brew install portaudio ffmpeg` on macOS). See the [full installation guide](docs/experiments/getting-started.md) for details.
 
 ### 2. Set up API keys
 
@@ -110,8 +110,8 @@ Results are saved to `data/simulations/`. Use `tau2 view` to browse them.
 
 | Document | Description |
 |----------|-------------|
-| [Getting Started](docs/getting-started.md) | Installation, API keys, first run, output structure, configuration |
-| [CLI Reference](docs/cli-reference.md) | All `tau2` commands and options |
+| [Getting Started](docs/experiments/getting-started.md) | Installation, API keys, first run, output structure, configuration |
+| [CLI Reference](docs/experiments/cli-reference.md) | All `tau2` commands and options |
 
 ### Core Concepts
 
@@ -120,7 +120,7 @@ Results are saved to `data/simulations/`. Use `tau2 view` to browse them.
 | [Agent Developer Guide](src/tau2/agent/README.md) | Build and evaluate your own agent |
 | [Domains](src/tau2/domains/README.md) | Domain structure, data format, and available domains |
 | [Orchestrator & Communication Modes](src/tau2/orchestrator/README.md) | Half-duplex and full-duplex orchestration |
-| [Task Schema & Evaluation](docs/evaluation.md) | What `evaluation_criteria.actions` means, how `reward_basis` gates the reward, and how to inspect action correctness |
+| [Task Schema & Evaluation](docs/development/evaluation.md) | What `evaluation_criteria.actions` means, how `reward_basis` gates the reward, and how to inspect action correctness |
 
 ### Knowledge Retrieval
 
@@ -230,13 +230,13 @@ If you use a specific component of $\tau^3$-bench, please cite the corresponding
 
 Our Banking.ru domain (`banking_ru`) is developed on top of τ-bench and is
 separate from upstream `banking_knowledge`. Start with the [developer map](AGENTS.md)
-and [banking concept](docs/banking-ru.md).
+and [banking concept](docs/domain/banking-ru.md).
 
 - [Dataset, installation and current MCP usage](data/tau2/domains/banking_ru/README.md)
-- [Architecture](docs/banking-ru/architecture.md) and [task format](docs/banking-ru/task-format.md)
-- [Evaluation and actual migration status](docs/banking-ru/evaluation.md)
-- [Development, Git workflow, targeted checks and Langfuse](docs/banking-ru/development.md)
-- [External task references](docs/banking-ru/references.md)
+- [Architecture](docs/domain/architecture.md) and [task format](docs/domain/task-format.md)
+- [Evaluation and actual migration status](docs/domain/evaluation.md)
+- [Development, Git workflow, targeted checks and Langfuse](docs/development/development.md)
+- [External task references](docs/development/references.md)
 
 The target banking score is DB × ACTION. Current task criteria remain authoritative
 for the implemented profile; new catalog and storage designs are not yet implemented.

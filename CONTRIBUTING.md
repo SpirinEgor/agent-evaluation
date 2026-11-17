@@ -2,8 +2,8 @@
 
 Thank you for your interest in contributing to τ-bench! This document provides guidelines to help you make clean, reviewable contributions that can be easily integrated into the project.
 
-For Banking.ru changes, follow the [Banking.ru development workflow](docs/banking-ru/development.md#git-от-начала-работы-до-слияния)
-and its [targeted offline checks](docs/banking-ru/development.md#как-выбирать-офлайн-проверки).
+For Banking.ru changes, follow the [Banking.ru development workflow](docs/development/development.md#git-от-начала-работы-до-слияния)
+and its [targeted offline checks](docs/development/development.md#как-выбирать-офлайн-проверки).
 The general τ-bench guidelines below cover the rest of the repository.
 
 ## 🚀 Quick Start

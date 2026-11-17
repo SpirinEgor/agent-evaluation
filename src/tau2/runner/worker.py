@@ -4,7 +4,7 @@ single checkpoint writer. Kill a worker and its leases expire back into the
 queue; nothing is lost.
 
 Run as ``tau2 worker --controller http://host:port --slots 10`` or
-``python -m tau2.runner.worker ...``. See docs/designs/parallel-runner.md.
+``python -m tau2.runner.worker ...``. See docs/experiments/parallel-runner.md.
 """
 
 from __future__ import annotations

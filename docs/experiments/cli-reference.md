@@ -130,7 +130,7 @@ Play mode allows you to:
 - **Test strategies** before implementing them in code
 - **Choose task splits** to practice on training data or test on held-out tasks
 
-See the [Gym Documentation](../src/tau2/gym/README.md) for using the gymnasium interface programmatically.
+See the [Gym Documentation](../../src/tau2/gym/README.md) for using the gymnasium interface programmatically.
 
 ---
 

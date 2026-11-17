@@ -49,7 +49,7 @@ Each entry in `tasks.json` is a `Task` (see
 *one* reference trajectory used to derive the target DB end state, not
 a per-call requirement on the agent (unless `RewardType.ACTION` is in
 `reward_basis`, which the standard airline / retail / telecom tasks do
-not use). See [`docs/evaluation.md`](../../../docs/evaluation.md) for
+not use). See [`docs/development/evaluation.md`](../../../docs/development/evaluation.md) for
 the full breakdown.
 
 

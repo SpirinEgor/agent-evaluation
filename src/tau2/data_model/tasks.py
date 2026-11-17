@@ -124,7 +124,7 @@ class Action(BaseModel):
       derive the target DB end state. A per-call requirement only when
       `RewardType.ACTION` is in `reward_basis` and this action has
       `required_for_reward=True`. See
-      `docs/evaluation.md`.
+      `docs/development/evaluation.md`.
     - `InitialState.initialization_actions`: replayed before the
       simulation to set up the initial state.
 
@@ -372,7 +372,7 @@ class RewardType(str, Enum):
       `banking_ru` and a few `banking_knowledge` tasks; not used in
       airline/retail/telecom.
 
-    See `docs/evaluation.md`.
+    See `docs/development/evaluation.md`.
     """
 
     DB = "DB"
@@ -906,7 +906,7 @@ class EvaluationCriteria(BaseModel):
     is one reference trajectory used to derive the target DB end state
     — not a per-call requirement on the agent unless `RewardType.ACTION`
     is in `reward_basis` and the action has `required_for_reward=True`.
-    See `docs/evaluation.md`.
+    See `docs/development/evaluation.md`.
     """
 
     business_process_only: bool = Field(

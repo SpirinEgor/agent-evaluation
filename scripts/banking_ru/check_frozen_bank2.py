@@ -9,6 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 RELEASES = Path("releases/banking_ru/bank_002")
+RUNS = "docs/experiments/runs/"
+PREVIOUS_RUNS = "docs/banking-ru/runs/"
 SCOPES = [
     "data/tau2/domains/banking_ru/corpus",
     "data/tau2/domains/banking_ru/tasks/bank_002",
@@ -20,11 +22,11 @@ SCOPES = [
     "integrations/eval_platform",
     "pyproject.toml",
     "uv.lock",
-    "docs/banking-ru.md",
-    "docs/banking-ru/evaluation.md",
-    "docs/banking-ru/task-format.md",
-    "docs/banking-ru/knowledge.md",
-    "docs/banking-ru/discovery.md",
+    "docs/domain/banking-ru.md",
+    "docs/domain/evaluation.md",
+    "docs/domain/task-format.md",
+    "docs/domain/knowledge.md",
+    "docs/domain/discovery.md",
     "scripts/banking_ru/codex_broker.py",
     "scripts/banking_ru/codex_container.py",
     "scripts/banking_ru/banking_preflight.py",
@@ -61,10 +63,12 @@ def check_history(root, base):
             name.startswith(str(RELEASES) + "/")
             and name.endswith(".json")
             and not name.endswith("/current.json")
-        ) or name.startswith("docs/banking-ru/runs/")
+        ) or name.startswith((RUNS, PREVIOUS_RUNS))
         if immutable:
             old = git(root, "show", f"{base}:{name}")
             path = root / name
+            if name.startswith(PREVIOUS_RUNS):
+                path = root / RUNS / name[len(PREVIOUS_RUNS) :]
             if not path.is_file() or path.read_bytes() != old:
                 raise ValueError(f"Immutable evidence changed: {name}")
 

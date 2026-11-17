@@ -63,4 +63,4 @@ The agent receives `tools: list[Tool]` and `domain_policy: str` in `__init__`.
 
 See `src/tau2/agent/README.md` for the full developer guide.
 
-Banking.ru examples require the local BANKING_PAYLOAD_STORE configuration described in docs/banking-ru/development.md. Running these examples invokes a model.
+Banking.ru examples require the local BANKING_PAYLOAD_STORE configuration described in docs/development/development.md. Running these examples invokes a model.

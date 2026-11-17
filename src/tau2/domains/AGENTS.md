@@ -76,11 +76,11 @@ The `banking_knowledge` domain extends the standard domain pattern significantly
 
 ## Banking.ru development
 
-For `banking_ru`, start with the [concept](../../../docs/banking-ru.md),
-[task format](../../../docs/banking-ru/task-format.md) and
-[development workflow](../../../docs/banking-ru/development.md).
+For `banking_ru`, start with the [concept](../../../docs/domain/banking-ru.md),
+[task format](../../../docs/domain/task-format.md) and
+[development workflow](../../../docs/development/development.md).
 The common environment, tools, startup and corpus remain identical across tasks.
-The [evaluation guide](../../../docs/banking-ru/evaluation.md) records actual
+The [evaluation guide](../../../docs/domain/evaluation.md) records actual
 migration status separately from the target DB × ACTION contract.
 Do not change another task's profile or remove ENV guards as incidental cleanup.
 Banking has no task splits; the generic split rules above do not require adding one.

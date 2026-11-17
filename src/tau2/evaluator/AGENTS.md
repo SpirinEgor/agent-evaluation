@@ -2,9 +2,9 @@
 
 ## Banking.ru: концепт и реализация — 27 октября 2026
 
-Перед изменением банковской оценки прочитай [концепт](../../../docs/banking-ru.md),
-[механику и статус миграции](../../../docs/banking-ru/evaluation.md) и
-[процесс разработки](../../../docs/banking-ru/development.md).
+Перед изменением банковской оценки прочитай [концепт](../../../docs/domain/banking-ru.md),
+[механику и статус миграции](../../../docs/domain/evaluation.md) и
+[процесс разработки](../../../docs/development/development.md).
 Целевой балл — DB × ACTION; текущие профили определяются критериями задач.
 Не отключай ENV-защиты немигрированных задач без переноса и проверки покрытия.
 Поддержку других доменов сохраняй.
@@ -77,7 +77,7 @@ The `evaluate_simulation()` function in `evaluator.py` is the main entry point. 
 
 5. **Termination depends on profile**: The ordinary path returns 0 for termination outside `AGENT_STOP`/`USER_STOP`. Banking requires AGENT_STOP even in `business_process_only`; missing agent done zeros DB and ACTION. Other domains retain their profile behavior.
 
-6. **`evaluation_criteria.actions` is *one* reference trajectory, not a per-action requirement**: `EnvironmentEvaluator` replays `actions` on a fresh env to derive the target DB hash, then compares against the predicted DB hash. Other agent trajectories producing an equivalent end state also pass. ACTION matches declared required actions (`required_for_reward=True`) when that component is enabled; optional reference steps may still supply separately required evidence. See [the shared evaluation guide](../../../docs/evaluation.md).
+6. **`evaluation_criteria.actions` is *one* reference trajectory, not a per-action requirement**: `EnvironmentEvaluator` replays `actions` on a fresh env to derive the target DB hash, then compares against the predicted DB hash. Other agent trajectories producing an equivalent end state also pass. ACTION matches declared required actions (`required_for_reward=True`) when that component is enabled; optional reference steps may still supply separately required evidence. See [the shared evaluation guide](../../../docs/development/evaluation.md).
 
 7. **Environment evaluator needs `environment_constructor` and `env_kwargs`**: Unlike other evaluators, `EnvironmentEvaluator.calculate_reward()` takes an `environment_constructor` callable to create fresh environments for gold vs predicted comparison. It also accepts `env_kwargs: dict` for domain-specific parameters (e.g., `retrieval_variant` for `banking_knowledge`). These kwargs are threaded from `evaluate_simulation()` through to both the predicted and gold environment constructors. Always pass `env_kwargs` when calling `calculate_reward()` to ensure domains with custom constructor parameters work correctly.
 

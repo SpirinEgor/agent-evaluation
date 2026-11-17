@@ -106,7 +106,7 @@ Results are saved in `data/simulations/`.
 tau2 run --domain retail --audio-native --num-tasks 1 --verbose-logs
 ```
 
-See the [Audio Native Documentation](../src/tau2/voice/audio_native/README.md) for provider configuration and all options.
+See the [Audio Native Documentation](../../src/tau2/voice/audio_native/README.md) for provider configuration and all options.
 
 ### Knowledge retrieval evaluation
 
@@ -115,7 +115,7 @@ tau2 run --domain banking_knowledge --retrieval-config bm25 \
   --agent-llm gpt-4.1 --user-llm gpt-4.1 --num-tasks 5
 ```
 
-See the [Knowledge Retrieval Documentation](../src/tau2/knowledge/README.md) for retrieval configuration options.
+See the [Knowledge Retrieval Documentation](../../src/tau2/knowledge/README.md) for retrieval configuration options.
 
 
 > **tip**: for full agent evaluation that matches the original τ-bench methodology, remove `--num-tasks` to evaluate on the complete task set (the `base` split is used by default).
@@ -183,7 +183,7 @@ This allows you to browse simulation files, view agent performance metrics, insp
 
 ## Configuration
 
-The framework is configured via [`src/tau2/config.py`](../src/tau2/config.py).
+The framework is configured via [`src/tau2/config.py`](../../src/tau2/config.py).
 
 ### LLM Call Caching
 
@@ -205,11 +205,11 @@ make clean
 ## Next Steps
 
 - [CLI Reference](cli-reference.md) — all `tau2` commands and options
-- [Agent Developer Guide](../src/tau2/agent/README.md) — build and evaluate your own agent
-- [Domain Documentation](../src/tau2/domains/README.md) — understand the available domains
-- [Communication Modes](../src/tau2/orchestrator/README.md) — half-duplex and full-duplex orchestration
-- [Task Schema & Evaluation](evaluation.md) — how a task is scored, what `actions`/`communicate_info`/`reward_basis` actually do
-- [Knowledge Retrieval](../src/tau2/knowledge/README.md) — retrieval pipeline setup and configuration for banking_knowledge domain
-- [Voice (Full-Duplex)](../src/tau2/voice/README.md) — providers, speech complexity, and CLI options for voice evaluation
+- [Agent Developer Guide](../../src/tau2/agent/README.md) — build and evaluate your own agent
+- [Domain Documentation](../../src/tau2/domains/README.md) — understand the available domains
+- [Communication Modes](../../src/tau2/orchestrator/README.md) — half-duplex and full-duplex orchestration
+- [Task Schema & Evaluation](../development/evaluation.md) — how a task is scored, what `actions`/`communicate_info`/`reward_basis` actually do
+- [Knowledge Retrieval](../../src/tau2/knowledge/README.md) — retrieval pipeline setup and configuration for banking_knowledge domain
+- [Voice (Full-Duplex)](../../src/tau2/voice/README.md) — providers, speech complexity, and CLI options for voice evaluation
 - [Voice Persona Setup](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md) — create custom ElevenLabs voices for the user simulator
-- [Gym/RL Interface](../src/tau2/gym/README.md) — Gymnasium-compatible environment for RL training
+- [Gym/RL Interface](../../src/tau2/gym/README.md) — Gymnasium-compatible environment for RL training

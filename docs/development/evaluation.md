@@ -9,10 +9,10 @@ required of the agent, this page is for you.
 
 For development of our `banking_ru` domain, the accepted scoring contract is
 `DB × ACTION`: final bank state and valid business execution. See
-[the banking development guide](banking-ru.md) for the normative rules and concrete task examples. COMMUNICATE and NL_ASSERTION
+[the banking development guide](../domain/banking-ru.md) for the normative rules and concrete task examples. COMMUNICATE and NL_ASSERTION
 are not part of the banking score.
 
-The [banking evaluation guide](banking-ru/evaluation.md) records actual task profiles,
+The [banking evaluation guide](../domain/evaluation.md) records actual task profiles,
 migration status and known differences from the agreed concept. Required current
 sources must be received before dependent actions in the target contract; no
 specific search path is required. Rejected calls with no disclosure or forbidden
@@ -52,7 +52,7 @@ to enable every component for banking_ru. reward_basis is task-specific.
 ## The task schema, in plain English
 
 A task's `evaluation_criteria` (see
-[`src/tau2/data_model/tasks.py`](../src/tau2/data_model/tasks.py)) includes these core
+[`src/tau2/data_model/tasks.py`](../../src/tau2/data_model/tasks.py)) includes these core
 fields, alongside additional task-specific criteria:
 
 | Field | What it is | When it gates the reward |
@@ -104,7 +104,7 @@ those numbers and would also penalize correct-but-different solutions.
 
 ## A worked example: airline task `1`
 
-From [`data/tau2/domains/airline/tasks.json`](../data/tau2/domains/airline/tasks.json):
+From [`data/tau2/domains/airline/tasks.json`](https://github.com/sierra-research/tau2-bench/blob/ddc66a777e520373975f15d3abec989cfe2ec371/data/tau2/domains/airline/tasks.json):
 
 ```json
 {
@@ -177,7 +177,7 @@ still run for diagnostic purposes:
   COMMUNICATE (and optionally NL) regardless of `reward_basis`. This is
   not the task's official score and ACTION can include more than reference
   matching, depending on the configured criteria. See
-  [`src/tau2/evaluator/evaluator.py`](../src/tau2/evaluator/evaluator.py).
+  [`src/tau2/evaluator/evaluator.py`](../../src/tau2/evaluator/evaluator.py).
 - The `partial_action_reward` property on `RewardInfo` further breaks
   down the action match rate by `ToolType.READ` vs `ToolType.WRITE`,
   which is useful for spotting "DB-passes-but-no-write-was-attempted"
@@ -203,10 +203,10 @@ rules do not reject a valid solution.
 
 ## Pointers
 
-- Schema definitions: [`src/tau2/data_model/tasks.py`](../src/tau2/data_model/tasks.py)
-- Evaluator source: [`src/tau2/evaluator/`](../src/tau2/evaluator/)
-- Evaluator architecture overview: [`src/tau2/evaluator/AGENTS.md`](../src/tau2/evaluator/AGENTS.md)
+- Schema definitions: [`src/tau2/data_model/tasks.py`](../../src/tau2/data_model/tasks.py)
+- Evaluator source: [`src/tau2/evaluator/`](../../src/tau2/evaluator/)
+- Evaluator architecture overview: [`src/tau2/evaluator/AGENTS.md`](../../src/tau2/evaluator/AGENTS.md)
 - Reward shape (`RewardInfo`, `ActionCheck`, etc.):
-  [`src/tau2/data_model/simulation.py`](../src/tau2/data_model/simulation.py)
+  [`src/tau2/data_model/simulation.py`](../../src/tau2/data_model/simulation.py)
 - Discussion of the `actions`-vs-`reward_basis` confusion:
   [issue #224][issue-224] and [RFC #129][issue-129].

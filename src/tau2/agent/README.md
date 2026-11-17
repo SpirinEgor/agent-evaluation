@@ -277,4 +277,4 @@ tau2 run \
   ...
 ```
 
-See `tau2 run --help` or `docs/cli-reference.md` for the full list of options.
+See `tau2 run --help` or `docs/experiments/cli-reference.md` for the full list of options.
