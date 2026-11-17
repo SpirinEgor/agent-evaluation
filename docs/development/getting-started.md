@@ -89,6 +89,10 @@ See the [Voice Persona Setup Guide](https://github.com/sierra-research/tau2-benc
 
 ## Running Your First Evaluation
 
+Before running a local simulation in this checkout, provision the
+[simulator data](running_simulations.md#running-simulations). For Banking.ru
+A2A/MCP sessions, use the [repository quick start](../../README.md#быстрый-старт).
+
 ### Standard text-based evaluation (half-duplex)
 
 ```bash

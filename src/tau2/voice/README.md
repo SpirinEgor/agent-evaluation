@@ -2,6 +2,9 @@
 
 τ-bench supports end-to-end voice evaluation using real-time audio APIs. In this mode, a user simulator streams synthesized speech to the agent, and the agent responds with audio — both sides operating simultaneously (full-duplex).
 
+Provision the [simulator data](../../../docs/development/running_simulations.md#running-simulations)
+before running a local voice simulation.
+
 ```bash
 tau2 run --domain retail --audio-native --num-tasks 1 --verbose-logs
 ```

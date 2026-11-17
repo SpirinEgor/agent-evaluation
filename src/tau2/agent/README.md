@@ -1,7 +1,5 @@
 # Agent Developer Guide
 
-> **Quick start:** See `examples/agents/` for runnable code you can copy and modify.
-
 ## Overview
 
 Agents are the system-under-test in tau2 evals. An agent interacts with a simulated user and uses environment tools (API endpoints) to resolve customer service tasks. The eval framework scores the agent on whether it takes the correct actions and follows domain policy.
