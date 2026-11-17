@@ -18,6 +18,8 @@ DATA = Path("data/tau2/domains/banking_ru")
 DOC_FILES = (
     "AGENTS.md",
     "README.md",
+    "CONTRIBUTING.md",
+    "docs/README.md",
     "data/tau2/domains/banking_ru/README.md",
     "src/tau2/domains/AGENTS.md",
     "src/tau2/evaluator/AGENTS.md",
@@ -30,6 +32,14 @@ DOC_DIRS = (
     "docs/development",
     "docs/experiments",
     "docs/research",
+)
+DOC_INDEX = Path("docs/README.md")
+DOC_ENTRY_POINTS = (
+    "docs/domain/banking-ru.md",
+    "docs/architecture/architecture.md",
+    "docs/development/development.md",
+    "docs/experiments/results.md",
+    "docs/research/references.md",
 )
 LINK = re.compile(r"!?\[[^\]\n]*\]\(")
 
@@ -131,6 +141,24 @@ def check_documents(root, paths):
                 if reason:
                     errors.append(f"{path}:{number}: {reason}: {raw}")
     return errors
+
+
+def check_document_index(root):
+    index = root / DOC_INDEX
+    if not index.is_file():
+        return []  # The document check already reports a missing index.
+    targets = set()
+    for line in prose(index.read_text()):
+        line = re.sub(r"(`+).*?\1", "", line)
+        for raw in inline_links(line):
+            url = urlsplit(raw)
+            if not url.scheme and not url.netloc and url.path:
+                targets.add((index.parent / unquote(url.path)).resolve())
+    return [
+        f"{DOC_INDEX}: add a link to {path}"
+        for path in DOC_ENTRY_POINTS
+        if (root / path).resolve() not in targets
+    ]
 
 
 def check_task_index(root):
@@ -279,6 +307,7 @@ def main(root=ROOT):
         sorted(path for folder in DOC_DIRS for path in (root / folder).rglob("*.md"))
     )
     errors = check_documents(root, documents)
+    errors.extend(check_document_index(root))
     tasks, issues = check_task_index(root)
     errors.extend(issues)
     evaluation = root / "docs/architecture/evaluation.md"

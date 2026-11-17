@@ -36,6 +36,19 @@ def test_links_cannot_require_an_external_checkout(guard, tmp_path):
     assert len(guard["check_documents"](tmp_path, [doc])) == 2
 
 
+def test_document_index_reports_an_unlinked_entry_point(guard, tmp_path):
+    index = tmp_path / "docs/README.md"
+    index.parent.mkdir()
+    linked_paths = guard["DOC_ENTRY_POINTS"][:-1]
+    index.write_text(
+        "\n".join(f"[Guide]({Path(path).relative_to('docs')})" for path in linked_paths)
+    )
+    missing = guard["DOC_ENTRY_POINTS"][-1]
+    assert guard["check_document_index"](tmp_path) == [
+        f"docs/README.md: add a link to {missing}"
+    ]
+
+
 def test_profiles_follow_task_data_not_hardcoded_bank_numbers(guard, tmp_path):
     tasks = [
         {
