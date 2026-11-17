@@ -68,6 +68,6 @@
 
 Для деталей исполнения используйте [архитектуру](../architecture/architecture.md),
 [формат задач](../architecture/task-format.md) и [контракт оценки](../architecture/evaluation.md).
-Сведения о прежних попытках собраны в [истории оценки](../experiments/evaluation-history.md).
+См. [раздел экспериментов](../experiments/README.md) для доступа к локальной истории оценки.
 [Предыдущая редакция концепта](../development/history/banking-ru-concept.md) сохраняет
 датированные проектные решения и контекст их появления.

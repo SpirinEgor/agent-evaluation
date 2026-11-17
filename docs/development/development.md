@@ -624,7 +624,7 @@ host-ledger: `verified`, `unverified` или `unavailable`. Его област�
 preflight и не объявляет старый CLI capture полным.
 
 Дополнительные диагностические показатели описаны в
-[банковской оценке](../experiments/evaluation-history.md#дополнительные-метрики--2-ноября-2026).
+банковской оценке (локально в `docs/experiments/evaluation-history.md#дополнительные-метрики--2-ноября-2026`).
 Подписочный транспорт сохраняет только числовые input/output/total tokens из
 полученного usage; неизвестные токены и стоимость обозначаются null.
 

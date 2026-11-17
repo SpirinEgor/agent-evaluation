@@ -33,6 +33,7 @@ DOC_DIRS = (
     "docs/experiments",
 )
 RUNS_DIR = Path("docs/experiments/runs")
+LOCAL_EVALUATION_HISTORY = Path("docs/experiments/evaluation-history.md")
 DOC_INDEX = Path("docs/README.md")
 DOC_ENTRY_POINTS = (
     "docs/domain/banking-ru.md",
@@ -311,6 +312,7 @@ def main(root=ROOT):
             for folder in DOC_DIRS
             for path in (root / folder).rglob("*.md")
             if not path.is_relative_to(root / RUNS_DIR)
+            and path != root / LOCAL_EVALUATION_HISTORY
         )
     )
     errors = check_documents(root, documents)

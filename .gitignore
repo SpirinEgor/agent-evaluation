@@ -228,6 +228,7 @@ data/simulations/.credentials/
 # Local banking runtime resources
 /artifacts/
 /docs/experiments/runs/
+/docs/experiments/evaluation-history.md
 data/platform/
 *.lock.tmp
 data/tau2/domains/banking_ru_champ/**/*.lock
