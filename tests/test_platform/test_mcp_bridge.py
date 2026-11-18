@@ -3,7 +3,7 @@ import pytest
 pytest.importorskip("mcp")
 
 from tau2.data_model.message import ToolMessage
-from tau2.domains.banking_ru.environment import get_environment
+from tau2.domains.banking_ru_champ.environment import get_environment
 from tau2.platform.mcp_bridge import (
     DONE_TOOL_NAME,
     done_tool,

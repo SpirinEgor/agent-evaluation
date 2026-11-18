@@ -6,7 +6,7 @@ Usage:
     from tau2.scripts.leaderboard import Leaderboard
 
     # Load leaderboard from default location
-    lb = Leaderboard.load()
+    lb = Leaderboard.load("/path/to/submissions")
 
     # Get top models by domain
     top_retail = lb.get_top_models(domain="retail", metric="pass_1", limit=5)
@@ -33,16 +33,6 @@ from .submission import (
     Submission,
 )
 
-# Default path to submissions relative to the repo root
-DEFAULT_SUBMISSIONS_PATH = (
-    Path(__file__).parent.parent.parent.parent.parent
-    / "web"
-    / "leaderboard"
-    / "public"
-    / "submissions"
-)
-
-
 MetricType = Literal["pass_1", "pass_2", "pass_3", "pass_4", "cost"]
 DomainType = Literal["retail", "airline", "telecom", "banking_knowledge"]
 
@@ -58,24 +48,21 @@ class Leaderboard(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     submissions: dict[str, Submission] = Field(default_factory=dict)
-    submissions_path: Path = Field(default=DEFAULT_SUBMISSIONS_PATH)
+    submissions_path: Path
 
     @classmethod
-    def load(cls, submissions_path: Optional[Path | str] = None) -> "Leaderboard":
+    def load(cls, submissions_path: Path | str) -> "Leaderboard":
         """Load the leaderboard from the submissions directory.
 
         Args:
-            submissions_path: Path to the submissions directory. If None, uses
-                the default path in the tau-bench repository.
+            submissions_path: Path to the submissions directory.
 
         Returns:
             Leaderboard instance with all submissions loaded.
         """
-        if submissions_path is None:
-            submissions_path = DEFAULT_SUBMISSIONS_PATH
         submissions_path = Path(submissions_path)
 
-        if not submissions_path.exists():
+        if not submissions_path.is_dir():
             raise FileNotFoundError(
                 f"Submissions directory not found: {submissions_path}"
             )
@@ -489,6 +476,7 @@ class Leaderboard(BaseModel):
 
 
 def show_leaderboard(
+    submissions_path: Path | str,
     domain: Optional[str] = None,
     metric: str = "pass_1",
     limit: Optional[int] = None,
@@ -498,10 +486,11 @@ def show_leaderboard(
     This is a convenience function for CLI usage.
 
     Args:
+        submissions_path: Path to the submissions directory.
         domain: If specified, show leaderboard for that domain only.
                If None, shows overall leaderboard.
         metric: The metric to rank by. Default is "pass_1".
         limit: Maximum number of entries to show.
     """
-    lb = Leaderboard.load()
+    lb = Leaderboard.load(submissions_path)
     lb.display(domain=domain, metric=metric, limit=limit)

@@ -19,7 +19,7 @@ from starlette.routing import Mount
 
 from tau2.config import PLATFORM_DATA_DIR, platform_budgets
 from tau2.data_model.tasks import Task
-from tau2.domains.banking_ru.mcp_systems import SINGLE_SERVER, MCPLayout
+from tau2.domains.banking_ru_champ.mcp_systems import SINGLE_SERVER, MCPLayout
 from tau2.platform.mcp_transport import MCPTransportJournal
 from tau2.platform.session import PlatformSession, SessionStatus
 from tau2.registry import registry
@@ -28,7 +28,7 @@ MCP_MOUNT_PREFIX = "/s"
 
 
 class PlatformSettings(BaseModel):
-    domain: str = "banking_ru"
+    domain: str = "banking_ru_champ"
     split: str = "base"
     max_calls: int | None = None
     max_errors: int | None = None
@@ -247,10 +247,12 @@ def build_app(settings: PlatformSettings) -> FastAPI:
         layout = (
             body.mcp_layout
             or settings.mcp_layout
-            or ("systems" if settings.domain == "banking_ru" else "single")
+            or ("systems" if settings.domain == "banking_ru_champ" else "single")
         )
-        if layout == "systems" and settings.domain != "banking_ru":
-            raise HTTPException(status_code=422, detail="systems requires banking_ru")
+        if layout == "systems" and settings.domain != "banking_ru_champ":
+            raise HTTPException(
+                status_code=422, detail="systems requires banking_ru_champ"
+            )
         session = PlatformSession(
             task,
             env_constructor,
@@ -321,7 +323,7 @@ def build_app(settings: PlatformSettings) -> FastAPI:
             status=s.status,
             reward=reward.final_reward,
             business_process_only=bool(
-                s.env.domain_name == "banking_ru"
+                s.env.domain_name == "banking_ru_champ"
                 and s.task.evaluation_criteria
                 and s.task.evaluation_criteria.business_process_only
             ),

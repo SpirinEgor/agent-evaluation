@@ -22,7 +22,7 @@ from tau2.config import platform_budgets
 from tau2.data_model.message import AssistantMessage, Message, ToolCall, ToolMessage
 from tau2.data_model.simulation import RewardInfo, SimulationRun, TerminationReason
 from tau2.data_model.tasks import Action, Task
-from tau2.domains.banking_ru.mcp_systems import (
+from tau2.domains.banking_ru_champ.mcp_systems import (
     SINGLE_SERVER,
     SYSTEMS,
     MCPLayout,
@@ -106,7 +106,10 @@ class PlatformSession:
         self.max_calls, self.max_errors = platform_budgets(
             self.env.domain_name, max_calls, max_errors
         )
-        if self.env.domain_name == "banking_ru" and task.max_bank_calls is not None:
+        if (
+            self.env.domain_name == "banking_ru_champ"
+            and task.max_bank_calls is not None
+        ):
             self.max_calls = min(self.max_calls, task.max_bank_calls)
         if max_discovery_calls is not None and (
             type(max_discovery_calls) is not int or max_discovery_calls < 1
@@ -138,19 +141,19 @@ class PlatformSession:
         ] + [done_tool()]
         self.system_tools = (
             partition_tools(self.mcp_tools)
-            if self.env.domain_name == "banking_ru"
+            if self.env.domain_name == "banking_ru_champ"
             else {}
         )
         if mcp_layout == "systems" and not self.system_tools:
-            raise ValueError("System MCP layout is supported only for banking_ru")
+            raise ValueError("System MCP layout is supported only for banking_ru_champ")
         self.directory = None
         self.knowledge = None
         if mcp_layout == "directory":
-            if self.env.domain_name != "banking_ru":
+            if self.env.domain_name != "banking_ru_champ":
                 raise ValueError(
-                    "Directory MCP layout is supported only for banking_ru"
+                    "Directory MCP layout is supported only for banking_ru_champ"
                 )
-            from tau2.domains.banking_ru.discovery_workflow import SPECIAL_TOOLS
+            from tau2.domains.banking_ru_champ.discovery_workflow import SPECIAL_TOOLS
             from tau2.environment.tool import as_tool
 
             native = {tool.name: tool for tool in self.mcp_tools}
@@ -189,7 +192,7 @@ class PlatformSession:
                 self._directory_call if self.directory is not None else self._call
             )
             result = dispatch(name, arguments, system=system, attempt=attempt)
-            if self.env.domain_name == "banking_ru":
+            if self.env.domain_name == "banking_ru_champ":
                 if len(self.log) > previous_calls and not result.is_error:
                     self._append_client_messages(result)
                 result.content.append(
@@ -304,9 +307,9 @@ class PlatformSession:
                         event["trace_call"] = False
         if (
             name == "call_discoverable_agent_tool"
-            and self.env.domain_name == "banking_ru"
+            and self.env.domain_name == "banking_ru_champ"
         ):
-            from tau2.domains.banking_ru.discovery_workflow import SPECIAL_TOOLS
+            from tau2.domains.banking_ru_champ.discovery_workflow import SPECIAL_TOOLS
 
             nested_name = call.arguments.get("name")
             nested_args = call.arguments.get("arguments")
@@ -348,7 +351,7 @@ class PlatformSession:
 
     def _bank_budget_spent(self) -> bool:
         return (
-            self.env.domain_name == "banking_ru"
+            self.env.domain_name == "banking_ru_champ"
             and self.task.bank_budget_mode == "hard"
             and len(self.log) >= self.max_calls
         )
@@ -457,7 +460,7 @@ class PlatformSession:
                         self.log.append((canonical, message))
                         if (
                             len(self.log) >= self.max_calls
-                            and self.env.domain_name != "banking_ru"
+                            and self.env.domain_name != "banking_ru_champ"
                         ):
                             self.finish(SessionStatus.BUDGET_EXHAUSTED)
                     result = to_call_result(message)
@@ -508,7 +511,7 @@ class PlatformSession:
                 self.log.append((canonical, message))
                 if (
                     len(self.log) >= self.max_calls
-                    and self.env.domain_name != "banking_ru"
+                    and self.env.domain_name != "banking_ru_champ"
                 ):
                     self.finish(SessionStatus.BUDGET_EXHAUSTED)
             result = to_call_result(message)
@@ -685,10 +688,13 @@ class PlatformSession:
             self.errors += 1
         if self.max_errors > 0 and self.errors >= self.max_errors:
             self.finish(SessionStatus.TOO_MANY_ERRORS)
-        elif len(self.log) >= self.max_calls and self.env.domain_name != "banking_ru":
+        elif (
+            len(self.log) >= self.max_calls
+            and self.env.domain_name != "banking_ru_champ"
+        ):
             self.finish(SessionStatus.BUDGET_EXHAUSTED)
         result = to_call_result(message)
-        if self.env.domain_name != "banking_ru":
+        if self.env.domain_name != "banking_ru_champ":
             result.content.append(
                 t.TextContent(
                     type="text",
@@ -761,7 +767,7 @@ class PlatformSession:
                 action, action.arguments, bindings, received
             )
             if self.directory is not None:
-                from tau2.domains.banking_ru.mcp_systems import TOOL_OWNERS
+                from tau2.domains.banking_ru_champ.mcp_systems import TOOL_OWNERS
 
                 owner = TOOL_OWNERS[action.name]
                 self.call(

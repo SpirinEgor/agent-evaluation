@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts/banking_ru/check_repo.py"
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts/banking_ru_champ/check_repo.py"
 
 
 @pytest.fixture
@@ -34,6 +34,19 @@ def test_links_cannot_require_an_external_checkout(guard, tmp_path):
     outside.write_text("# External\n")
     doc.write_text(f"[bad](<{outside}>)\n[bad](../external-guide.md)\n")
     assert len(guard["check_documents"](tmp_path, [doc])) == 2
+
+
+def test_document_index_reports_an_unlinked_entry_point(guard, tmp_path):
+    index = tmp_path / "docs/README.md"
+    index.parent.mkdir()
+    linked_paths = guard["DOC_ENTRY_POINTS"][:-1]
+    index.write_text(
+        "\n".join(f"[Guide]({Path(path).relative_to('docs')})" for path in linked_paths)
+    )
+    missing = guard["DOC_ENTRY_POINTS"][-1]
+    assert guard["check_document_index"](tmp_path) == [
+        f"docs/README.md: add a link to {missing}"
+    ]
 
 
 def test_profiles_follow_task_data_not_hardcoded_bank_numbers(guard, tmp_path):
@@ -69,7 +82,7 @@ def test_profiles_follow_task_data_not_hardcoded_bank_numbers(guard, tmp_path):
 
 @pytest.mark.parametrize("extra", ["tasks/bank_002.json", "tasks/bank_001/extra.json"])
 def test_index_rejects_unlisted_task_files(guard, tmp_path, extra):
-    data = tmp_path / "data/tau2/domains/banking_ru"
+    data = tmp_path / "data/tau2/domains/banking_ru_champ"
     (data / "tasks").mkdir(parents=True)
     (data / "tasks.json").write_text(
         json.dumps({"task_files": ["tasks/bank_001.json"]})
@@ -78,8 +91,8 @@ def test_index_rejects_unlisted_task_files(guard, tmp_path, extra):
     unlisted = data / extra
     unlisted.parent.mkdir(parents=True, exist_ok=True)
     unlisted.write_text(json.dumps({"id": "Bank 2"}))
-    loader = SCRIPT.parents[2] / "src/tau2/domains/banking_ru/task_store.py"
-    target = tmp_path / "src/tau2/domains/banking_ru/task_store.py"
+    loader = SCRIPT.parents[2] / "src/tau2/domains/banking_ru_champ/task_store.py"
+    target = tmp_path / "src/tau2/domains/banking_ru_champ/task_store.py"
     target.parent.mkdir(parents=True)
     target.write_bytes(loader.read_bytes())
     tasks, errors = guard["check_task_index"](tmp_path)
@@ -109,7 +122,7 @@ def test_hidden_input_in_composed_path(guard, tmp_path):
 
 def test_cli_runs_from_other_directory_and_keeps_data_unchanged(tmp_path):
     root = SCRIPT.parents[2]
-    data = root / "data/tau2/domains/banking_ru"
+    data = root / "data/tau2/domains/banking_ru_champ"
 
     def snapshot():
         return {

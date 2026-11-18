@@ -236,7 +236,9 @@ def export_attempt(record, *, model, ticket, metadata=None, client=None, events=
                 timeout=5,
             )
             context = propagate_attributes(
-                session_id=attempt, tags=["banking_ru"], trace_name="banking.attempt"
+                session_id=attempt,
+                tags=["banking_ru_champ"],
+                trace_name="banking.attempt",
             )
         result = record.get("result") or {}
         events = (result.get("mcp_events") or []) if events is None else events

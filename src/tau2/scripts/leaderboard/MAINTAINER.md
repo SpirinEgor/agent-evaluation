@@ -1,5 +1,7 @@
 # Leaderboard Maintainer Guide
 
+These commands work with a local copy of the upstream τ-bench submissions.
+
 ## Prerequisites
 
 - AWS CLI configured with `tau-bench-ci` profile
@@ -38,12 +40,12 @@ The trajectory source should contain either:
 
 ```bash
 python -m tau2.scripts.leaderboard.review_submission \
-  web/leaderboard/public/submissions/<submission-dir> \
+  /path/to/submissions/<submission-dir> \
   /tmp/review-trajectories/
 
 # Or with --upload to also push to S3:
 python -m tau2.scripts.leaderboard.review_submission \
-  web/leaderboard/public/submissions/<submission-dir> \
+  /path/to/submissions/<submission-dir> \
   /tmp/review-trajectories/ \
   --upload --aws-profile tau-bench-ci
 ```
@@ -63,7 +65,7 @@ If you uploaded manually or want to re-check:
 
 ```bash
 python -m tau2.scripts.leaderboard.review_submission \
-  web/leaderboard/public/submissions/<submission-dir> \
+  /path/to/submissions/<submission-dir> \
   /tmp/review-trajectories/ \
   --verify-only --aws-profile tau-bench-ci
 ```
@@ -71,7 +73,7 @@ python -m tau2.scripts.leaderboard.review_submission \
 ### 5. Commit and merge
 
 After the script updates `submission.json`, commit the change and merge the PR.
-The GitHub Actions workflow will sync `submission.json` and `manifest.json` to S3
+The upstream GitHub Actions workflow syncs `submission.json` and `manifest.json` to S3
 (trajectories are excluded from the sync — they were uploaded directly by the script).
 
 ## Manual S3 Commands
@@ -87,7 +89,7 @@ aws s3 sync \
 
 # Upload submission.json
 aws s3 cp \
-  web/leaderboard/public/submissions/<submission-dir>/submission.json \
+  /path/to/submissions/<submission-dir>/submission.json \
   s3://sierra-tau-bench-public/submissions/<submission-dir>/submission.json \
   --profile tau-bench-ci
 
@@ -112,15 +114,16 @@ trajectories:
 
 ```bash
 # All voice submissions in the manifest (downloads trajectories to ~/.cache/tau2/)
-python -m tau2.scripts.leaderboard.backfill_interaction_metrics
+python -m tau2.scripts.leaderboard.backfill_interaction_metrics --submissions-dir /path/to/submissions
 
 # Specific submissions, or a dry run
 python -m tau2.scripts.leaderboard.backfill_interaction_metrics \
+  --submissions-dir /path/to/submissions \
   --submissions gpt-realtime-2_openai_2026-06-24 --dry-run
 ```
 
-The script patches the local `web/leaderboard/public/submissions/<dir>/submission.json`
-files; commit them via PR and the GitHub Actions sync pushes them to S3.
+The script patches the local `/path/to/submissions/<dir>/submission.json`
+files in the supplied directory.
 
 ## Troubleshooting
 

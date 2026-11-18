@@ -342,7 +342,7 @@ def banking_business_failures(trace, policy, *, initial_db=None):
             ):
                 continue
             args = target.call.arguments
-            from tau2.domains.banking_ru.case_correspondence import (
+            from tau2.domains.banking_ru_champ.case_correspondence import (
                 reference_disclosure_failures,
             )
 

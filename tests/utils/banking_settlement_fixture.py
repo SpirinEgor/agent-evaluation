@@ -3,7 +3,7 @@
 import json
 from copy import deepcopy
 
-from tau2.domains.banking_ru.data_model import BankingDB
+from tau2.domains.banking_ru_champ.data_model import BankingDB
 
 C, B = "gromov_a_1187", "txn_552291"
 PERIOD = "2026-07"
@@ -14,14 +14,16 @@ def ready(late=True, unknown=True):
     """Build isolated settlement API state from standalone fixture data."""
     from pathlib import Path
 
-    pinned = Path(__file__).resolve().parents[1] / "fixtures/banking_ru/settlement_api"
+    pinned = (
+        Path(__file__).resolve().parents[1] / "fixtures/banking_ru_champ/settlement_api"
+    )
     raw = json.loads((pinned / "db.json").read_text())
-    from tau2.domains.banking_ru.file_corpus import FileCorpus
-    from tau2.domains.banking_ru.file_pilot import get_file_environment
+    from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
+    from tau2.domains.banking_ru_champ.file_pilot import get_file_environment
 
     env = get_file_environment(
         pinned,
-        "banking_ru",
+        "banking_ru_champ",
         structured_identity=True,
         snapshot=(FileCorpus(pinned), BankingDB.model_validate(raw)),
     )

@@ -16,7 +16,7 @@ from pathlib import PurePosixPath
 
 import mcp.types as t
 
-from tau2.domains.banking_ru.file_corpus import FileCorpus
+from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
 from tau2.platform.bank_directory import DirectoryError, _normal
 from tau2.platform.catalog_pages import CatalogPages, CursorError
 

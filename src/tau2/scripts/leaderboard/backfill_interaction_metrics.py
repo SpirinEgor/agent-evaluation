@@ -3,12 +3,11 @@ Maintainer tool: backfill interaction metrics for existing voice submissions.
 
 For each voice submission in the leaderboard manifest, downloads the public
 trajectories from S3 (cached locally), computes the interaction_metrics block,
-and patches the corresponding web/leaderboard/public/submissions/<dir>/
-submission.json. Trajectories on S3 are never modified; the patched
-submission.json files are committed via PR and synced to S3 by CI.
+and patches submission.json in the supplied submissions directory.
 
 Usage:
     python -m tau2.scripts.leaderboard.backfill_interaction_metrics \\
+        --submissions-dir PATH \\
         [--submissions DIR ...] [--cache-dir PATH] [--dry-run]
 """
 
@@ -35,8 +34,6 @@ from tau2.scripts.leaderboard.submission import (
 S3_BUCKET = "sierra-tau-bench-public"
 S3_PREFIX = "submissions"
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-SUBMISSIONS_DIR = REPO_ROOT / "web" / "leaderboard" / "public" / "submissions"
 DEFAULT_CACHE_DIR = Path.home() / ".cache" / "tau2" / "backfill_trajectories"
 
 console = Console()
@@ -66,9 +63,11 @@ def sync_trajectories(submission_name: str, cache_dir: Path) -> Path:
     return dest
 
 
-def backfill_submission(submission_name: str, cache_dir: Path, dry_run: bool) -> bool:
+def backfill_submission(
+    submissions_dir: Path, submission_name: str, cache_dir: Path, dry_run: bool
+) -> bool:
     """Compute and patch interaction metrics for one submission."""
-    submission_file = SUBMISSIONS_DIR / submission_name / SUBMISSION_FILE_NAME
+    submission_file = submissions_dir / submission_name / SUBMISSION_FILE_NAME
     if not submission_file.exists():
         console.print(f"  [red]No submission.json at {submission_file}[/red]")
         return False
@@ -102,6 +101,12 @@ def main():
         epilog=__doc__,
     )
     parser.add_argument(
+        "--submissions-dir",
+        type=Path,
+        required=True,
+        help="Directory containing local τ-bench submissions",
+    )
+    parser.add_argument(
         "--submissions",
         nargs="*",
         default=None,
@@ -119,11 +124,13 @@ def main():
         help="Compute and print metrics without modifying submission.json files",
     )
     args = parser.parse_args()
+    if not args.submissions_dir.is_dir():
+        parser.error(f"submissions directory not found: {args.submissions_dir}")
 
     if args.submissions:
         submission_names = args.submissions
     else:
-        with open(SUBMISSIONS_DIR / MANIFEST_FILE_NAME) as f:
+        with open(args.submissions_dir / MANIFEST_FILE_NAME) as f:
             manifest = json.load(f)
         submission_names = manifest.get("voice_submissions", [])
 
@@ -135,7 +142,9 @@ def main():
     for name in submission_names:
         console.print(f"\n[bold]{name}[/bold]")
         try:
-            if not backfill_submission(name, Path(args.cache_dir), args.dry_run):
+            if not backfill_submission(
+                args.submissions_dir, name, Path(args.cache_dir), args.dry_run
+            ):
                 failures.append(name)
         except Exception as e:
             console.print(f"  [red]FAILED: {e}[/red]")

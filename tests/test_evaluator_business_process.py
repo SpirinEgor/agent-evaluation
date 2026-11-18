@@ -23,7 +23,7 @@ def test_rejected_calls_filtered_only_for_business_constraints():
 
 
 def test_no_separate_error_cap_keeps_call_budget():
-    from tau2.domains.banking_ru.environment import get_environment, get_tasks
+    from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
     from tau2.platform.session import PlatformSession, SessionStatus
 
     task = next(t for t in get_tasks() if t.id == "Bank 2")
@@ -36,7 +36,10 @@ def test_no_separate_error_cap_keeps_call_budget():
 
 
 def test_prompt_states_only_call_cap_when_errors_disabled():
-    p = Path(__file__).resolve().parents[1] / "scripts/banking_ru/run_codex_harness.py"
+    p = (
+        Path(__file__).resolve().parents[1]
+        / "scripts/banking_ru_champ/run_codex_harness.py"
+    )
     spec = importlib.util.spec_from_file_location("business_harness", p)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)

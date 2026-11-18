@@ -10,7 +10,7 @@ from test_platform.test_codex_container import load_module, request_contract
 
 
 def broker():
-    path = Path(__file__).parents[2] / "scripts/banking_ru/codex_broker.py"
+    path = Path(__file__).parents[2] / "scripts/banking_ru_champ/codex_broker.py"
     spec = importlib.util.spec_from_file_location("banking_test_broker", path)
     value = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(value)

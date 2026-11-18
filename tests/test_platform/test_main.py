@@ -8,7 +8,7 @@ from tau2.platform.__main__ import parse_args
 def test_parse_args_defaults_and_overrides():
     settings, host, port = parse_args([])
     assert (settings.domain, settings.split, host, port) == (
-        "banking_ru",
+        "banking_ru_champ",
         "base",
         "127.0.0.1",
         8010,
@@ -22,7 +22,9 @@ def test_parse_args_defaults_and_overrides():
     assert settings.reveal_checks is True and settings.max_calls == 30
 
 
-@pytest.mark.parametrize("domain,want", [("banking_ru", (100, 0)), ("mock", (60, 5))])
+@pytest.mark.parametrize(
+    "domain,want", [("banking_ru_champ", (100, 0)), ("mock", (60, 5))]
+)
 def test_cli_resolves_domain_budgets_and_preserves_overrides(domain, want):
     settings, _, _ = parse_args(["--domain", domain])
     assert (settings.max_calls, settings.max_errors) == want

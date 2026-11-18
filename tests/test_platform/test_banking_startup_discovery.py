@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
-from tau2.domains.banking_ru.mcp_systems import SYSTEMS
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.mcp_systems import SYSTEMS
 from tau2.platform.session import PlatformSession
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,15 +37,15 @@ def test_startup_has_no_system_map_or_document_targets():
 
 @pytest.mark.parametrize("layout", ["single", "systems", "directory"])
 def test_session_uses_startup_from_its_environment_snapshot(layout, tmp_path):
-    from tau2.domains.banking_ru.corpus_manifest import corpus_files, corpus_hash
-    from tau2.domains.banking_ru.data_model import BankingDB
-    from tau2.domains.banking_ru.file_corpus import FileCorpus
-    from tau2.domains.banking_ru.file_pilot import get_file_environment
-    from tau2.domains.banking_ru.utils import BANKING_RU_DATA_DIR
+    from tau2.domains.banking_ru_champ.corpus_manifest import corpus_files, corpus_hash
+    from tau2.domains.banking_ru_champ.data_model import BankingDB
+    from tau2.domains.banking_ru_champ.file_corpus import FileCorpus
+    from tau2.domains.banking_ru_champ.file_pilot import get_file_environment
+    from tau2.domains.banking_ru_champ.utils import BANKING_RU_CHAMP_DATA_DIR
 
-    shutil.copytree(BANKING_RU_DATA_DIR / "corpus", tmp_path / "corpus")
+    shutil.copytree(BANKING_RU_CHAMP_DATA_DIR / "corpus", tmp_path / "corpus")
     for name in ("db.json", "intake_answers.json", "manifest.json"):
-        shutil.copy2(BANKING_RU_DATA_DIR / name, tmp_path / name)
+        shutil.copy2(BANKING_RU_CHAMP_DATA_DIR / name, tmp_path / name)
     startup = tmp_path / "corpus/AGENTS.md"
     startup.write_text(startup.read_text() + "\nТестовая строка из снимка корпуса.\n")
     manifest_path = tmp_path / "manifest.json"
@@ -58,7 +58,7 @@ def test_session_uses_startup_from_its_environment_snapshot(layout, tmp_path):
 
     def changed_snapshot(solo_mode=False, task_id=None):
         return get_file_environment(
-            tmp_path, "banking_ru", solo_mode=solo_mode, snapshot=(corpus, db)
+            tmp_path, "banking_ru_champ", solo_mode=solo_mode, snapshot=(corpus, db)
         )
 
     s = PlatformSession(task, changed_snapshot, mcp_layout=layout)
@@ -69,7 +69,7 @@ def test_session_uses_startup_from_its_environment_snapshot(layout, tmp_path):
 
 def test_harness_prompt_has_no_duplicate_system_catalog():
     spec = importlib.util.spec_from_file_location(
-        "startup_harness", ROOT / "scripts/banking_ru/run_codex_harness.py"
+        "startup_harness", ROOT / "scripts/banking_ru_champ/run_codex_harness.py"
     )
     h = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(h)

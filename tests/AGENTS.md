@@ -109,8 +109,8 @@ Retrieval e2e tests use skip markers to gate tests that require external depende
 
 ## Banking.ru tests
 
-Read the [concept](../docs/banking-ru.md), [evaluation guide](../docs/banking-ru/evaluation.md)
-and [development workflow](../docs/banking-ru/development.md) before banking changes.
+Read the [concept](../docs/domain/banking-ru.md), [evaluation guide](../docs/architecture/evaluation.md)
+and [development workflow](../docs/development/development.md) before banking changes.
 Use targeted offline controls for changed guarantees: reference, allowed alternatives,
 noop and substantial violations with component-level reasons from the whole grader.
 Preserve both trajectory modes where affected. Existing legacy ENV guards stay
@@ -123,6 +123,6 @@ Do not relabel existing results or silently disable checks to match the target.
 Banking completion does not require final prose; as of 2 November 2026 missing agent done zeros DB and ACTION.
 
 Fixtures must be self-contained; maintained tests cannot read ignored artifacts.
-The explicit inventory is [run_basic_tests.py](../scripts/banking_ru/run_basic_tests.py).
+The explicit inventory is [run_basic_tests.py](../scripts/banking_ru_champ/run_basic_tests.py).
 Full regression and model runs require a separately allowed scope. A docs-only
 change needs link and consistency checks, not a full suite.

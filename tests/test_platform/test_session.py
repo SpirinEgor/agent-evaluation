@@ -2,7 +2,7 @@ import pytest
 
 pytest.importorskip("mcp")
 
-from tau2.domains.banking_ru.environment import get_environment, get_tasks
+from tau2.domains.banking_ru_champ.environment import get_environment, get_tasks
 from tau2.platform.mcp_bridge import DONE_TOOL_NAME, STOP_TOKEN
 from tau2.platform.session import PlatformSession, SessionStatus
 
@@ -200,7 +200,9 @@ def test_diagnostic_budget_executes_after_100_and_keeps_accounting(layout):
     assert "102/100" in session.budget_status_text()
     assert "превышение 2" in session.budget_status_text()
     if layout == "directory":
-        from tests.test_domains.test_banking_ru.test_bank2_linked_goals import invoke
+        from tests.test_domains.test_banking_ru_champ.test_bank2_linked_goals import (
+            invoke,
+        )
 
         assert not invoke(session, "done", {}).is_error
     else:

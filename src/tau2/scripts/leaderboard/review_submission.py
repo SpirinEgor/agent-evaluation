@@ -8,18 +8,18 @@ Usage:
 Example:
     # Validate only (dry run)
     python -m tau2.scripts.leaderboard.review_submission \\
-        web/leaderboard/public/submissions/my-model_org_2026-01-01 \\
+        /path/to/submissions/my-model_org_2026-01-01 \\
         /tmp/downloaded-trajectories/
 
     # Validate + upload to S3
     python -m tau2.scripts.leaderboard.review_submission \\
-        web/leaderboard/public/submissions/my-model_org_2026-01-01 \\
+        /path/to/submissions/my-model_org_2026-01-01 \\
         /tmp/downloaded-trajectories/ \\
         --upload --aws-profile tau-bench-ci
 
     # Verify an existing S3 upload
     python -m tau2.scripts.leaderboard.review_submission \\
-        web/leaderboard/public/submissions/my-model_org_2026-01-01 \\
+        /path/to/submissions/my-model_org_2026-01-01 \\
         /tmp/downloaded-trajectories/ \\
         --verify-only --aws-profile tau-bench-ci
 """

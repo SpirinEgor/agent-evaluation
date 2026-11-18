@@ -13,7 +13,7 @@ from tau2.data_model.tasks import (
     Task,
     UserScenario,
 )
-from tau2.domains.banking_ru.environment import get_environment
+from tau2.domains.banking_ru_champ.environment import get_environment
 from tau2.evaluator.evaluator import EvaluationType, evaluate_simulation
 from tau2.evaluator.evaluator_action import ActionEvaluator, FullDuplexActionEvaluator
 from tau2.orchestrator.modes import CommunicationMode
@@ -80,7 +80,7 @@ def grade(messages, mode, *, action_only=False, task=None, env_kwargs=None):
         task,
         EvaluationType.ACTION if action_only else EvaluationType.ALL,
         True,
-        "banking_ru",
+        "banking_ru_champ",
         mode=mode,
         env_kwargs=env_kwargs,
     )

@@ -22,7 +22,7 @@ Usage:
 
 By default the grid runs sequentially, one `tau2 run` subprocess per combo.
 With --workers N the combos are registered as producers in one controller and
-run concurrently across N worker processes (see docs/designs/parallel-runner.md):
+run concurrently across N worker processes (see docs/development/parallel-runner.md):
 
     python -m experiments.tau_voice.run_multiple --providers openai,gemini \\
         --save-to data/exp/run --workers 4

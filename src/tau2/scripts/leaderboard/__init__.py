@@ -16,7 +16,7 @@ Example usage for reading leaderboard data:
     from tau2.scripts.leaderboard import Leaderboard
 
     # Load leaderboard from default location
-    lb = Leaderboard.load()
+    lb = Leaderboard.load("/path/to/submissions")
 
     # Get a summary of the leaderboard
     print(lb.summary())

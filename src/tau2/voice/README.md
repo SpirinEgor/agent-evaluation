@@ -2,6 +2,9 @@
 
 τ-bench supports end-to-end voice evaluation using real-time audio APIs. In this mode, a user simulator streams synthesized speech to the agent, and the agent responds with audio — both sides operating simultaneously (full-duplex).
 
+Provision the [simulator data](../../../docs/development/running_simulations.md#running-simulations)
+before running a local voice simulation.
+
 ```bash
 tau2 run --domain retail --audio-native --num-tasks 1 --verbose-logs
 ```
@@ -47,7 +50,7 @@ tau2 run --domain retail --audio-native --speech-complexity regular
 | `--max-steps-seconds` | `600` | Maximum conversation duration |
 | `--verbose-logs` | — | Save audio files, LLM logs, and tick data |
 
-See `tau2 run --help` or the [CLI Reference](../../docs/cli-reference.md) for the full list including turn-taking thresholds and debugging options.
+See `tau2 run --help` or the [CLI Reference](../../../docs/development/cli-reference.md) for the full list including turn-taking thresholds and debugging options.
 
 ## Programmatic Usage
 
@@ -69,7 +72,7 @@ config = VoiceRunConfig(
 results = run_domain(config)
 ```
 
-See [Running Simulations](../../docs/running_simulations.md) for more examples and instance-level control.
+See [Running Simulations](../../../docs/development/running_simulations.md) for more examples and instance-level control.
 
 ## Output Structure
 
@@ -124,7 +127,7 @@ TAU2_VOICE_ID_LISA_BRENNER=your_voice_id_here
 
 For a minimal setup, create just the two control personas and use `--speech-complexity control`.
 
-See the [Voice Persona Setup Guide](../../docs/voice-personas.md) for step-by-step instructions on creating matching voices with ElevenLabs Voice Design.
+See the [Voice Persona Setup Guide](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md) for step-by-step instructions on creating matching voices with ElevenLabs Voice Design.
 
 ## Environment Variables
 
@@ -135,4 +138,4 @@ See the [Voice Persona Setup Guide](../../docs/voice-personas.md) for step-by-st
 | `XAI_API_KEY` | xAI Grok Voice provider |
 | `ELEVENLABS_API_KEY` | User simulator TTS (synthesis) |
 | `DEEPGRAM_API_KEY` | Transcription (Deepgram nova-2, nova-3) |
-| `TAU2_VOICE_ID_*` | Custom voice ID overrides (see [Voice Persona Setup](../../docs/voice-personas.md)) |
+| `TAU2_VOICE_ID_*` | Custom voice ID overrides (see [Voice Persona Setup](https://github.com/sierra-research/tau2-bench/blob/main/docs/voice-personas.md)) |

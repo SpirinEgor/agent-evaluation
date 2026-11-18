@@ -3,7 +3,7 @@ import pytest
 pytest.importorskip("mcp")
 
 from tau2.data_model.tasks import Action
-from tau2.domains.banking_ru.environment import get_tasks
+from tau2.domains.banking_ru_champ.environment import get_tasks
 from tau2.platform.client import OpenedSession, PlatformClient
 from test_platform.conftest import run_with_app
 

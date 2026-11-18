@@ -76,7 +76,8 @@ Do NOT change this order — it affects noise levels and SNR behavior.
 
 ## Adding Background Noise Audio Files
 
-Audio files live in `data/voice/background_noise_audio_pcm_mono_verified/`.
+Supply background noise audio under
+`$TAU2_DATA_DIR/voice/background_noise_audio_pcm_mono_verified/`.
 
 ### Format Requirements
 

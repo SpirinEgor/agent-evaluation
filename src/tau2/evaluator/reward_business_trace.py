@@ -2,7 +2,7 @@
 
 from decimal import Decimal, InvalidOperation
 
-from tau2.domains.banking_ru.reward_resolution import payouts_within_consent
+from tau2.domains.banking_ru_champ.reward_resolution import payouts_within_consent
 from tau2.evaluator.cashback_state import payload, records
 
 
@@ -45,8 +45,10 @@ def _execution_packet(name, args):
 
 def _component_amounts(offer, args, sources, grounds):
     """Validate received terms, without searching for an optimal selection."""
-    from tau2.domains.banking_ru.reward_resolution import selected_amounts
-    from tau2.domains.banking_ru.reward_resolution_models import RewardResolutionOffer
+    from tau2.domains.banking_ru_champ.reward_resolution import selected_amounts
+    from tau2.domains.banking_ru_champ.reward_resolution_models import (
+        RewardResolutionOffer,
+    )
 
     def integer(value):
         number = _money(value)
@@ -83,7 +85,7 @@ def _component_amounts(offer, args, sources, grounds):
     typed = RewardResolutionOffer.model_validate(raw)
     if typed.amount_basis != "incremental" or not typed.components:
         raise ValueError("Composite offer must be incremental")
-    from tau2.domains.banking_ru.component_eligibility import validate_eligibility
+    from tau2.domains.banking_ru_champ.component_eligibility import validate_eligibility
 
     def snapshot(names):
         return {

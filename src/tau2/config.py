@@ -252,7 +252,7 @@ def platform_budgets(
     domain: str, max_calls: int | None = None, max_errors: int | None = None
 ) -> tuple[int, int]:
     """Resolve domain defaults while preserving explicit participant limits."""
-    banking = domain == "banking_ru"
+    banking = domain == "banking_ru_champ"
     return (
         max_calls
         if max_calls is not None

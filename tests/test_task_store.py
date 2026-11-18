@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from tau2.domains.banking_ru.task_store import (
+from tau2.domains.banking_ru_champ.task_store import (
     load_tasks,
     render_task_patch,
     task_outputs,
@@ -108,7 +108,7 @@ def split_indexed(tmp_path):
 
 
 def test_three_files_reassemble_and_preserve_unchanged_bytes(tmp_path):
-    from tau2.domains.banking_ru.task_store import task_inputs
+    from tau2.domains.banking_ru_champ.task_store import task_inputs
 
     index, tasks, folder = split_indexed(tmp_path)
     assert load_tasks(index) == tasks
@@ -197,7 +197,7 @@ def test_ticket_compatibility_fields_are_derived_without_persisting_copies(tmp_p
     folder.mkdir()
     scenario = {
         "id": "Bank 2",
-        "user_scenario": {"instructions": {"domain": "banking_ru"}},
+        "user_scenario": {"instructions": {"domain": "banking_ru_champ"}},
     }
     (folder / "scenario.json").write_text(json.dumps(scenario))
     (folder / "ticket.md").write_text("Обращение\n")

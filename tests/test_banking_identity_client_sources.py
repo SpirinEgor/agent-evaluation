@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from tau2.domains.banking_ru.data_model import ClientAnswer
+from tau2.domains.banking_ru_champ.data_model import ClientAnswer
 
 
 def test_client_answer_accepts_canonical_rows_and_historical_keywords():
@@ -58,7 +58,7 @@ def test_seeded_identity_requires_real_matching_session(identity_generator, veri
 
 @pytest.fixture
 def identity_generator(monkeypatch):
-    directory = Path(__file__).resolve().parents[1] / "scripts/banking_ru"
+    directory = Path(__file__).resolve().parents[1] / "scripts/banking_ru_champ"
     monkeypatch.syspath_prepend(str(directory))
     spec = importlib.util.spec_from_file_location(
         "identity_client_sources", directory / "build_identity_contract.py"

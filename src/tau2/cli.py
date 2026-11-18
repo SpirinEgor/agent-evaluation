@@ -486,7 +486,7 @@ def run_intro():
     )
     domain_table.add_column("Domain", style="bold", no_wrap=True)
     domain_table.add_column("Description")
-    domain_table.add_row("banking_ru", "Banking.ru customer support benchmark")
+    domain_table.add_row("banking_ru_champ", "Banking.ru customer support benchmark")
     console.print(domain_table)
     console.print()
 
@@ -507,7 +507,9 @@ def run_intro():
         "tau2 play", "Interactive manual mode \u2014 play the agent yourself"
     )
     cmd_table.add_row("tau2 domain <name>", "Show detailed documentation for a domain")
-    cmd_table.add_row("tau2 leaderboard", "Display the current leaderboard")
+    cmd_table.add_row(
+        "tau2 leaderboard --submissions-dir <path>", "Display local τ-bench submissions"
+    )
     cmd_table.add_row(
         "tau2 review <path>", "Run LLM-based conversation review on results"
     )
@@ -530,14 +532,11 @@ def run_intro():
         "tau2 check-data\n"
         "\n"
         "# 2. Run a text (half-duplex) evaluation\n"
-        "tau2 run --domain banking_ru --agent-llm gpt-4.1 --user-llm gpt-4.1 "
+        "tau2 run --domain banking_ru_champ --agent-llm gpt-4.1 --user-llm gpt-4.1 "
         "--num-trials 1 --num-tasks 5\n"
         "\n"
         "# 3. Browse results\n"
-        "tau2 view\n"
-        "\n"
-        "# 4. Check the archived leaderboard\n"
-        "tau2 leaderboard"
+        "tau2 view"
     )
     console.print(
         Panel(
@@ -716,7 +715,7 @@ def main():
     domain_parser.add_argument(
         "domain",
         type=str,
-        help="Name of the domain to show documentation for (e.g., 'banking_ru')",
+        help="Name of the domain to show documentation for (e.g., 'banking_ru_champ')",
     )
     domain_parser.set_defaults(func=lambda args: run_show_domain(args))
 
@@ -860,6 +859,11 @@ def main():
     # Leaderboard command
     leaderboard_parser = subparsers.add_parser(
         "leaderboard", help="Show the tau-bench leaderboard"
+    )
+    leaderboard_parser.add_argument(
+        "--submissions-dir",
+        required=True,
+        help="Directory containing local τ-bench submissions",
     )
     leaderboard_parser.add_argument(
         "--domain",
@@ -1156,6 +1160,7 @@ def run_leaderboard(args):
     from tau2.scripts.leaderboard.leaderboard import show_leaderboard
 
     show_leaderboard(
+        submissions_path=args.submissions_dir,
         domain=args.domain,
         metric=args.metric,
         limit=args.limit,

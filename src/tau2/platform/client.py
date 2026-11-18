@@ -14,7 +14,11 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 from tau2.data_model.tasks import Action
-from tau2.domains.banking_ru.mcp_systems import SINGLE_SERVER, TOOL_OWNERS, MCPLayout
+from tau2.domains.banking_ru_champ.mcp_systems import (
+    SINGLE_SERVER,
+    TOOL_OWNERS,
+    MCPLayout,
+)
 from tau2.platform.mcp_bridge import DONE_TOOL_NAME
 
 

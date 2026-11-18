@@ -341,7 +341,7 @@ def _build_env_kwargs(config: RunConfig, task: Task) -> dict:
     the task reference needed for golden_retrieval policy.
     """
     env_kwargs: dict = {}
-    if getattr(config, "domain", None) == "banking_ru":
+    if getattr(config, "domain", None) == "banking_ru_champ":
         env_kwargs["task_id"] = task.id
     retrieval_config = getattr(config, "retrieval_config", None)
     if retrieval_config is not None:

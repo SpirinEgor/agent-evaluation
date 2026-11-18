@@ -16,7 +16,7 @@ from platform_sdk import (
     VirtualClock,
 )
 
-from tau2.domains.banking_ru.environment import prepare_task
+from tau2.domains.banking_ru_champ.environment import prepare_task
 from tau2.platform.sdk.benchmark import BankingBenchmark
 from tau2.platform.session import SessionStatus
 
