@@ -196,6 +196,10 @@ def test_reference_and_tampered_report_journal(task):
         and values["protocol_completion"]
     )
     assert set(sink.artifacts) == {"banking-reward.json", "banking-trajectory.json"}
+    assert values["progress"] == values["tool_call_precision"] == 1
+    assert not values["critical_violation"]
+    assert values["agent_tool_errors"] == 0
+    assert values["valid_tool_calls"] == len(journal)
     bad_report = deepcopy(inputs.report)
     bad_report["db"]["customers"].clear()
     with pytest.raises(ValueError, match="Final state"):
@@ -205,11 +209,50 @@ def test_reference_and_tampered_report_journal(task):
         BankingEvaluator().evaluate(replace(inputs, journal=bad_journal), Sink())
 
 
+def test_competition_aggregation_excludes_incomplete_tasks():
+    def row(task_id, reward, progress, errors):
+        return sdk.RunEvaluation(
+            run_id=task_id,
+            task_id=task_id,
+            trial=0,
+            seed=0,
+            stop_reason="done",
+            domain_reason="done",
+            values={
+                "reward": reward,
+                "DB": reward,
+                "ACTION": reward,
+                "protocol_completion": True,
+                "critical_violation": False,
+                "progress": progress,
+                "agent_tool_errors": errors,
+                "valid_tool_calls": 4,
+                "unclassified_tool_calls": 0,
+                "bank_calls": 4,
+                "discovery_calls": 3,
+            },
+        )
+
+    context = sdk.AggregateContext("all", 3, 1, {"Bank 3": 1}, True)
+    results = [
+        row("Bank 1", 1, 1, 0),
+        row("Bank 2", 0, 0.5, 2),
+        row("Bank 3", 0, 0, 99),
+    ]
+    aggregate = BankingEvaluator().aggregate(results, context)
+    assert aggregate["success_rate"] == aggregate["unresolved_progress"] == 0.5
+    assert aggregate["agent_tool_errors_per_task"] == 1
+    assert aggregate["tool_call_precision"] == 0.8
+    assert aggregate["critical_tasks"] == 0
+
+
 def test_noop_missing_done_and_recovery(task):
     bench = benchmark(task)
     values, _, _ = grade(task, bench, [], stop="max_turns")
     assert values["reward"] == values["DB"] == values["ACTION"] == 0
     assert not values["protocol_completion"]
+    assert values["progress"] == 0
+    assert "tool_call_precision" not in values
     noop = iter(
         [
             sdk.ToolCall(

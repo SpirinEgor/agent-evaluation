@@ -518,6 +518,7 @@ async def invoke_app_server(
     timed_out, exit_code = False, 0
     cancellation = None
     tid = None
+    task_sent_at = None
 
     def emit(event):
         lines.append(json.dumps(event, ensure_ascii=False) + "\n")
@@ -735,6 +736,7 @@ async def invoke_app_server(
                         )
                     tid = thread["id"]
                     emit(dict(type="thread.started", thread_id=tid))
+                    task_sent_at = datetime.now(UTC).isoformat()
                     await send(
                         dict(
                             id=3,
@@ -878,6 +880,7 @@ async def invoke_app_server(
         timed_out=timed_out,
         exit_code=exit_code,
         elapsed_seconds=time.monotonic() - started,
+        task_sent_at=task_sent_at,
         agent_profile=agent.manifest()
         if agent
         else {"id": "codex_baseline", "version": "baseline"},

@@ -653,7 +653,13 @@ def test_journal_uses_persisted_platform_events(tmp_path):
     record = {
         "task_id": "Bank 2",
         "token": token,
-        "run": {"stdout": json.dumps(item), "stderr": "", "output_observations": []},
+        "run": {
+            "stdout": json.dumps(item),
+            "stderr": "",
+            "output_observations": [],
+            "task_sent_at": "2026-11-18T12:00:05+00:00",
+            "elapsed_seconds": 22,
+        },
         "confirmed_external_refusal": False,
     }
     (tmp_path / f"{token}.json").write_text(
@@ -661,7 +667,9 @@ def test_journal_uses_persisted_platform_events(tmp_path):
             {
                 "id": token,
                 "task_id": "Bank 2",
+                "end_time": "2026-11-18T12:00:18+00:00",
                 "info": {
+                    "metrics": {"competition": {"version": "banking_competition_v1"}},
                     "mcp_events": [
                         {
                             "call_id": "mcp-3",
@@ -669,7 +677,7 @@ def test_journal_uses_persisted_platform_events(tmp_path):
                             "canonical_name": "get_cards",
                             "arguments": {"customer_id": "own"},
                         }
-                    ]
+                    ],
                 },
             }
         )
@@ -678,6 +686,8 @@ def test_journal_uses_persisted_platform_events(tmp_path):
     event = record["attempt_journal"]["attempts"][0]
     assert event["delivered_to_mcp"] is True
     assert event["mcp_call_id"] == "mcp-3"
+    assert record["metrics"]["resolution_seconds"] == 22
+    assert record["metrics"]["competition"]["duration_seconds"] == 13
 
 
 def test_journal_rejects_wrong_session_or_task(tmp_path):

@@ -97,6 +97,11 @@ class PlatformSession:
                 message_history=list(initial.message_history or []),
                 strict=True,
             )
+        self._competition_initial_db = None
+        if self.env.domain_name == "banking_ru_champ":
+            db = self.env.tools.db
+            self._competition_initial_db = db.model_dump(mode="json")
+            self._competition_initial_db["session"] = db.session.model_dump(mode="json")
         if hasattr(self.env, "run_metadata"):
             task_snapshot = self.task.model_dump(mode="json")
             self.env.run_metadata["task_snapshot_sha256"] = hashlib.sha256(
@@ -656,7 +661,16 @@ class PlatformSession:
         elif allowed:
             if name == "call_discoverable_agent_tool":
                 self.env.tools.__dict__["_discovery_dispatch_entered"] = False
+            tools = self.env.tools
+            track_effect = (
+                self._competition_initial_db is not None
+                and name in tools.get_tools()
+                and tools.tool_mutates_state(name)
+            )
+            previous_state = tools.get_db_hash() if track_effect else None
             message = self.env.get_response(call)
+            if track_effect:
+                event["business_state_changed"] = tools.get_db_hash() != previous_state
             if (
                 name == "call_discoverable_agent_tool"
                 and message.error
@@ -835,7 +849,7 @@ class PlatformSession:
             SessionStatus.TOO_MANY_ERRORS: TerminationReason.TOO_MANY_ERRORS,
         }[self.status]
 
-    def attempt_metrics(self) -> dict:
+    def attempt_metrics(self, reward: Optional[RewardInfo] = None) -> dict:
         from tau2.environment.toolkit import ToolType
         from tau2.platform.attempt_metrics import tool_metrics
 
@@ -859,11 +873,27 @@ class PlatformSession:
             protocol_completion=self.status is SessionStatus.DONE,
             resolution_seconds=(end - self.created_at).total_seconds(),
         )
+        criteria = self.task.evaluation_criteria
+        if (
+            self._competition_initial_db is not None
+            and criteria is not None
+            and criteria.banking_contract_version == "db_action_v1"
+            and reward is not None
+            and reward.grading_status == "final"
+        ):
+            from tau2.platform.competition_evidence import competition_evidence
+
+            result["competition"] = {
+                **competition_evidence(self, solved=reward.final_reward == 1),
+                "bank_calls": len(self.log),
+                "discovery_calls": self.discovery_calls,
+            }
         return result
 
     def to_simulation_run(self) -> SimulationRun:
         """Запись в формате results.json: её понимают tau2 view и evaluate_trajectories."""
         end = self.finished_at or self._now()
+        reward = self.grade() if self.transport_complete else None
         return SimulationRun(
             id=self.token,
             task_id=self.task.id,
@@ -873,7 +903,7 @@ class PlatformSession:
             duration=(end - self.created_at).total_seconds(),
             termination_reason=self.termination_reason(),
             messages=self.trajectory(),
-            reward_info=self.grade() if self.transport_complete else None,
+            reward_info=reward,
             trial=0,
             info={
                 "participant": self.participant,
@@ -882,7 +912,7 @@ class PlatformSession:
                 "mcp_events": self.mcp_events,
                 "transport_complete": self.transport_complete,
                 "discovery": self.discovery_metrics(),
-                "metrics": self.attempt_metrics(),
+                "metrics": self.attempt_metrics(reward),
                 "tool_call_errors": deepcopy(self.tool_call_errors),
                 **(
                     {"environment_errors": deepcopy(self.environment_errors)}
