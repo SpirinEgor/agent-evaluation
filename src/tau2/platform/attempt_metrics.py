@@ -7,6 +7,14 @@ from collections import Counter
 FORMAT_CODES = {"INVALID_ARGUMENT", "UNKNOWN_SYSTEM", "UNKNOWN_TOOL"}
 
 
+def event_error_code(event):
+    code = event.get("diagnostic_code")
+    if code:
+        return code
+    match = re.search(r"\bERR_[A-Z_]+\b", str(event.get("response", "")))
+    return match[0] if match else "UNCLASSIFIED"
+
+
 def tool_metrics(events, *, read_tools, mutating_tools):
     """Count host-observed calls. Repeats/recovery are conservative indicators."""
     categories = Counter()
@@ -28,12 +36,9 @@ def tool_metrics(events, *, read_tools, mutating_tools):
         origin = event.get("error_origin")
         if origin not in {"corpus", "infrastructure"}:
             eligible += 1
-        code = event.get("diagnostic_code")
         if failed:
             errors += 1
-            if not code:
-                match = re.search(r"\bERR_[A-Z_]+\b", str(event.get("response", "")))
-                code = match[0] if match else "UNCLASSIFIED"
+            code = event_error_code(event)
             codes[code] += 1
             if origin in {"corpus", "infrastructure"}:
                 category = "unclassified"  # excluded from format accuracy

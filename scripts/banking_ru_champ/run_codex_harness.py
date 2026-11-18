@@ -620,6 +620,18 @@ def attach_persisted_journal(record: dict, results_dir: Path) -> None:
     record["metrics"]["compute"] = model_metrics(run)
     record["metrics"]["protocol_completion"] = record.get("protocol_status") == "done"
     record["metrics"]["resolution_seconds"] = run.get("elapsed_seconds")
+    if (
+        "competition" in record["metrics"]
+        and run.get("task_sent_at")
+        and payload.get("end_time")
+    ):
+        start = datetime.fromisoformat(run["task_sent_at"])
+        finish = datetime.fromisoformat(payload["end_time"])
+        if finish >= start:
+            record["metrics"]["competition"]["duration_seconds"] = (
+                finish - start
+            ).total_seconds()
+
     action_info = ((payload.get("reward_info") or {}).get("info") or {}).get(
         "action"
     ) or {}

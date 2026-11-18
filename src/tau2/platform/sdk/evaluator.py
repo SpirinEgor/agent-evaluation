@@ -17,6 +17,7 @@ from platform_sdk import (
 )
 
 from tau2.domains.banking_ru_champ.environment import prepare_task
+from tau2.platform.competition_ranking import Attempt, summarize
 from tau2.platform.sdk.benchmark import BankingBenchmark
 from tau2.platform.session import SessionStatus
 
@@ -29,8 +30,20 @@ class BankingEvaluator:
         "protocol_completion": MetricInfo("Получен агентский done", "higher"),
         "bank_calls": MetricInfo("Банковские вызовы", "lower"),
         "discovery_calls": MetricInfo("Вызовы discovery", "lower"),
+        "critical_violation": MetricInfo("Подтверждённый критический эффект", "lower"),
+        "progress": MetricInfo("Предметный прогресс", "higher"),
+        "agent_tool_errors": MetricInfo("Ошибочные вызовы агента", "lower"),
+        "valid_tool_calls": MetricInfo("Подтверждённые корректные вызовы"),
+        "unclassified_tool_calls": MetricInfo("Вызовы без категории"),
+        "tool_call_precision": MetricInfo("Доля корректных вызовов", "higher"),
     }
-    experiment_metrics = {"success_rate": MetricInfo("Средний балл задач", "higher")}
+    experiment_metrics = {
+        "success_rate": MetricInfo("Средний балл задач", "higher"),
+        "critical_tasks": MetricInfo("Задачи с критическим нарушением", "lower"),
+        "unresolved_progress": MetricInfo("Прогресс в нерешённых задачах", "higher"),
+        "agent_tool_errors_per_task": MetricInfo("Ошибки агента на задачу", "lower"),
+        "tool_call_precision": MetricInfo("Доля корректных вызовов", "higher"),
+    }
 
     def evaluate(self, inputs: EvalInputs, ctx: EvalContext) -> dict[str, Value]:
         if inputs.report is None or inputs.journal is None:
@@ -86,15 +99,17 @@ class BankingEvaluator:
         )
         reward = session.grade()
         ctx.log_artifact("banking-reward.json", reward.model_dump_json(indent=2))
+        trajectory = session.to_simulation_run()
         ctx.log_artifact(
             "banking-trajectory.json",
-            session.to_simulation_run().model_dump_json(indent=2),
+            trajectory.model_dump_json(indent=2),
         )
         if reward.grading_status == "needs_review":
             raise ValueError(
                 "Banking grading needs review; do not publish a numeric score"
             )
         breakdown = reward.reward_breakdown or {}
+        metrics = trajectory.info["metrics"].get("competition", {})
         return {
             "reward": reward.final_reward,
             "DB": breakdown.get("DB", 0.0),
@@ -102,6 +117,18 @@ class BankingEvaluator:
             "protocol_completion": session.status is SessionStatus.DONE,
             "bank_calls": len(session.log),
             "discovery_calls": session.discovery_calls,
+            **{
+                name: metrics[name]
+                for name in (
+                    "critical_violation",
+                    "progress",
+                    "agent_tool_errors",
+                    "valid_tool_calls",
+                    "unclassified_tool_calls",
+                    "tool_call_precision",
+                )
+                if metrics.get(name) is not None
+            },
         }
 
     def aggregate(
@@ -115,7 +142,28 @@ class BankingEvaluator:
             for task_id, values in by_task.items()
             if not ctx.incomplete.get(task_id)
         ]
+        measured = [
+            result for result in results if not ctx.incomplete.get(result.task_id)
+        ]
+        metrics = {}
+        if (
+            ctx.trials_planned == 1
+            and measured
+            and all("progress" in r.values for r in measured)
+        ):
+            totals = summarize(
+                [
+                    Attempt.model_validate({**r.values, "task_id": r.task_id})
+                    for r in measured
+                ]
+            )
+            metrics = {
+                key: totals[key]
+                for key in self.experiment_metrics
+                if key != "success_rate" and totals[key] is not None
+            }
         return {
+            **metrics,
             "success_rate": sum(complete) / len(complete) if complete else 0.0,
             "tasks_complete": len(complete),
             "partial": ctx.partial,
